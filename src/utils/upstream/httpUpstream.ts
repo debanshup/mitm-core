@@ -1,5 +1,5 @@
 import http, { IncomingMessage, ServerResponse } from "http";
-import { parseHttpReqData } from "../../../utils/parseReqData.ts";
+import { parseHttpReqData } from "../parser/parseReqData.ts";
 
 export function createHTTPUpstream(
   req: IncomingMessage,

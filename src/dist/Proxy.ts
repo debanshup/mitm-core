@@ -1,11 +1,15 @@
 import * as http from "http";
 import { WebSocketServer } from "ws";
 import Stream from "stream";
-import net, { isIPv4 } from "net";
+import net, { isIPv4, Socket } from "net";
 import {
   ConnectionTypes,
   connectionEvents,
-} from "../observer/connection_type/emitter.ts";
+} from "../core/event-manager/EventBus.ts";
+import type { Iplugins } from "../interfaces/IPlugins.ts";
+import { PluginRegistry, type Plugin } from "../plugins/PluginRegistry.ts";
+import { ContextManager } from "../core/context-manager/ContextManager.ts";
+import { PipelineCompiler } from "../core/pipelines/PipelineCompiler.ts";
 
 /**
  * @important register middleware in the main app / here to auto forward req or res to middleware
@@ -16,7 +20,36 @@ export default class Proxy {
    */
   private httpServer: http.Server | undefined;
   private wsServer: WebSocketServer | undefined;
+  private pipelines = {};
+
   // private upstream: net.Socket | undefined;
+
+  /**
+   *
+   * @static -> register middleware
+   *
+   */
+  public static async registerMiddleware() {
+    await import("../middleware/middleware.ts");
+  }
+  /**
+   *
+   * @static -> register handlers
+   *
+   */
+  public static registerPlugins(plugins: Plugin[]) {
+    PluginRegistry.registerPlugins(plugins);
+    // console.info(PluginRegistry.getEnabledPlugins())
+  }
+  /**
+   *
+   * @static -> unregister middleware
+   *
+   */
+  public static unRegisterPlugins(plugins: Plugin[]) {
+    PluginRegistry.unRegisterPlugins(plugins);
+  }
+
   /**
    * @constructor
    */
@@ -31,13 +64,12 @@ export default class Proxy {
     }
   }
 
-  /**
-   *
-   * @static
-   *
-   */
-  public static async registerMiddleware() {
-    await import("../middleware/middleware.ts");
+  public init() {
+    this.pipelines = PipelineCompiler.compile(
+      PluginRegistry.getEnabledPlugins()
+    );
+
+    console.info("Pipelines:", this.pipelines);
   }
 
   public listen(port: number, callback?: () => void) {
@@ -51,6 +83,35 @@ export default class Proxy {
     }
   }
 
+  public onTCPconnection(
+    tcpConnectionHandler?: (socket: Socket, next: () => void) => void
+  ) {
+    this.httpServer?.on("connection", (socket) => {
+      const defaultCallback = () => {
+        // disable nagle's at tcp level
+        socket.setNoDelay(true);
+        socket.on("error", (err: Error) => {
+          if (!socket.destroyed) {
+            socket.destroy();
+          }
+          console.error("socket", err);
+        });
+        socket.on("close", () => {
+          if (!socket.destroyed) {
+            socket.destroy();
+          }
+        });
+
+        connectionEvents.emit(ConnectionTypes.TCP, { socket });
+      };
+      if (tcpConnectionHandler) {
+        tcpConnectionHandler(socket, defaultCallback);
+      } else {
+        defaultCallback();
+      }
+    });
+  }
+
   public onConnect(
     connectHandler?: (
       req: http.IncomingMessage,
@@ -61,21 +122,7 @@ export default class Proxy {
   ) {
     this.httpServer?.on("connect", (req, socket, head) => {
       const defaultCallback = () => {
-        // disable nagle's
-        (socket as net.Socket).setNoDelay(true);
-        connectionEvents.emit(ConnectionTypes.CONNECT, { req, socket });
-        socket.on("error", (err: Error) => {
-          if (!socket.destroyed) {
-            socket.destroy();
-          }
-          console.error("socket", err, "for", req.url);
-          
-        });
-        socket.on("close", () => {
-          if (!socket.destroyed) {
-            socket.destroy();
-          }
-        });
+        connectionEvents.emit(ConnectionTypes.CONNECT, { req, socket, head });
       };
       if (connectHandler) {
         connectHandler(req, socket, head, defaultCallback);
