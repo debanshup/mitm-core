@@ -1,8 +1,6 @@
 import * as http from "http";
 export function parseHttpReqData(req: http.IncomingMessage) {
   const targetUrl = URL.parse(req.url!);
-  console.info(targetUrl)
-
   return {
     host: targetUrl?.hostname,
     port: targetUrl?.port ? Number(targetUrl.port) : 80,

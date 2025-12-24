@@ -1,15 +1,13 @@
 import * as http from "http";
 import { WebSocketServer } from "ws";
 import Stream from "stream";
-import net, { isIPv4, Socket } from "net";
+import { Socket } from "net";
 import {
   ConnectionTypes,
   connectionEvents,
 } from "../core/event-manager/EventBus.ts";
-import type { Iplugins } from "../interfaces/IPlugins.ts";
 import { PluginRegistry, type Plugin } from "../plugins/PluginRegistry.ts";
-import { ContextManager } from "../core/context-manager/ContextManager.ts";
-import { PipelineCompiler } from "../core/pipelines/PipelineCompiler.ts";
+import { Pipeline } from "../core/pipelines/PipelineCompiler.ts";
 
 /**
  * @important register middleware in the main app / here to auto forward req or res to middleware
@@ -20,7 +18,7 @@ export default class Proxy {
    */
   private httpServer: http.Server | undefined;
   private wsServer: WebSocketServer | undefined;
-  private pipelines = {};
+  private static isMiddlewareRegistered: boolean = false;
 
   // private upstream: net.Socket | undefined;
 
@@ -30,7 +28,14 @@ export default class Proxy {
    *
    */
   public static async registerMiddleware() {
-    await import("../middleware/middleware.ts");
+    if (!this.isMiddlewareRegistered) {
+      await import("../middleware/middleware.ts");
+      this.isMiddlewareRegistered = true;
+      console.info("Middleware registered successfully");
+    } else {
+      throw Error("Middleware already registered!");
+    }
+    return this;
   }
   /**
    *
@@ -39,7 +44,7 @@ export default class Proxy {
    */
   public static registerPlugins(plugins: Plugin[]) {
     PluginRegistry.registerPlugins(plugins);
-    // console.info(PluginRegistry.getEnabledPlugins())
+    return this;
   }
   /**
    *
@@ -64,12 +69,8 @@ export default class Proxy {
     }
   }
 
-  public init() {
-    this.pipelines = PipelineCompiler.compile(
-      PluginRegistry.getEnabledPlugins()
-    );
-
-    console.info("Pipelines:", this.pipelines);
+  public static initPipelines() {
+    Pipeline.compile(PluginRegistry.getEnabledPlugins());
   }
 
   public listen(port: number, callback?: () => void) {
@@ -90,18 +91,6 @@ export default class Proxy {
       const defaultCallback = () => {
         // disable nagle's at tcp level
         socket.setNoDelay(true);
-        socket.on("error", (err: Error) => {
-          if (!socket.destroyed) {
-            socket.destroy();
-          }
-          console.error("socket", err);
-        });
-        socket.on("close", () => {
-          if (!socket.destroyed) {
-            socket.destroy();
-          }
-        });
-
         connectionEvents.emit(ConnectionTypes.TCP, { socket });
       };
       if (tcpConnectionHandler) {

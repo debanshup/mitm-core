@@ -3,7 +3,7 @@ import http from "http";
 import net from "net";
 import assert from "node:assert";
 import Proxy from "../../src/dist/Proxy.js";
-import { createMockHttpServer } from "../utils/createMockHttpServr.js";
+import { createMockHttpServer } from "../utils/createMockHttpServer.ts";
 await Proxy.registerMiddleware();
 describe("proxy forwards HTTP GET correctly", () => {
   it("forwards request to upstream", async () => {
