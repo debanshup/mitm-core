@@ -89,8 +89,6 @@ export default class Proxy {
   ) {
     this.httpServer?.on("connection", (socket) => {
       const defaultCallback = () => {
-        // disable nagle's at tcp level
-        socket.setNoDelay(true);
         connectionEvents.emit(ConnectionTypes.TCP, { socket });
       };
       if (tcpConnectionHandler) {
