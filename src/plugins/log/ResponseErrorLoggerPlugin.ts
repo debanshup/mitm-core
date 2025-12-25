@@ -9,6 +9,6 @@ export default class ResponseErrorLoggerPlugin extends BasePlugin {
   static async execute(ctx: ProxyContext) {
     if (!ctx.err) return;
 
-    console.error("[UPSTREAM_ERROR]",ctx.err);
+    console.error("[UPSTREAM_ERROR]", ctx.err);
   }
 }

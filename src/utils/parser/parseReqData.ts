@@ -1,14 +1,28 @@
 import * as http from "http";
 export function parseHttpReqData(req: http.IncomingMessage) {
-  const targetUrl = URL.parse(req.url!);
+  const hostHeader = req.headers.host; // ⭐ NEW (source of truth)
+
+  if (!hostHeader) {
+    throw new Error("Missing Host header");
+  }
+
+  const [host, portFromHost] = hostHeader.split(":"); // ⭐ NEW
+
+  const isTLS = (req.socket as any).encrypted === true; // ⭐ NEW
+
   return {
-    host: targetUrl?.hostname,
-    port: targetUrl?.port ? Number(targetUrl.port) : 80,
+    host,
+    port: portFromHost
+      ? Number(portFromHost)
+      : isTLS
+      ? 443 // ⭐ FIXED
+      : 80,
     method: req.method,
     headers: req.headers,
-    path: targetUrl?.pathname,
+    path: req.url, // ⭐ FIXED (keep path as-is)
   };
 }
+
 
 export function parseConnectData(req: http.IncomingMessage) {
   const [host, port] = req.url!.split(":");
