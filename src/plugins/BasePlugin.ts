@@ -12,8 +12,14 @@ export abstract class BasePlugin {
   static isRegistered() {
     return this.registered;
   }
+  protected static assertRegistered(this: typeof BasePlugin) {
+    
+    if (!this.registered) {
+      throw new Error(`${this.name} is not registered`);
+    }
+  }
 
-  constructor() {
+  protected constructor() {
     const ctor = this.constructor as typeof BasePlugin;
     if (!ctor.isRegistered()) {
       throw new Error(`${ctor.name} is not registered`);
