@@ -87,10 +87,12 @@ export default class Proxy {
   public onTCPconnection(
     tcpConnectionHandler?: (socket: Socket, next: () => void) => void
   ) {
+
     this.httpServer?.on("connection", (socket) => {
       const defaultCallback = () => {
         connectionEvents.emit(ConnectionTypes.TCP, { socket });
       };
+      
       if (tcpConnectionHandler) {
         tcpConnectionHandler(socket, defaultCallback);
       } else {
