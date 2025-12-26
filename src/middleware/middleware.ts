@@ -29,6 +29,7 @@ export type State = (typeof STATE)[keyof typeof STATE];
 export type ProxyContext = {
   req?: IncomingMessage;
   res?: ServerResponse;
+  upstreamRes: IncomingMessage,
   socket?: Stream.Duplex | Socket;
   tlsSocket: TLSSocket;
   head?: any;
@@ -47,7 +48,7 @@ connectionEvents.on(ConnectionTypes.TCP, ({ socket }) => {
     }
     ctx.err = err;
     ctx.state.set(STATE.STOP, true);
-    await Pipeline.run(Phase.TCP, ctx);
+    console.error("[TCP_CLIENT_ERROR]", err);
   });
   socket.on("close", () => {
     if (!socket.destroyed) {
@@ -119,6 +120,16 @@ connectionEvents.on(
     const ctx = ContextManager.getContext(socket);
     ctx.req = req;
     ctx.head = head;
+
+    /**
+     * @important ->
+     *     if (site is protected) {
+        bypass MITM → direct tunnel}
+        else {
+        MITM normally
+      }
+     */
+
     await Pipeline.run(Phase.CONNECT, ctx);
 
     // run pipeline here
