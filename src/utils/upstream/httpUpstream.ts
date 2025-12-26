@@ -12,12 +12,12 @@ export function createHTTPUpstream(
   // console.info("X-Forwarded-Proto",req.headers["X-Forwarded-Proto"])
   // console.info("X-Real-IP",req.headers["X-Real-IP"])
   // console.info("Cookie",req.headers.cookie)
-  // console.info(
-  //   req.headers["proxy-connection"],
-  //   req.headers["proxy-authorization"],
-  //   req.headers["upgrade"],
-  //   req.headers["te"]
-  // );
+  console.info(
+    req.headers["proxy-connection"],
+    req.headers["proxy-authorization"],
+    req.headers["upgrade"],
+    req.headers["te"]
+  );
 
   delete req.headers["proxy-connection"];
   delete req.headers["proxy-authorization"];

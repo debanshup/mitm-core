@@ -1,17 +1,8 @@
 import Proxy from "../src/dist/Proxy.ts";
-import type { Iplugins } from "../src/interfaces/IPlugins.ts";
-import CacheConnectPlugin from "../src/plugins/cache/CacheConnectPlugin.ts";
-import CacheRequestPlugin from "../src/plugins/cache/CacheRequestPlugin.ts";
-import CacheResponsePlugin from "../src/plugins/cache/CacheResponsePlugin.ts";
-import type { Plugin } from "../src/plugins/PluginRegistry.ts";
-import ConnectLoggerPlugin from "../src/plugins/log/ConnectLoggerPlugin.ts";
-import RequestHandler from "../src/plugins/request/RequestHandler.ts";
-import RequestLoggerPlugin from "../src/plugins/log/RequestLoggerPlugin.ts";
-import ResponseLoggerPlugin from "../src/plugins/log/ResponseLoggerPlugin.ts";
 import ClientSocketErrorLoggerPlugin from "../src/plugins/log/ClientErrorLoggerPlugin.ts";
 import ResponseErrorLoggerPlugin from "../src/plugins/log/ResponseErrorLoggerPlugin.ts";
-import ResponsePlugin from "../src/plugins/response/ResponseHandler.ts";
-import HandshakePlugin from "../src/plugins/handshake/HandshakePlugin.ts";
+import HandshakePlugin from "../src/plugins/connect/HandshakePlugin.ts";
+import RequestPlugin from "../src/plugins/request/RequestPlugin.ts";
 
 (await Proxy.registerMiddleware())
   .registerPlugins([
@@ -23,9 +14,8 @@ import HandshakePlugin from "../src/plugins/handshake/HandshakePlugin.ts";
     // ResponseLoggerPlugin,
     ClientSocketErrorLoggerPlugin,
     ResponseErrorLoggerPlugin,
-    ResponsePlugin,
     HandshakePlugin,
-    
+    RequestPlugin
   ])
   .initPipelines();
 const proxy = new Proxy();
@@ -34,11 +24,16 @@ proxy.onTCPconnection((socket, next) => {
   next();
 });
 proxy.onConnect((req, socket, head, next) => {
+  // console.time("CONNECT for "+req.url);
   next();
+  // console.timeEnd("CONNECT for "+req.url);
 });
 
 proxy.onRequest((req, res, next) => {
+  // console.time("_REQ");
+
   next();
+  // console.timeEnd("_REQ");
 });
 
 proxy.listen(8081);
