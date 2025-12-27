@@ -21,7 +21,9 @@ import RequestPlugin from "../src/plugins/request/RequestPlugin.ts";
 const proxy = new Proxy();
 
 proxy.onTCPconnection((socket, next) => {
+  // console.time("TCP")
   next();
+  // console.timeEnd("TCP")
 });
 proxy.onConnect((req, socket, head, next) => {
   // console.time("CONNECT for "+req.url);

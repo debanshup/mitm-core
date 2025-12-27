@@ -24,12 +24,12 @@ export default class HandshakePlugin extends BasePlugin {
 
     socket.write("HTTP/1.1 200 Connection Established\r\n\r\n");
 
-    // console.time("cert_gen for " + host);
+    console.time("cert_gen for " + host);
 
     // get key, cert for host
     const { cert, key } = await CertManager.getCert(host!);
 
-    // console.timeEnd("cert_gen for " + host);
+    console.timeEnd("cert_gen for " + host);
     // tls server
     const tlsSocket = new tls.TLSSocket(socket, {
       isServer: true,

@@ -110,11 +110,20 @@ export default class RequestPlugin extends BasePlugin {
       console.error(`Upstream Error (${e.name}) for ${targetUrl.href}`);
 
       if (!res.headersSent) {
+        res.setHeader("Connection", "close");
         res.statusCode = 502; // Bad Gateway
         res.end();
+        console.info(res.statusCode, "Sent to client for ->", res.req.url);
+      } else {
+        if (res.socket && !res.socket.destroyed) {
+          res.socket.destroy();
+          console.info("Socket destroyed for ->", res.req.url);
+        }
       }
+
       if (!upstream.destroyed) {
         upstream.destroy();
+        console.info("Upstream destroyed for ->", res.req.url);
       }
     });
     upstream.on("close", () => {
