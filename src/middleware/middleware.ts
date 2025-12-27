@@ -13,6 +13,7 @@ import { Pipeline } from "../core/pipelines/PipelineCompiler.ts";
 import { PluginRegistry } from "../plugins/PluginRegistry.ts";
 import { Phase } from "../core/phase/Phase.ts";
 import type { TLSSocket } from "tls";
+import { pool } from "../core/workers/pool/Worker_pool.ts";
 
 /**
  * @context_type
@@ -29,7 +30,7 @@ export type State = (typeof STATE)[keyof typeof STATE];
 export type ProxyContext = {
   req?: IncomingMessage;
   res?: ServerResponse;
-  upstreamRes: IncomingMessage,
+  upstreamRes: IncomingMessage;
   socket?: Stream.Duplex | Socket;
   tlsSocket: TLSSocket;
   head?: any;
@@ -116,6 +117,10 @@ connectionEvents.on(
     socket: Stream.Duplex;
     head: any;
   }) => {
+    // console.info(req.headers.host?.split(":")[0])
+    await pool.run({
+      hostname: req.headers.host?.split(":")[0]
+    });
     // mutate ctx
     const ctx = ContextManager.getContext(socket);
     ctx.req = req;

@@ -1,12 +1,13 @@
 import forge from "node-forge";
 import fs from "fs";
+import path from "path";
 export class CertManager {
   static async getCert(hostname: string) {
     const caCert = forge.pki.certificateFromPem(
-      fs.readFileSync("creds/CA.crt", "utf8")
+      fs.readFileSync("creds/__self__/CA.crt", "utf8")
     );
     const caKey = forge.pki.privateKeyFromPem(
-      fs.readFileSync("creds/key.pem", "utf8")
+      fs.readFileSync("creds/__self__/key.pem", "utf8")
     );
 
     // *** generate full keypair ***
@@ -69,6 +70,25 @@ export class CertManager {
     // *** sign leaf cert using CA private key ***
     cert.sign(caKey, forge.md.sha256.create());
 
+    // const certPath = path.join(
+    //   process.cwd(),
+    //   "creds",
+    //   `${hostname}`,
+    //   "cert.crt"
+    // );
+    // const keyPath = path.join(process.cwd(), "creds", `${hostname}`, "key.pem");
+    // fs.mkdirSync(path.dirname(certPath), { recursive: true });
+    // fs.writeFileSync(
+    //   certPath,
+    //   forge.pki.certificateToPem(cert) // cert written
+    // );
+    // //   fs.mkdirSync(path.dirname(keyPath), { recursive: true });
+
+    // fs.writeFileSync(
+    //   keyPath,
+    //   forge.pki.privateKeyToPem(keys.privateKey), // key written
+    //   { mode: 0o600 }
+    // );
     return {
       cert: forge.pki.certificateToPem(cert),
       key: forge.pki.privateKeyToPem(keys.privateKey),
