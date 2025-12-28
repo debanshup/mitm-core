@@ -1,6 +1,7 @@
 import { LRUCache } from "lru-cache";
 import path from "path";
 import fs from "fs";
+import * as crypto from "crypto";
 import { pool } from "../workers/pool/Worker_pool.ts";
 export class CertCache {
   protected constructor() {}
@@ -24,16 +25,44 @@ export class CertCache {
     this.cache.set(host.toLowerCase(), { key, cert });
   }
 
-  private static addToFile(
+  public static addToFile(
     host: string,
-    { key, cert }: { key: Buffer; cert: Buffer }
+    data: { key: string | Buffer; cert: string | Buffer }
   ) {
     const dir = path.join(process.cwd(), "creds", host);
+
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+
     const certPath = path.join(dir, "cert.crt");
     const keyPath = path.join(dir, "key.pem");
-    fs.mkdirSync(dir, { recursive: true }); // recursively create dir
-    fs.writeFileSync(certPath, cert);
-    fs.writeFileSync(keyPath, key, { mode: 0o600 });
+
+    // prevent collision
+    const tempSuffix = crypto.randomBytes(4).toString("hex");
+    const tempCertPath = `${certPath}.${tempSuffix}.tmp`;
+    const tempKeyPath = `${keyPath}.${tempSuffix}.tmp`;
+
+    try {
+      // write data to the TEMPORARY files first
+      fs.writeFileSync(tempCertPath, data.cert);
+      fs.writeFileSync(tempKeyPath, data.key);
+
+      // Rename temp files to the final destination
+      // If the process crashes during write, the final 'cert.crt' remains
+      // non-existent or holds the previous valid version.
+      fs.renameSync(tempCertPath, certPath);
+      fs.renameSync(tempKeyPath, keyPath);
+
+      console.info(`[FS] Successfully persisted certs for ${host}`);
+    } catch (err) {
+      console.error(`[FS] Failed to save certs for ${host}:`, err);
+
+      // Cleanup partial temp files if they exist
+      [tempCertPath, tempKeyPath].forEach((p) => {
+        if (fs.existsSync(p)) fs.unlinkSync(p);
+      });
+    }
   }
 
   private static delete(host: string) {
@@ -42,10 +71,11 @@ export class CertCache {
   public static async getCertFromCache(host: string) {
     // Synchronous LRU Cache Check
     if (this.isCached(host)) {
-      console.info("cert and key available in cache for", host);
+      console.info("[CACHE] cert and key available in cache for", host);
       return this.cache.get(host);
     }
     // Check for In-Flight Task
+    // fix for thundering herd
 
     const existingTask = this.inFlight.get(host);
     if (existingTask) {
@@ -75,7 +105,7 @@ export class CertCache {
           // generate
           console.info("generating cert and key for", host);
           const { cert, key } = await pool.run({ host });
-          this.addToFile(host, { key, cert });
+          await this.addToFile(host, { key, cert });
           this.addToCache(host, { key, cert });
           return { key, cert };
         }
