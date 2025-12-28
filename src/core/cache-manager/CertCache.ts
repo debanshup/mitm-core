@@ -65,9 +65,14 @@ export class CertCache {
     }
   }
 
-  private static delete(host: string) {
+  private static deleteFromCache(host: string) {
     this.cache.delete(host.toLowerCase());
   }
+
+  private static clearCache(){
+    this.cache.clear()
+  }
+
   public static async getCertFromCache(host: string) {
     // Synchronous LRU Cache Check
     if (this.isCached(host)) {
@@ -94,7 +99,7 @@ export class CertCache {
         const keyPath = path.join(process.cwd(), "creds", `${host}`, "key.pem");
         // Check FileSystem
         if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
-          console.info("cert and key available in fs for", host);
+          console.info("[FS] cert and key available in fs for", host);
           const data = {
             cert: fs.readFileSync(certPath),
             key: fs.readFileSync(keyPath),
@@ -105,7 +110,7 @@ export class CertCache {
           // generate
           console.info("generating cert and key for", host);
           const { cert, key } = await pool.run({ host });
-          await this.addToFile(host, { key, cert });
+           this.addToFile(host, { key, cert });
           this.addToCache(host, { key, cert });
           return { key, cert };
         }
