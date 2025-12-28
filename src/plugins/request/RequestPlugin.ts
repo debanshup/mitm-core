@@ -107,7 +107,8 @@ export default class RequestPlugin extends BasePlugin {
     upstream.setNoDelay(true);
 
     upstream.on("error", (e) => {
-      console.error(`Upstream Error (${e.name}) for ${targetUrl.href}`);
+      
+      console.error(`Upstream Error (${e}) for ${targetUrl.href}`);
 
       if (!res.headersSent) {
         res.setHeader("Connection", "close");

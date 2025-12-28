@@ -1,9 +1,7 @@
-import * as path from "path";
-import os from "os";
 import forge from "node-forge";
 import fs from "fs";
 
-export default ({ hostname }: { hostname: string }) => {
+export default ({ host }: { host: string }) => {
   const caCert = forge.pki.certificateFromPem(
     fs.readFileSync("creds/__self__/CA.crt", "utf8")
   );
@@ -25,7 +23,7 @@ export default ({ hostname }: { hostname: string }) => {
   cert.validity.notAfter.setFullYear(cert.validity.notBefore.getFullYear() + 1);
 
   // *** subject (leaf cert info) ***
-  cert.setSubject([{ name: "commonName", value: hostname }]);
+  cert.setSubject([{ name: "commonName", value: host }]);
 
   // *** issuer = your CA ***
   cert.setIssuer(caCert.subject.attributes);
@@ -52,7 +50,7 @@ export default ({ hostname }: { hostname: string }) => {
     {
       name: "subjectAltName",
       altNames: [
-        { type: 2, value: hostname }, // DNS
+        { type: 2, value: host }, // DNS
       ],
     },
     {
