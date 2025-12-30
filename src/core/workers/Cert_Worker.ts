@@ -2,6 +2,10 @@ import forge from "node-forge";
 import fs from "fs";
 
 export default ({ host }: { host: string }) => {
+  const isIPv6 = host.includes(":");
+  const isIPv4 = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(host);
+  const isIP = isIPv4 || isIPv6;
+  const cleanedHost = host.replace(/[\[\]]/g, "").toLowerCase();
   const caCert = forge.pki.certificateFromPem(
     fs.readFileSync("creds/__self__/CA.crt", "utf8")
   );
@@ -23,7 +27,7 @@ export default ({ host }: { host: string }) => {
   cert.validity.notAfter.setFullYear(cert.validity.notBefore.getFullYear() + 1);
 
   // *** subject (leaf cert info) ***
-  cert.setSubject([{ name: "commonName", value: host }]);
+  cert.setSubject([{ name: "commonName", value: cleanedHost }]);
 
   // *** issuer = your CA ***
   cert.setIssuer(caCert.subject.attributes);
@@ -50,7 +54,10 @@ export default ({ host }: { host: string }) => {
     {
       name: "subjectAltName",
       altNames: [
-        { type: 2, value: host }, // DNS
+        {
+          type: isIP ? 7 : 2, // IP or DNS
+          [isIP ? "ip" : "value"]: cleanedHost,
+        },
       ],
     },
     {
