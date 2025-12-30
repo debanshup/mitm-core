@@ -54,7 +54,7 @@ export class CertCache {
       fs.renameSync(tempCertPath, certPath);
       fs.renameSync(tempKeyPath, keyPath);
 
-      console.info(`[FS] Successfully persisted certs for ${host}`);
+      // console.info(`[FS] Successfully persisted certs for ${host}`);
     } catch (err) {
       console.error(`[FS] Failed to save certs for ${host}:`, err);
 
@@ -69,14 +69,14 @@ export class CertCache {
     this.cache.delete(host.toLowerCase());
   }
 
-  private static clearCache(){
-    this.cache.clear()
+  private static clearCache() {
+    this.cache.clear();
   }
 
   public static async getCertFromCache(host: string) {
     // Synchronous LRU Cache Check
     if (this.isCached(host)) {
-      console.info("[CACHE] cert and key available in cache for", host);
+      // console.info("[CACHE] cert and key available in cache for", host);
       return this.cache.get(host);
     }
     // Check for In-Flight Task
@@ -84,7 +84,7 @@ export class CertCache {
 
     const existingTask = this.inFlight.get(host);
     if (existingTask) {
-      console.info(`[Lock] Attaching to in-flight task for: ${host}`);
+      // console.info(`[Lock] Attaching to in-flight task for: ${host}`);
       return existingTask;
     }
 
@@ -99,7 +99,7 @@ export class CertCache {
         const keyPath = path.join(process.cwd(), "creds", `${host}`, "key.pem");
         // Check FileSystem
         if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
-          console.info("[FS] cert and key available in fs for", host);
+          // console.info("[FS] cert and key available in fs for", host);
           const data = {
             cert: fs.readFileSync(certPath),
             key: fs.readFileSync(keyPath),
@@ -110,7 +110,7 @@ export class CertCache {
           // generate
           console.info("generating cert and key for", host);
           const { cert, key } = await pool.run({ host });
-           this.addToFile(host, { key, cert });
+          this.addToFile(host, { key, cert });
           this.addToCache(host, { key, cert });
           return { key, cert };
         }

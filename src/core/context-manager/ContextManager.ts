@@ -1,6 +1,6 @@
 import type { Socket } from "net";
 import type Stream from "stream";
-import type { ProxyContext } from "../../middleware/middleware.ts";
+import type { ProxyContext } from "../types/types.ts";
 
 export class ContextManager {
   private static contextStore = new WeakMap<
