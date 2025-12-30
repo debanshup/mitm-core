@@ -1,52 +1,55 @@
-import { unlink } from "fs";
-import type { Plugin } from "../../plugins/PluginRegistry.ts";
 import { Phase } from "../phase/Phase.ts";
-import type { ProxyContext } from "../../middleware/middleware.ts";
+import type { ProxyContext } from "../types/types.ts";
+import { HANDLERS } from "../handlers/registry/registry.ts";
 
 export class Pipeline {
   private static pipelines: Record<Phase, any[]> = {};
-  static compile(plugins: Set<Plugin>) {
+  static compile() {
+    const handlers = HANDLERS;
     this.pipelines = {
-      tcp: [...plugins]
-        .filter((p) => p.phase === Phase.TCP)
-        .sort((a, b) => a.order! - b.order!)
-        .map((p) => ({
-          name: p.name,
-          execute: p.execute,
+      tcp: [...handlers]
+        .filter((h) => h.phase === Phase.TCP)
+        .map((h) => ({
+          name: h.name,
+          execute: h.execute,
         })),
-      connect: [...plugins]
-        .filter((p) => p.phase === Phase.CONNECT)
-        .sort((a, b) => a.order! - b.order!)
-        .map((p) => ({
-          name: p.name,
-          execute: p.execute,
+      connect: [...handlers]
+        .filter((h) => h.phase === Phase.CONNECT)
+        .map((h) => ({
+          name: h.name,
+          execute: h.execute,
         })),
 
-      request: [...plugins]
-        .filter((p) => p.phase === Phase.REQUEST)
-        .sort((a, b) => a.order! - b.order!)
-        .map((p) => ({
-          name: p.name,
-          execute: p.execute,
+      request: [...handlers]
+        .filter((h) => h.phase === Phase.REQUEST)
+        .map((h) => ({
+          name: h.name,
+          execute: h.execute,
         })),
-      response: [...plugins]
-        .filter((p) => p.phase === Phase.RESPONSE)
-        .sort((a, b) => a.order! - b.order!)
-        .map((p) => ({
-          name: p.name,
-          execute: p.execute,
+      response: [...handlers]
+        .filter((h) => h.phase === Phase.RESPONSE)
+        .map((h) => ({
+          name: h.name,
+          execute: h.execute,
         })),
     };
-    console.info("Pipeline initialized")
+    console.info("Pipeline initialized");
   }
 
   static async run(phase: Phase, ctx: ProxyContext) {
     for (const step of this.pipelines[phase]!) {
-      await step.execute(ctx);
-
-      // short circuit
-      if (ctx.state.get("STOP")) {
-        break;
+      try {
+        await step.execute(ctx);
+        // short circuit
+        if (ctx.state.get("STOP")) {
+          break;
+        }
+      } catch (err) {
+        console.error(`[Plugin Error] ${step.name}:`, err);
+        if (!ctx.res?.headersSent) {
+          ctx.res!.statusCode = 502;
+          ctx.res!.end("Proxy Error: Plugin Failure");
+        }
       }
     }
   }
