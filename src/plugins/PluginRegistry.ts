@@ -1,5 +1,5 @@
-import type { ProxyContext } from "../middleware/middleware.ts";
 import type { Phase } from "../core/phase/Phase.ts";
+import type { ProxyContext } from "../core/types/types.ts";
 export type Plugin = {
   name: string;
   phase: Phase;

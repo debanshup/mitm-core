@@ -70,7 +70,7 @@ export default class Proxy {
   }
 
   public static initPipelines() {
-    Pipeline.compile(PluginRegistry.getEnabledPlugins());
+    Pipeline.compile();
   }
 
   public listen(port: number, callback?: () => void) {
@@ -87,12 +87,11 @@ export default class Proxy {
   public onTCPconnection(
     tcpConnectionHandler?: (socket: Socket, next: () => void) => void
   ) {
-
     this.httpServer?.on("connection", (socket) => {
       const defaultCallback = () => {
         connectionEvents.emit(ConnectionTypes.TCP, { socket });
       };
-      
+
       if (tcpConnectionHandler) {
         tcpConnectionHandler(socket, defaultCallback);
       } else {
@@ -162,3 +161,12 @@ export default class Proxy {
     });
   }
 }
+
+process.on("uncaughtException", (err) => {
+  console.error("Uncaught Exception:", err.message);
+  console.error(err.stack);
+});
+
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("Unhandled Rejection at:", promise, "reason:", reason);
+});

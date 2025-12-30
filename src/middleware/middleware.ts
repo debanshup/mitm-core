@@ -13,36 +13,18 @@ import { Pipeline } from "../core/pipelines/PipelineCompiler.ts";
 import { PluginRegistry } from "../plugins/PluginRegistry.ts";
 import { Phase } from "../core/phase/Phase.ts";
 import type { TLSSocket } from "tls";
+import { STATE } from "../core/state/state.ts";
 
 /**
  * @context_type
  */
-export const STATE = {
-  STOP: Symbol("STOP"),
-  CONNECT_HANDLED: Symbol("CONNECT_HANDLED"),
-  SOCKET: Symbol("SOCKET"),
-  TLS_SOCKET: Symbol("TLS_SOCKET"),
-};
-
-export type State = (typeof STATE)[keyof typeof STATE];
-
-export type ProxyContext = {
-  req?: IncomingMessage;
-  res?: ServerResponse;
-  upstreamRes: IncomingMessage;
-  socket?: Stream.Duplex | Socket;
-  tlsSocket: TLSSocket;
-  head?: any;
-  err?: Error;
-  state: Map<State | string, any>;
-};
 
 connectionEvents.on(ConnectionTypes.TCP, ({ socket }) => {
   // disable nagle's at tcp level
   socket.setNoDelay(true);
   const ctx = ContextManager.getContext(socket);
-  ctx.state.set(STATE.SOCKET, socket);
   socket.on("error", async (err: Error) => {
+    // console.error("[Socket destroyed at middleware]", socket.destroyed);
     if (!socket.destroyed) {
       socket.destroy();
     }
@@ -56,6 +38,7 @@ connectionEvents.on(ConnectionTypes.TCP, ({ socket }) => {
     }
     ctx.state.set(STATE.STOP, true);
   });
+  ctx.state.set(STATE.SOCKET, socket);
 });
 
 connectionEvents.on(
