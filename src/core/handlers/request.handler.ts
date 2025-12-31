@@ -2,8 +2,9 @@ import https from "https";
 import http from "http";
 import { Phase } from "../../core/phase/Phase.ts";
 import { BaseHandler } from "./base/base.handler.ts";
-import type { ProxyContext } from "../types/types.ts";
-import { pipeline } from "stream";
+import type { Destroyable, ProxyContext } from "../types/types.ts";
+import Stream, { Duplex, pipeline } from "stream";
+import { ProxyUtils } from "../utiils/ProxyUtils.ts";
 
 export class RequestHandler extends BaseHandler {
   static order = 25;
@@ -43,6 +44,26 @@ export class RequestHandler extends BaseHandler {
     timeout: 30000,
     scheduling: "lifo",
   });
+
+  // bridge
+
+  // private static bridge(source: Duplex, destination: Duplex) {
+  //   let destroyed = false;
+  //   pipeline(source, destination, (err) => {
+  //     if (err) {
+  //       if (destroyed) {
+  //         return;
+  //       }
+
+  //       source.destroy();
+  //       destination.destroy();
+  //       destroyed = true;
+  //     }
+  //   });
+  // }
+
+  // clean up
+
   static async execute(ctx: ProxyContext) {
     const { req, res } = ctx;
 
@@ -94,15 +115,35 @@ export class RequestHandler extends BaseHandler {
         // Pipe Upstream Response -> Client
         pipeline(upstreamRes, res, (err) => {
           if (err) {
-            console.error(`[Stream Error] Upstream -> Client: ${err}`);
-            res.destroy();
-            upstream.destroy();
+            if (err && !["ECONNRESET", "EPIPE"].includes((err as any).code)) {
+              console.error("Bridge Error:", err);
+            }
+            ProxyUtils.cleanUp([upstreamRes, res]);
           }
         });
       }
     );
     // disable nagle's
     upstream.setNoDelay(true);
+
+    // early guard
+    req.once("error", (err) => {
+      console.error("[req error]", err.message, req.url, targetUrl.href);
+      ProxyUtils.cleanUp([req, res, upstream, ctx.upstreamRes!, req.socket]);
+    });
+    res.once("error", (err) => {
+      console.error("[res error]", err.message, req.url, targetUrl.href);
+      ProxyUtils.cleanUp([req, res, upstream, ctx.upstreamRes!, req.socket]);
+    });
+
+    // Pipe Client Request -> Upstream Server
+
+    pipeline(req, upstream, (err) => {
+      if (err) {
+        console.error(`[Stream Error] Client -> Upstream: ${err.message}`);
+        ProxyUtils.cleanUp([upstream]);
+      }
+    });
 
     // upstream.on("timeout", ()=>{})
 
@@ -112,29 +153,15 @@ export class RequestHandler extends BaseHandler {
       if (!res.headersSent) {
         res.setHeader("Connection", "close");
         res.statusCode = 502; // Bad Gateway
-        res.end();
-        console.error(res.statusCode, "Sent to client for ->", res.req.url);
+        res.end("Bad Gateway");
+        console.error(res.statusCode, "Sent to client for ->", targetUrl.host);
       } else {
         res.destroy();
       }
-      if (!upstream.destroyed) {
-        upstream.destroy();
-        console.info("Upstream destroyed for ->", res.req.url);
-      }
+      ProxyUtils.cleanUp([upstream]);
     });
     upstream.on("close", () => {
-      if (!upstream.destroyed) {
-        upstream.destroy();
-      }
-    });
-
-    // Pipe Client Request -> Upstream Server
-
-    pipeline(req, upstream, (err) => {
-      if (err) {
-        console.error(`[Stream Error] Client -> Upstream: ${err.message}`);
-        upstream.destroy();
-      }
+      ProxyUtils.cleanUp([upstream]);
     });
   }
 }

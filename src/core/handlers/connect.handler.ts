@@ -7,7 +7,7 @@ import { Pipeline } from "../../core/pipelines/PipelineCompiler.ts";
 import { BaseHandler } from "./base/base.handler.ts";
 import type { ProxyContext } from "../types/types.ts";
 import { STATE } from "../state/state.ts";
-import type { Socket } from "net";
+import { ProxyUtils } from "../utiils/ProxyUtils.ts";
 export class HandshakeHandler extends BaseHandler {
   static order = 10;
   static phase = Phase.CONNECT;
@@ -60,24 +60,26 @@ export class HandshakeHandler extends BaseHandler {
       console.error("[Socket destroyed]", socket.destroyed, "for", host);
       console.error("[TLS Socket destroyed]", tlsSocket.destroyed, "for", host);
       // console.error(`[TLS Handshake Error] for ${host}:`, err.message);
-      if (!tlsSocket.destroyed) tlsSocket.destroy();
-      if (!socket.destroyed) socket.destroy();
+      ProxyUtils.cleanUp([socket, tlsSocket]);
     });
 
     ctx.tlsSocket = tlsSocket;
 
     // timeout for handshake if the client opens the connection but never sends the "ClientHello"
     const handshakeTimeout = setTimeout(() => {
-      // console.error(`[Handshake Timeout] for ${host}`);
-      if (!tlsSocket.destroyed) tlsSocket.destroy();
-      if (!socket.destroyed) socket.destroy();
+      console.error(`[Handshake Timeout] for ${host}`);
+      // create tunnel instread of interception
+
+      ProxyUtils.cleanUp([socket, tlsSocket]);
+
     }, 10000);
 
     tlsSocket.on("close", (hadErr) => {
       if (hadErr) {
         console.warn(`[TLS Close] Socket closed due to error for ${host}`);
       }
-      if (!socket.destroyed) socket.destroy();
+      // console.info("tls closed", tlsSocket.destroyed)
+      ProxyUtils.cleanUp([socket, tlsSocket]);
     });
 
     // tlsSocket.on("data", (d: Buffer) => {});
