@@ -25,3 +25,9 @@ export type Handler = {
   unregister(): void;
   isRegistered(): boolean;
 };
+
+export type Destroyable = {
+  destroyed?: boolean;
+  destroy: (error?: Error) => void;
+  end?: () => void;
+};

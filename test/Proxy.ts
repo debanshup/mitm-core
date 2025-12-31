@@ -1,23 +1,10 @@
+import { RequestHandler } from "../src/core/handlers/request.handler.ts";
+import { ResponseHandler } from "../src/core/handlers/response.handler.ts";
 import Proxy from "../src/dist/Proxy.ts";
-import ClientSocketErrorLoggerPlugin from "../src/plugins/log/ClientErrorLoggerPlugin.ts";
-import ResponseErrorLoggerPlugin from "../src/plugins/log/ResponseErrorLoggerPlugin.ts";
-import HandshakePlugin from "../src/plugins/connect/HandshakePlugin.ts";
-import RequestPlugin from "../src/plugins/request/RequestPlugin.ts";
+import ClientSocketErrorLoggerPlugin from "../src/plugins/log/clientErrorLogger.plugin.ts";
+import ResponseErrorLoggerPlugin from "../src/plugins/log/responseErrorLogger.plugin.ts";
 
-(await Proxy.registerMiddleware())
-  .registerPlugins([
-    // CacheRequestPlugin,
-    // CacheResponsePlugin,
-    // CacheConnectPlugin,
-    // RequestLoggerPlugin,
-    // ConnectLoggerPlugin,
-    // ResponseLoggerPlugin,
-    ClientSocketErrorLoggerPlugin,
-    ResponseErrorLoggerPlugin,
-    HandshakePlugin,
-    RequestPlugin
-  ])
-  .initPipelines();
+(await Proxy.registerMiddleware()).initPipelines();
 const proxy = new Proxy();
 
 proxy.onTCPconnection((socket, next) => {

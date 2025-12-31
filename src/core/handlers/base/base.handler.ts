@@ -1,5 +1,5 @@
 import type { Phase } from "../../phase/Phase.ts";
-import type { ProxyContext } from "../../types/types.ts";
+import type { Destroyable, ProxyContext } from "../../types/types.ts";
 
 export abstract class BaseHandler {
   static phase: Phase;
