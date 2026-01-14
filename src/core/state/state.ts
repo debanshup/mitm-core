@@ -1,6 +1,6 @@
 export const STATE = {
-  STOP: Symbol("STOP"),
-  CONNECT_HANDLED: Symbol("CONNECT_HANDLED"),
-  SOCKET: Symbol("SOCKET"),
-  TLS_SOCKET: Symbol("TLS_SOCKET"),
+  cert_cache_hit: Boolean,
+  req_cache_hit: Boolean,
+  finished: Boolean,
+  is_error: Boolean,
 };
