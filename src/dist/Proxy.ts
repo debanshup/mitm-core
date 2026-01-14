@@ -1,13 +1,15 @@
 import * as http from "http";
-import { WebSocketServer } from "ws";
-import Stream from "stream";
+// import { WebSocketServer } from "ws";
+import tls from "tls";
+import Stream, { Duplex, pipeline } from "stream";
 import { Socket } from "net";
 import {
   ConnectionTypes,
   connectionEvents,
 } from "../core/event-manager/EventBus.ts";
 import { PluginRegistry, type Plugin } from "../plugins/PluginRegistry.ts";
-import { Pipeline } from "../core/pipelines/PipelineCompiler.ts";
+import Pipeline from "../core/pipelines/PipelineCompiler.ts";
+// import ws, { WebSocketServer } from "ws";
 
 /**
  * @important register middleware in the main app / here to auto forward req or res to middleware
@@ -17,7 +19,7 @@ export default class Proxy {
    * @private
    */
   private httpServer: http.Server | undefined;
-  private wsServer: WebSocketServer | undefined;
+  // private wsServer: WebSocketServer | undefined;
   private static isMiddlewareRegistered: boolean = false;
 
   // private upstream: net.Socket | undefined;
@@ -63,9 +65,51 @@ export default class Proxy {
       this.httpServer = http.createServer({
         keepAlive: true,
       });
-    }
-    if (!this.wsServer) {
-      this.wsServer = new WebSocketServer({ server: this.httpServer });
+
+      // if (!this.wsServer) {
+      //   this.wsServer = new WebSocketServer({ server: this.httpServer });
+      // }
+
+      this.httpServer?.on("upgrade", (req, socket, head) => {
+        console.info("Upgrading for", req.url);
+        const host = req.headers.host;
+        if (!host) return socket.destroy();
+
+        const [hostname, portStr] = host.split(":");
+        const port = parseInt(portStr!) || 443;
+
+        // Use TLS for the upstream connection to handle HTTPS/WSS
+        const upstream = tls.connect(
+          port,
+          hostname,
+          { rejectUnauthorized: false },
+          () => {
+            // 1. Manually finish the handshake for the browser
+            socket.write(
+              "HTTP/1.1 101 Switching Protocols\r\n" +
+                "Upgrade: websocket\r\n" +
+                "Connection: Upgrade\r\n\r\n"
+            );
+
+            upstream.write(head);
+
+            // 2. Bidirectional Pipeline
+            pipeline(socket, upstream, () => {
+              socket.destroy();
+              upstream.destroy();
+            });
+            pipeline(upstream, socket, () => {
+              socket.destroy();
+              upstream.destroy();
+            });
+          }
+        );
+
+        upstream.on("error", () => {
+          socket.destroy();
+          upstream.destroy();
+        });
+      });
     }
   }
 
@@ -138,7 +182,6 @@ export default class Proxy {
       }
     });
   }
-
   //   public onResponse(
   //     callback: (req: http.IncomingMessage, res: http.ServerResponse) => void
   //   ) {

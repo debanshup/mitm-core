@@ -1,7 +1,7 @@
 import type { Destroyable } from "../types/types.ts";
 
 export class ProxyUtils {
-    static cleanUp(streams: Destroyable[]) {
+  static cleanUp(streams: Destroyable[]) {
     streams.forEach((s) => {
       if (s && s.destroyed === false) {
         if (typeof s.destroy === "function") {
