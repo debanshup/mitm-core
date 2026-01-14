@@ -9,11 +9,12 @@ import { parseConnectData } from "../utils/parser/parseReqData.ts";
 import { createHTTPSUpstream } from "../utils/upstream/httpsUpstream.ts";
 import type { Socket } from "net";
 import { ContextManager } from "../core/context-manager/ContextManager.ts";
-import { Pipeline } from "../core/pipelines/PipelineCompiler.ts";
+import Pipeline from "../core/pipelines/PipelineCompiler.ts";
 import { PluginRegistry } from "../plugins/PluginRegistry.ts";
 import { Phase } from "../core/phase/Phase.ts";
 import type { TLSSocket } from "tls";
 import { STATE } from "../core/state/state.ts";
+import { ProxyUtils } from "../core/utiils/ProxyUtils.ts";
 
 /**
  * @context_type
@@ -22,36 +23,47 @@ import { STATE } from "../core/state/state.ts";
 connectionEvents.on(ConnectionTypes.TCP, ({ socket }) => {
   // disable nagle's at tcp level
   socket.setNoDelay(true);
+  // Set a 2-minute inactivity timeout
+  socket.setTimeout(12000);
   const ctx = ContextManager.getContext(socket);
+  ctx.conn_state.set("conn", "tcp");
+
+  socket.on("timeout", () => {
+    // console.warn(
+    //   "Destroying idle socket to prevent CLOSE_WAIT",
+    //   ContextManager.getContext(socket).reqCtx!.req?.url
+    // );
+    socket.destroy();
+    ctx.reqCtx!.state.set(STATE.is_error, true);
+  });
   socket.on("error", async (err: Error) => {
-    // console.error("[Socket destroyed at middleware]", socket.destroyed);
-    if (!socket.destroyed) {
-      socket.destroy();
-    }
+    ProxyUtils.cleanUp([socket]);
     ctx.err = err;
-    ctx.state.set(STATE.STOP, true);
-    console.error("[TCP_CLIENT_ERROR]", err);
+    ctx.reqCtx!.state.set(STATE.is_error, true);
+    console.error("[TCP_CLIENT_ERROR]", err.stack);
   });
   socket.on("close", () => {
-    if (!socket.destroyed) {
-      socket.destroy();
-    }
-    ctx.state.set(STATE.STOP, true);
+    // console.error("[Socket destroyed at middleware]", socket.destroyed);
+    ProxyUtils.cleanUp([socket]);
+    ctx.reqCtx!.state.set(STATE.finished, true);
   });
-  ctx.state.set(STATE.SOCKET, socket);
+  // console.info("socket created", ctx.id);
 });
 
 connectionEvents.on(
   ConnectionTypes.HTTP,
   async ({ req, res }: { req: IncomingMessage; res: ServerResponse }) => {
-    // console.info(req.headers)
+    // console.info("HTTP_CONNECTION:", req.url);
+
     //mutate ctx
     const ctx = ContextManager.getContext(req.socket);
-    ctx.req = req;
-    ctx.res = res;
+    ctx.conn_type = "http";
+    ctx.reqCtx!.req = req;
+    ctx.reqCtx!.res = res;
+    ctx.reqCtx.next_phase = Phase.REQUEST;
     // run pipeline here
-    await Pipeline.run(Phase.REQUEST, ctx);
-    await Pipeline.run(Phase.RESPONSE, ctx);
+    await Pipeline.run(ctx);
+    // await Pipeline.run(Phase.RESPONSE, ctx);
 
     // const upstream = createHTTPUpstream(req, res);
     // upstream.on("error", async (err) => {
@@ -101,8 +113,10 @@ connectionEvents.on(
   }) => {
     // mutate ctx
     const ctx = ContextManager.getContext(socket);
-    ctx.req = req;
+    ctx.conn_type = "https";
     ctx.head = head;
+    ctx.reqCtx!.req = req;
+    ctx.reqCtx.next_phase = Phase.HANDSHAKE;
 
     /**
      * @important ->
@@ -113,7 +127,7 @@ connectionEvents.on(
       }
      */
 
-    await Pipeline.run(Phase.CONNECT, ctx);
+    await Pipeline.run(ctx);
 
     // run pipeline here
 

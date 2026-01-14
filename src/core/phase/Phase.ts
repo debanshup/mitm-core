@@ -1,5 +1,5 @@
 export const Phase = {
-  CONNECT : "connect",
+  HANDSHAKE : "handshake",
   REQUEST : "request",
   RESPONSE : "response",
   TCP:"tcp"

@@ -3,6 +3,6 @@ import type { Destroyable, ProxyContext } from "../../types/types.ts";
 
 export abstract class BaseHandler {
   static phase: Phase;
-  public static execute: (ctx: ProxyContext) => Promise<void>;
+  public static handle: (ctx: ProxyContext) => Promise<void>;
   protected constructor() {}
 }

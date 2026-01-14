@@ -1,56 +1,115 @@
 import { Phase } from "../phase/Phase.ts";
 import type { ProxyContext } from "../types/types.ts";
 import { HANDLERS } from "../handlers/registry/registry.ts";
+import { STATE } from "../state/state.ts";
+import { ContextManager } from "../context-manager/ContextManager.ts";
 
-export class Pipeline {
-  private static pipelines: Record<Phase, any[]> = {};
+export default class Pipeline {
+  protected constructor() {}
+  private static pipelines: Record<Phase, { name: any; handle: any }[]> = {};
   static compile() {
     const handlers = HANDLERS;
-    this.pipelines = {
-      tcp: [...handlers]
-        .filter((h) => h.phase === Phase.TCP)
+    // console.info(handlers);
+    Pipeline.pipelines = {
+      // tcp: [...handlers]
+      //   .filter((h) => h.phase === Phase.TCP)
+      //   .map((h) => ({
+      //     name: h.name,
+      //     handle: h.handle,
+      //   })),
+      handshake: [...handlers]
+        .filter((h) => h.phase === Phase.HANDSHAKE)
         .map((h) => ({
           name: h.name,
-          execute: h.execute,
-        })),
-      connect: [...handlers]
-        .filter((h) => h.phase === Phase.CONNECT)
-        .map((h) => ({
-          name: h.name,
-          execute: h.execute,
+          handle: h.handle,
         })),
 
       request: [...handlers]
         .filter((h) => h.phase === Phase.REQUEST)
         .map((h) => ({
           name: h.name,
-          execute: h.execute,
+          handle: h.handle,
         })),
       response: [...handlers]
         .filter((h) => h.phase === Phase.RESPONSE)
         .map((h) => ({
           name: h.name,
-          execute: h.execute,
+          handle: h.handle,
         })),
     };
+    // console.info(Pipeline.pipelines);
     console.info("Pipeline initialized");
   }
 
-  static async run(phase: Phase, ctx: ProxyContext) {
-    for (const step of this.pipelines[phase]!) {
+  private static validateError(ctx: ProxyContext) {
+    if (
+      ctx.reqCtx!.state.get(STATE.finished) ||
+      ctx.reqCtx!.state.get(STATE.is_error)
+    ) {
+      console.info(
+        "finished:",
+        ctx.reqCtx!.state.get(STATE.finished),
+        " error:",
+        ctx.reqCtx!.state.get(STATE.is_error)
+      );
+
+      return;
+    }
+  }
+
+  /**
+   * @redefine
+   */
+  static async run(ctx: ProxyContext) {
+    if (!ctx.reqCtx.next_phase) {
+      console.info("Next phase is undefined");
+    }
+
+    // console.info("Next Phase:",ctx.reqCtx.next_phase);
+
+    for (const step of Pipeline.pipelines[ctx.reqCtx.next_phase!]!) {
       try {
-        await step.execute(ctx);
-        // short circuit
-        if (ctx.state.get("STOP")) {
-          break;
-        }
+        await step.handle(ctx);
       } catch (err) {
         console.error(`[Plugin Error] ${step.name}:`, err);
-        if (!ctx.res?.headersSent) {
-          ctx.res!.statusCode = 502;
-          ctx.res!.end("Proxy Error: Plugin Failure");
+        if (!ctx.reqCtx!.res?.headersSent) {
+          ctx.reqCtx!.res!.statusCode = 502;
+          ctx.reqCtx!.res!.end("Proxy Error: Plugin Failure");
         }
       }
+    }
+  }
+
+  /**
+   *
+   * @experimental
+   */
+  static async _run(ctx: ProxyContext) {
+    const reqCtx = ctx.reqCtx!;
+
+    while (
+      !reqCtx.state.get(STATE.finished) ||
+      !reqCtx.state.get(STATE.is_error)
+    ) {
+      const phase = reqCtx.next_phase;
+      console.info("Next phase:", phase);
+      if (!phase) break;
+
+      for (const step of Pipeline.pipelines[phase] ?? []) {
+        console.info(
+          "finished:",
+          ctx.reqCtx.state.get(STATE.finished),
+          "error:",
+          ctx.reqCtx.state.get(STATE.is_error),
+          "url:",
+          ctx.reqCtx.req?.url
+        );
+        await step.handle(ctx);
+        if (reqCtx.state.get(STATE.finished)) break;
+      }
+
+      // prevent infinite loop
+      if (reqCtx.next_phase === phase) break;
     }
   }
 }
