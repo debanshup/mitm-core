@@ -9,8 +9,11 @@
     "module": "nodenext",
     "target": "esnext",
     "types": [
+      "node",
       "mocha"
     ],
+
+    "noImplicitAny":false,
     "moduleResolution": "nodenext",
     "sourceMap": true,
     "declaration": true,
@@ -35,5 +38,6 @@
     "skipLibCheck": true,
     "allowImportingTsExtensions": true,
     "noEmit": true,
+    
   }
 }
