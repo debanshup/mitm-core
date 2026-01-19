@@ -1,14 +1,14 @@
 import https from "https";
-import http, { IncomingMessage } from "http";
+import http from "http";
 import { Phase } from "../../core/phase/Phase.ts";
 import { BaseHandler } from "./base/base.handler.ts";
 import type { ProxyContext } from "../types/types.ts";
 import { pipeline } from "stream";
 import { ProxyUtils } from "../utiils/ProxyUtils.ts";
 import { STATE } from "../state/state.ts";
-
 import Pipeline from "../pipelines/PipelineCompiler.ts";
-import type { Socket } from "net";
+import { ResponseCache } from "../cache-manager/ResponseCache.ts";
+import { Tunnel } from "../direct-tunnel/Tunnel.ts";
 
 // import pipeline_agent from "../agent/pipeline.ts";
 export class RequestHandler extends BaseHandler {
@@ -53,15 +53,11 @@ export class RequestHandler extends BaseHandler {
 
   static async handle(ctx: ProxyContext) {
     const { reqCtx } = ctx;
-    // console.info(reqCtx!.state.get(STATE.finished))
-    // const { req, res } = reqCtx;
-
     if (!reqCtx?.req) {
       console.info("REQ not found!");
       return;
     }
     // console.info("running req handler...");
-
     let targetUrl: URL;
 
     try {
@@ -70,7 +66,7 @@ export class RequestHandler extends BaseHandler {
       } else {
         targetUrl = new URL(
           reqCtx!.req.url || "/",
-          `https://${reqCtx.req.headers.host}`
+          `https://${reqCtx.req.headers.host}`,
         );
       }
     } catch (error) {
@@ -85,115 +81,46 @@ export class RequestHandler extends BaseHandler {
     const isHTTPS = targetUrl.protocol === "https:";
     const requestModule = isHTTPS ? https : http;
     const agent = isHTTPS ? this.httpsAgent : this.httpAgent;
-    // console.info("creating upstream");
-    const upstream = requestModule.request(
-      {
+    // check for cache
+
+ 
+    const upstream = requestModule.request({
+      host: targetUrl.hostname,
+      port: targetUrl.port || (isHTTPS ? 443 : 80),
+      method: reqCtx.req?.method,
+      path: reqCtx.req?.url,
+      headers: {
+        ...reqCtx.req?.headers,
         host: targetUrl.hostname,
-        port: targetUrl.port || (isHTTPS ? 443 : 80),
-        method: reqCtx.req?.method,
-        path: reqCtx.req?.url,
-        headers: {
-          ...reqCtx.req?.headers,
-          host: targetUrl.hostname,
-          connection: "keep-alive",
-        },
-        agent,
-        timeout: 20000,
+        connection: "keep-alive",
       },
-      (upstreamRes) => {
-        // console.info("upstream res");
-        reqCtx.upstreamRes = upstreamRes;
-        // console
-        //   .info
-        //   // "STATUS for",targetUrl.host,upstreamRes.statusCode,"\n", "[Headers]:",upstreamRes.headers
-        //   ();
-        // upstreamRes.on("end", () => {
-        //   reqCtx.res!.end();
-        //   upstreamRes.socket?.destroy();
-        //   reqCtx.state.set(STATE.finished, true);
-        // });
-        upstreamRes.on("close", (hadErr: boolean) => {
-          ProxyUtils.cleanUp([upstreamRes, upstream]);
-          if (hadErr) {
-            reqCtx.state.set(STATE.is_error, true);
-            return;
-          }
-          // console.log("Upstream fully closed for:", targetUrl.host);
-          reqCtx.state.set(STATE.finished, true);
-        });
-
-        // if headers were already sent by plugins
-        if (reqCtx.res!.writableEnded) {
-          return;
-        }
-        reqCtx.res!.writeHead(
-          upstreamRes.statusCode || 500,
-          upstreamRes.headers
-        );
-        // Pipe Upstream Response -> Client
-        // upstreamRes.on("data", () => {});
-
-        pipeline(upstreamRes, reqCtx.res!, (err) => {
-          if (err) {
-            if (err && !["ECONNRESET", "EPIPE"].includes((err as any).code)) {
-              console.error("Bridge Error:", err);
-            }
-            ProxyUtils.cleanUp([upstreamRes]);
-            reqCtx.state.set(STATE.is_error, true);
-          }
-        });
-      }
-    );
+      agent,
+      timeout: 20000,
+    });
     // disable nagle's
     upstream.setNoDelay(true);
-
-    // early guard
-    // req.once("error", (err) => {
-    //   console.error("[req error]", err.message, req.url, targetUrl.href);
-    //   ProxyUtils.cleanUp([req, res, upstream, ctx.upstreamRes!, req.socket]);
-    // });
-    // res.once("error", (err) => {
-    //   console.error("[res error]", err.message, req.url, targetUrl.href);
-    //   ProxyUtils.cleanUp([req, res, upstream, ctx.upstreamRes!, req.socket]);
-    // });
+    reqCtx.upstream = upstream;
 
     // Pipe Client Request -> Upstream Server
 
     pipeline(reqCtx.req, upstream, (err) => {
       if (err) {
         console.error(`[Stream Error] Client -> Upstream: ${err.message}`);
+        if (reqCtx.res && !reqCtx.res.headersSent) {
+          reqCtx.res!.setHeader("Connection", "close");
+          reqCtx.res!.statusCode = 502; // Bad Gateway
+          reqCtx.res!.end("Bad Gateway");
+          console.error(
+            reqCtx.res!.statusCode,
+            "Sent to client for ->",
+            targetUrl.host,
+          );
+        }
         ProxyUtils.cleanUp([upstream, ctx.socket!]);
         reqCtx.state.set(STATE.is_error, true);
       }
     });
-
-    // upstream.on("timeout", ()=>{})
-
-    upstream.on("error", (e) => {
-      console.error(`[Upstream Error](${e}) for ${targetUrl.href}`);
-
-      if (reqCtx.res && !reqCtx.res.headersSent) {
-        reqCtx.res!.setHeader("Connection", "close");
-        reqCtx.res!.statusCode = 502; // Bad Gateway
-        reqCtx.res!.end("Bad Gateway");
-        console.error(
-          reqCtx.res!.statusCode,
-          "Sent to client for ->",
-          targetUrl.host
-        );
-      }
-      reqCtx.state.set(STATE.is_error, true);
-    });
-    upstream.on("close", (hadErr: boolean) => {
-      ProxyUtils.cleanUp([upstream]);
-      reqCtx.state.set(STATE.finished, true);
-    });
-
-    // setTimeout(() => {
-    //   if (!ctx.socket!.destroyed) {
-    //     console.log("⚠️ [upstream_side] leaked socket (likely CLOSE_WAIT) for", targetUrl.host);
-    //     ctx.socket!.destroy();
-    //   }
-    // }, 30000);
+    reqCtx.next_phase = Phase.RESPONSE;
+    await Pipeline.run(ctx);
   }
 }
