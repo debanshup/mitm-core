@@ -4,15 +4,9 @@ import {
   connectionEvents,
 } from "../core/event-manager/EventBus.ts";
 import Stream from "stream";
-import { createHTTPUpstream } from "../utils/upstream/httpUpstream.ts";
-import { parseConnectData } from "../utils/parser/parseReqData.ts";
-import { createHTTPSUpstream } from "../utils/upstream/httpsUpstream.ts";
-import type { Socket } from "net";
 import { ContextManager } from "../core/context-manager/ContextManager.ts";
 import Pipeline from "../core/pipelines/PipelineCompiler.ts";
-import { PluginRegistry } from "../plugins/PluginRegistry.ts";
 import { Phase } from "../core/phase/Phase.ts";
-import type { TLSSocket } from "tls";
 import { STATE } from "../core/state/state.ts";
 import { ProxyUtils } from "../core/utiils/ProxyUtils.ts";
 
@@ -23,29 +17,18 @@ import { ProxyUtils } from "../core/utiils/ProxyUtils.ts";
 connectionEvents.on(ConnectionTypes.TCP, ({ socket }) => {
   // disable nagle's at tcp level
   socket.setNoDelay(true);
-  // Set a 2-minute inactivity timeout
-  socket.setTimeout(12000);
   const ctx = ContextManager.getContext(socket);
   ctx.conn_state.set("conn", "tcp");
-
-  socket.on("timeout", () => {
-    // console.warn(
-    //   "Destroying idle socket to prevent CLOSE_WAIT",
-    //   ContextManager.getContext(socket).reqCtx!.req?.url
-    // );
-    socket.destroy();
-    ctx.reqCtx!.state.set(STATE.is_error, true);
-  });
   socket.on("error", async (err: Error) => {
     ProxyUtils.cleanUp([socket]);
     ctx.err = err;
     ctx.reqCtx!.state.set(STATE.is_error, true);
-    console.error("[TCP_CLIENT_ERROR]", err.stack);
+    console.error("[TCP_CLIENT_ERROR]", err);
   });
   socket.on("close", () => {
     // console.error("[Socket destroyed at middleware]", socket.destroyed);
     ProxyUtils.cleanUp([socket]);
-    ctx.reqCtx!.state.set(STATE.finished, true);
+    ctx.reqCtx!.state.set(STATE.is_finished, true);
   });
   // console.info("socket created", ctx.id);
 });
@@ -61,43 +44,9 @@ connectionEvents.on(
     ctx.reqCtx!.req = req;
     ctx.reqCtx!.res = res;
     ctx.reqCtx.next_phase = Phase.REQUEST;
-    // run pipeline here
+    // run pipeline
     await Pipeline.run(ctx);
-    // await Pipeline.run(Phase.RESPONSE, ctx);
-
-    // const upstream = createHTTPUpstream(req, res);
-    // upstream.on("error", async (err) => {
-    //   if (!upstream.destroyed) {
-    //     upstream.destroy();
-    //   }
-
-    //   /**
-    //    * set status code based on error type
-    //    */
-    //   res.statusCode = 502;
-    //   ctx.res = res;
-    //   ctx.err = err;
-    //   await Pipeline.run(Phase.RESPONSE, ctx);
-    //   res.end();
-    // });
-    // upstream.on("close", () => {
-    //   if (!upstream.destroyed) {
-    //     upstream.destroy();
-    //   }
-    // });
-
-    // upstream.on("response", async (r) => {
-    //   // console.log("status:", r.statusCode);
-    //   res.writeHead(r.statusCode!, r.headers);
-    //   await Pipeline.run(Phase.RESPONSE, ctx);
-    //   r.pipe(res);
-
-    //   // r.on("data", (chunk: Buffer) => {
-    //   //   // console.log("Received chunk:", chunk.length);
-    //   // });
-    // });
-    // req.pipe(upstream);
-  }
+  },
 );
 
 connectionEvents.on(
@@ -111,47 +60,13 @@ connectionEvents.on(
     socket: Stream.Duplex;
     head: any;
   }) => {
+    // console.info(req.headers.host)
     // mutate ctx
     const ctx = ContextManager.getContext(socket);
     ctx.conn_type = "https";
     ctx.head = head;
     ctx.reqCtx!.req = req;
     ctx.reqCtx.next_phase = Phase.HANDSHAKE;
-
-    /**
-     * @important ->
-     *     if (site is protected) {
-        bypass MITM → direct tunnel}
-        else {
-        MITM normally
-      }
-     */
-
     await Pipeline.run(ctx);
-
-    // run pipeline here
-
-    // const { host, port } = parseConnectData(req);
-
-    // socket.write("HTTP/1.1 200 Connection Established\r\n\r\n");
-    // /**
-    //  * @default
-    //  */
-    // const upstream = createHTTPSUpstream(host!, port);
-    // upstream.on("error", async (err) => {
-    //   if (!upstream.destroyed) {
-    //     upstream.destroy();
-    //   }
-    //   ctx.err = err;
-    //   await Pipeline.run(Phase.RESPONSE, ctx);
-    // });
-    // upstream.on("close", () => {
-    //   if (!upstream.destroyed) {
-    //     upstream.destroy();
-    //   }
-    // });
-
-    // socket.pipe(upstream);
-    // upstream.pipe(socket);
-  }
+  },
 );
