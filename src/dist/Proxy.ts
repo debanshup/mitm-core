@@ -88,7 +88,7 @@ export default class Proxy {
             socket.write(
               "HTTP/1.1 101 Switching Protocols\r\n" +
                 "Upgrade: websocket\r\n" +
-                "Connection: Upgrade\r\n\r\n"
+                "Connection: Upgrade\r\n\r\n",
             );
 
             upstream.write(head);
@@ -102,7 +102,7 @@ export default class Proxy {
               socket.destroy();
               upstream.destroy();
             });
-          }
+          },
         );
 
         upstream.on("error", () => {
@@ -129,7 +129,7 @@ export default class Proxy {
   }
 
   public onTCPconnection(
-    tcpConnectionHandler?: (socket: Socket, next: () => void) => void
+    tcpConnectionHandler?: (socket: Socket, next: () => void) => void,
   ) {
     this.httpServer?.on("connection", (socket) => {
       const defaultCallback = () => {
@@ -149,8 +149,8 @@ export default class Proxy {
       req: http.IncomingMessage,
       socket: Stream.Duplex,
       head: any,
-      next: () => void
-    ) => void
+      next: () => void,
+    ) => void,
   ) {
     this.httpServer?.on("connect", (req, socket, head) => {
       const defaultCallback = () => {
@@ -168,8 +168,8 @@ export default class Proxy {
     reqHandler?: (
       req: http.IncomingMessage,
       res: http.ServerResponse,
-      next: () => void
-    ) => void
+      next: () => void,
+    ) => void,
   ) {
     this.httpServer?.on("request", (req, res) => {
       const defaultCallback = () => {
