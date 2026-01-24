@@ -9,23 +9,86 @@ import { STATE } from "../state/state.ts";
 import { ProxyUtils } from "../utiils/ProxyUtils.ts";
 
 import Pipeline from "../pipelines/PipelineCompiler.ts";
+import { Tunnel } from "../direct-tunnel/Tunnel.ts";
 
-// import { Pipeline } from "../../core/pipelines/PipelineCompiler.ts";
 export class HandshakeHandler extends BaseHandler {
   static phase = Phase.HANDSHAKE;
+  private static httpServer = createServer(async (req, res) => {
+    const ctx = (req.socket as any).__ctx as ProxyContext;
+    const reqCtx = ctx.reqCtx;
+    try {
+      const upstreamHeaders = { ...req.headers };
+      // use an array for deletion
+      delete upstreamHeaders["via"];
+      delete upstreamHeaders["x-forwarded-for"];
+      delete upstreamHeaders["x-forwarded-host"];
+      delete upstreamHeaders["x-forwarded-proto"];
+      delete upstreamHeaders["forwarded"];
+      delete upstreamHeaders["proxy-authorization"];
+      delete upstreamHeaders["te"];
+      delete upstreamHeaders["trailers"];
+      if (upstreamHeaders["proxy-connection"]) {
+        upstreamHeaders["connection" as string] =
+          upstreamHeaders["proxy-connection"];
+        delete upstreamHeaders["proxy-connection"];
+      }
+      req.headers = upstreamHeaders;
+      ctx.reqCtx!.req = req;
+      ctx.reqCtx!.res = res;
+    } catch (err) {
+      console.error("[Internal Parser Error]", err);
+      if (!req.socket.destroyed) req.socket.destroy();
+      if (!res.headersSent) {
+        res.statusCode = 502;
+        res.end("Bad Gateway");
+      } else {
+        res.destroy();
+      }
+    }
+    reqCtx.res = res;
+    // ctx.tlsSocket = tlsSocket;
+    reqCtx.next_phase = Phase.REQUEST;
+    await Pipeline.run(ctx);
+
+    // console.info(reqCtx.next_phase)
+  });
+  private static handleH1Session(ctx: ProxyContext, tlsSocket: tls.TLSSocket) {
+    // console.log(
+    //   "Server hash:",
+    //   this.httpServer.constructor.name,
+    //   this.httpServer.listenerCount("request"),
+    // );
+
+    (tlsSocket as any).__ctx = ctx;
+    this.httpServer.emit("connection", tlsSocket);
+  }
+  private static handleH2Session(ctx: ProxyContext, tlsSocket: tls.TLSSocket) {
+    /**
+     * @todo: implement this
+     */
+  }
+
   public static async handle(ctx: ProxyContext) {
-    const { socket, reqCtx } = ctx;
+    const { reqCtx } = ctx;
+    const socket = reqCtx.req?.socket;
     // console.info(req, socket);
     if (!reqCtx?.req || !socket) {
       return;
     }
-    if (reqCtx.state.get(STATE.finished)) {
+    if (reqCtx.state.get(STATE.is_finished)) {
+      return;
+    }
+    if (socket.writable && !socket.destroyed) {
+      socket.write("HTTP/1.1 200 Connection Established\r\n\r\n");
+    }
+    const shouldBypass = Tunnel.shouldBypass(reqCtx.req);
+    // console.info(shouldBypass);
+    if (shouldBypass) {
+      await Tunnel.createDirectTunnel(ctx);
       return;
     }
 
     const { host } = parseConnectData(reqCtx.req);
-
-    socket.write("HTTP/1.1 200 Connection Established\r\n\r\n");
 
     // console.time("cert_gen for " + host);
     const data = await CertManager.getCert(host!);
@@ -61,7 +124,7 @@ export class HandshakeHandler extends BaseHandler {
     });
 
     tlsSocket.on("error", (err) => {
-      console.error(`[TLS Handshake Error] for ${host}:`, err.message);
+      console.error(`[TLS Handshake Error] for ${host}:`, err);
       ProxyUtils.cleanUp([socket, tlsSocket]);
       reqCtx.state.set(STATE.is_error, true);
     });
@@ -76,61 +139,20 @@ export class HandshakeHandler extends BaseHandler {
 
     // timeout for handshake if the client opens the connection but never sends the "ClientHello"
     const handshakeTimeout = setTimeout(() => {
-      // console.error(`[Handshake Timeout] for ${host}`);
-      // create tunnel instread of interception
       ProxyUtils.cleanUp([socket, tlsSocket]);
       reqCtx.state.set(STATE.is_error, true);
 
       // console.info(socket.closed, tlsSocket.closed);
     }, 10000);
 
-    // tlsSocket.on("timeout", ()=>{
-
-    // })
-
-    // tlsSocket.on("data", (d: Buffer) => {});
-    tlsSocket.on("secure", () => {
-      // console.info("tls handshake ok");
+    tlsSocket.on("secure", async () => {
+      // console.info(tlsSocket.alpnProtocol, "for", host);
+      if (tlsSocket.alpnProtocol === "h2") {
+        await Tunnel.createDirectTunnel(ctx);
+        return;
+      }
       clearTimeout(handshakeTimeout);
-      const httpServer = createServer(async (req, res) => {
-        // error handler for internal parser
-        try {
-          const upstreamHeaders = { ...req.headers };
-          // use an array for deletion
-          delete upstreamHeaders["via"];
-          delete upstreamHeaders["x-forwarded-for"];
-          delete upstreamHeaders["x-forwarded-host"];
-          delete upstreamHeaders["x-forwarded-proto"];
-          delete upstreamHeaders["forwarded"];
-          delete upstreamHeaders["proxy-authorization"];
-          delete upstreamHeaders["te"];
-          delete upstreamHeaders["trailers"];
-          if (upstreamHeaders["proxy-connection"]) {
-            upstreamHeaders["connection" as string] =
-              upstreamHeaders["proxy-connection"];
-            delete upstreamHeaders["proxy-connection"];
-          }
-          req.headers = upstreamHeaders;
-          ctx.reqCtx!.req = req;
-          ctx.reqCtx!.res = res;
-        } catch (err) {
-          console.error("[Internal Parser Error]", err);
-          if (!req.socket.destroyed) req.socket.destroy();
-          if (!res.headersSent) {
-            res.statusCode = 502;
-            res.end("Bad Gateway");
-          } else {
-            res.destroy();
-          }
-        }
-        reqCtx.res = res;
-        ctx.tlsSocket = tlsSocket;
-        reqCtx.next_phase = Phase.REQUEST;
-        // console.info(reqCtx.next_phase)
-
-        await Pipeline.run(ctx);
-      });
-      httpServer.emit("connection", tlsSocket);
+      HandshakeHandler.handleH1Session(ctx, tlsSocket)!;
     });
   }
 }
