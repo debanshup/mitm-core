@@ -7,8 +7,6 @@ import { pipeline } from "stream";
 import { ProxyUtils } from "../utiils/ProxyUtils.ts";
 import { STATE } from "../state/state.ts";
 import Pipeline from "../pipelines/PipelineCompiler.ts";
-import { ResponseCache } from "../cache-manager/ResponseCache.ts";
-import { Tunnel } from "../direct-tunnel/Tunnel.ts";
 
 // import pipeline_agent from "../agent/pipeline.ts";
 export class RequestHandler extends BaseHandler {
@@ -31,25 +29,6 @@ export class RequestHandler extends BaseHandler {
     timeout: 30000,
     scheduling: "lifo",
   });
-
-  // bridge
-
-  // private static bridge(source: Duplex, destination: Duplex) {
-  //   let destroyed = false;
-  //   pipeline(source, destination, (err) => {
-  //     if (err) {
-  //       if (destroyed) {
-  //         return;
-  //       }
-
-  //       source.destroy();
-  //       destination.destroy();
-  //       destroyed = true;
-  //     }
-  //   });
-  // }
-
-  // clean up
 
   static async handle(ctx: ProxyContext) {
     const { reqCtx } = ctx;
@@ -76,14 +55,12 @@ export class RequestHandler extends BaseHandler {
       return;
     }
 
-    // console.info(targetUrl);
-
     const isHTTPS = targetUrl.protocol === "https:";
     const requestModule = isHTTPS ? https : http;
     const agent = isHTTPS ? this.httpsAgent : this.httpAgent;
-    // check for cache
 
- 
+
+    
     const upstream = requestModule.request({
       host: targetUrl.hostname,
       port: targetUrl.port || (isHTTPS ? 443 : 80),
@@ -102,10 +79,9 @@ export class RequestHandler extends BaseHandler {
     reqCtx.upstream = upstream;
 
     // Pipe Client Request -> Upstream Server
-
     pipeline(reqCtx.req, upstream, (err) => {
       if (err) {
-        console.error(`[Stream Error] Client -> Upstream: ${err.message}`);
+        // console.error(`[Stream Error] Client -> Upstream: ${err.message}`);
         if (reqCtx.res && !reqCtx.res.headersSent) {
           reqCtx.res!.setHeader("Connection", "close");
           reqCtx.res!.statusCode = 502; // Bad Gateway
@@ -113,10 +89,11 @@ export class RequestHandler extends BaseHandler {
           console.error(
             reqCtx.res!.statusCode,
             "Sent to client for ->",
-            targetUrl.host,
+            targetUrl.href,
+            "err:", err
           );
         }
-        ProxyUtils.cleanUp([upstream, ctx.socket!]);
+        ProxyUtils.cleanUp([upstream, reqCtx.req?.socket!]);
         reqCtx.state.set(STATE.is_error, true);
       }
     });
