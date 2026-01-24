@@ -1,9 +1,4 @@
-import { RequestHandler } from "../src/core/handlers/request.handler.ts";
-import { ResponseHandler } from "../src/core/handlers/response.handler.ts";
 import Proxy from "../src/dist/Proxy.ts";
-import ClientSocketErrorLoggerPlugin from "../src/plugins/log/clientErrorLogger.plugin.ts";
-import ResponseErrorLoggerPlugin from "../src/plugins/log/responseErrorLogger.plugin.ts";
-
 (await Proxy.registerMiddleware()).initPipelines();
 const proxy = new Proxy();
 
@@ -25,4 +20,8 @@ proxy.onRequest((req, res, next) => {
   // console.timeEnd("_REQ");
 });
 
-proxy.listen(8081);
+proxy.onError((err) => {
+  console.error(err.message);
+});
+
+proxy.listen(8001);
