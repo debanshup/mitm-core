@@ -41,22 +41,6 @@ export default class Pipeline {
     console.info("Pipeline initialized");
   }
 
-  private static validateError(ctx: ProxyContext) {
-    if (
-      ctx.reqCtx!.state.get(STATE.finished) ||
-      ctx.reqCtx!.state.get(STATE.is_error)
-    ) {
-      console.info(
-        "finished:",
-        ctx.reqCtx!.state.get(STATE.finished),
-        " error:",
-        ctx.reqCtx!.state.get(STATE.is_error)
-      );
-
-      return;
-    }
-  }
-
   /**
    * @redefine
    */
@@ -80,36 +64,5 @@ export default class Pipeline {
     }
   }
 
-  /**
-   *
-   * @experimental
-   */
-  static async _run(ctx: ProxyContext) {
-    const reqCtx = ctx.reqCtx!;
 
-    while (
-      !reqCtx.state.get(STATE.finished) ||
-      !reqCtx.state.get(STATE.is_error)
-    ) {
-      const phase = reqCtx.next_phase;
-      console.info("Next phase:", phase);
-      if (!phase) break;
-
-      for (const step of Pipeline.pipelines[phase] ?? []) {
-        console.info(
-          "finished:",
-          ctx.reqCtx.state.get(STATE.finished),
-          "error:",
-          ctx.reqCtx.state.get(STATE.is_error),
-          "url:",
-          ctx.reqCtx.req?.url
-        );
-        await step.handle(ctx);
-        if (reqCtx.state.get(STATE.finished)) break;
-      }
-
-      // prevent infinite loop
-      if (reqCtx.next_phase === phase) break;
-    }
-  }
 }
