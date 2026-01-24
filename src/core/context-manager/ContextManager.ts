@@ -14,7 +14,7 @@ export class ContextManager {
     if (!this.contextStore.has(socket)) {
       this.contextStore.set(socket, {
         id: crypto.randomUUID(),
-        socket,
+        // socket,
         conn_state: new Map(),
         reqCtx: {
           id: crypto.randomUUID(),
