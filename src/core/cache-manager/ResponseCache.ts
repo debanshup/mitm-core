@@ -33,10 +33,9 @@ export class ResponseCache {
     res: http.IncomingMessage,
     bodySize: number
   ): boolean {
-    // 1. Method Check: Only idempotent safe methods
+    // 1. Method Check
     if (req.method !== "GET" && req.method !== "HEAD") return false;
-    if (req.headers) {
-    }
+    
     // 2. Status Code Check: Use your whitelist!
     const CACHEABLE_STATUS_CODES = [
       200, 203, 204, 300, 301, 302, 307, 308, 404, 410,
@@ -45,7 +44,6 @@ export class ResponseCache {
     if (!CACHEABLE_STATUS_CODES.includes(status)) return false;
 
     // 3. Cache-Control "no-store" Check (Privacy/Security)
-    // If the server says 'no-store', a MITM proxy MUST NOT cache it.
     const cacheControl = res.headers["cache-control"] || "";
     if (cacheControl.includes("no-store") || cacheControl.includes("private")) {
       return false;
@@ -63,7 +61,7 @@ export class ResponseCache {
 
     // For 200 OK, be selective to save LRU space
     const isCachableType =
-      ct.includes("text/html") ||
+      // ct.includes("text/html") ||
       ct.includes("text/css") ||
       ct.includes("javascript") ||
       ct.includes("json") || // Added JSON for API heavy sites
@@ -89,7 +87,7 @@ export class ResponseCache {
 
       // no-store blocks caching
       if (cacheControl.includes("no-store")) {
-        return 0; // ⭐ **DO NOT CACHE**
+        return 0;
       }
 
       // no-cache → expire immediately but keep entry
