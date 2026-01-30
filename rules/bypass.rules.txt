@@ -1,0 +1,46 @@
+# bypass
+^(?:[a-z0-9-]+\.)*npmjs\.com$
+^(?:[a-z0-9-]+\.)*alive\.github\.com$
+^(?:[a-z0-9-]+\.)*bookmyshow\.com$
+^(?:[a-z0-9-]+\.)*whatsapp\.com$
+^(?:[a-z0-9-]+\.)*whatsapp\.net$
+^(?:[a-z0-9-]+\.)*mistral\.ai$
+^(?:[a-z0-9-]+\.)*perplexity\.ai$
+^(?:[a-z0-9-]+\.)*docker\.com$
+^(?:[a-z0-9-]+\.)*ecs\.office\.com$
+^(?:[a-z0-9-]+\.)*g\.live\.com$
+^(?:[a-z0-9-]+\.)*www\.recaptcha\.net$
+^(?:[a-z0-9-]+\.)*cloudflareaccess\.com$
+^(?:[a-z0-9-]+\.)*oneclient\.sfx\.ms$
+^(?:[a-z0-9-]+\.)*update\.microsoft\.com$
+^(?:[a-z0-9-]+\.)*mtalk\.google\.com$
+^(?:[a-z0-9-]+\.)*canva\.com$
+^(?:[a-z0-9-]+\.)*google\.com$
+^(?:[a-z0-9-]+\.)*reddit\.com$
+^(?:[a-z0-9-]+\.)*quora\.com$
+
+
+# --- Google Infrastructure & Beacons ---
+^(?:[a-z0-9-]+\.)*gvt[1-3]\.com$
+^(?:[a-z0-9-]+\.)*gcp\.gvt2\.com$
+^(?:[a-z0-9-]+\.)*googleapis\.com$
+^(?:[a-z0-9-]+\.)*gstatic\.com$
+
+# --- Microsoft Windows & Office Update Services ---
+^(?:[a-z0-9-]+\.)*windowsupdate\.microsoft\.com$
+^(?:[a-z0-9-]+\.)*update\.microsoft\.com$
+^(?:[a-z0-9-]+\.)*windowsupdate\.com$
+^(?:[a-z0-9-]+\.)*mp\.microsoft\.com$
+^(?:[a-z0-9-]+\.)*delivery\.mp\.microsoft\.com$
+^(?:[a-z0-9-]+\.)*officeconfig\.microsoft\.com$
+^(?:[a-z0-9-]+\.)*diagnostics\.office\.com$
+
+# --- Microsoft Store & Modern Apps ---
+^(?:[a-z0-9-]+\.)*microsoft\.com$
+^(?:[a-z0-9-]+\.)*msecnd\.net$
+^(?:[a-z0-9-]+\.)*microsoft\.com\.edgesuite\.net$
+^(?:[a-z0-9-]+\.)*delivery\.mp\.microsoft\.com$
+^(?:[a-z0-9-]+\.)*displaycatalog\.mp\.microsoft\.com$
+^(?:[a-z0-9-]+\.)*sls\.update\.microsoft\.com$
+^(?:[a-z0-9-]+\.)*store-images\.s-microsoft\.com$
+^(?:[a-z0-9-]+\.)*azureedge\.net$
