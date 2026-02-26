@@ -1,6 +1,6 @@
 import { LRUCache } from "lru-cache";
 import type { CachedResponse } from "../types/types.ts";
-import http from "http";
+import http, { type IncomingHttpHeaders } from "http";
 export class ResponseCache {
   protected constructor() {}
 
@@ -10,6 +10,10 @@ export class ResponseCache {
     sizeCalculation: (value) => value.body.length || 1,
     ttl: 1000 * 60 * 5, // Default 5 minute TTL
   });
+
+  private static CACHEABLE_STATUS_CODES = new Set([
+    200, 203, 204, 206, 300, 301, 302, 307, 308, 404, 410,
+  ]);
 
   static get(key: string) {
     return this.cache.get(key);
@@ -25,35 +29,63 @@ export class ResponseCache {
     return `${req.method}:${host}${req.url}:${encoding}`;
   }
 
-  /**
-   * @test_and_fix_for_npm “Code” tab breaks
-   */
+ 
   static isCacheableResponse(
     req: http.IncomingMessage,
     res: http.IncomingMessage,
-    bodySize: number
+    bodySize: number,
   ): boolean {
-    // 1. Method Check
-    if (req.method !== "GET" && req.method !== "HEAD") return false;
-    
-    // 2. Status Code Check: Use your whitelist!
-    const CACHEABLE_STATUS_CODES = [
-      200, 203, 204, 300, 301, 302, 307, 308, 404, 410,
-    ];
-    const status = res.statusCode || 0;
-    if (!CACHEABLE_STATUS_CODES.includes(status)) return false;
-
-    // 3. Cache-Control "no-store" Check (Privacy/Security)
-    const cacheControl = res.headers["cache-control"] || "";
-    if (cacheControl.includes("no-store") || cacheControl.includes("private")) {
+    // Method Check
+    if (req.method !== "GET" && req.method !== "HEAD") {
+      return false;
+    }
+    if (req.headers["authorization"]) {
       return false;
     }
 
-    // 4. Size Guard
+    // Matrix / Long-Polling failsafe
+    // If the server doesn't provide a content-length, it's likely a stream
+    // or chunked transfer (like Server-Sent Events). Don't cache it.
+
+    const reqAccept = (req.headers["accept"] || "").toLowerCase();
+    const resContentType = (res.headers["content-type"] || "").toLowerCase();
+    const reqUpgrade = (req.headers["upgrade"] || "").toLowerCase();
+
+    // Block Server-Sent Events (SSE) and WebSockets
+    if (
+      reqAccept.includes("text/event-stream") ||
+      resContentType.includes("text/event-stream") ||
+      reqUpgrade.includes("websocket")
+    ) {
+      return false;
+    }
+
+    // Block open-ended streams, BUT allow valid 'chunked' transfers!
+    const hasLength = !!res.headers["content-length"];
+    const isChunked = res.headers["transfer-encoding"] === "chunked";
+
+    if (!hasLength && !isChunked) {
+      return false;
+    }
+    const status = res.statusCode || 0;
+    if (!ResponseCache.CACHEABLE_STATUS_CODES.has(status)) return false;
+
+    //  Cache-Control "no-store" Check (Privacy/Security)
+    const cacheControl = (res.headers["cache-control"] || "").toLowerCase();
+    if (
+      cacheControl.includes("no-store") ||
+      cacheControl.includes("no-cache") ||
+      cacheControl.includes("private") ||
+      cacheControl.includes("must-revalidate")
+    ) {
+      return false;
+    }
+
+    //   Size Guard
     const sizeLimit = 5 * 1024 * 1024; // 5MB
     if (bodySize > sizeLimit) return false;
 
-    // 5. Content-Type Strategy
+    //  Content-Type Strategy
     const ct = res.headers["content-type"] || "";
 
     // Always cache Redirects and No-Content (even if body is 0)
@@ -72,27 +104,42 @@ export class ResponseCache {
   }
 
   static getExpirationTimestamp(
-    headers: any,
-    defaultTtlMs: number = 300000
+    headers: IncomingHttpHeaders,
+    defaultTtlMs: number = 300000,
+    host: string,
   ): number {
     const now = Date.now();
 
-    const cacheControl = headers["cache-control"];
-    if (cacheControl) {
-      // max-age
-      const maxAgeMatch = cacheControl.match(/max-age=(\d+)/);
-      if (maxAgeMatch) {
-        return now + parseInt(maxAgeMatch[1], 10) * 1000;
-      }
+    const getNormalizedHeader = (key: string) => {
+      const val = headers[key.toLowerCase()];
 
-      // no-store blocks caching
+      return Array.isArray(val)
+        ? val.join(", ").toLowerCase()
+        : String(val || "").toLowerCase();
+    };
+
+    const cacheControl = getNormalizedHeader("cache-control");
+    // console.info(cacheControl);
+    if (cacheControl) {
       if (cacheControl.includes("no-store")) {
         return 0;
       }
-
-      // no-cache → expire immediately but keep entry
-      if (cacheControl.includes("no-cache")) {
-        return now; // requires revalidation
+      if (
+        cacheControl.includes("no-cache") ||
+        cacheControl.includes("must-revalidate")
+      ) {
+        return now; // revalidation
+      }
+      // max-age
+      const sMaxAge = cacheControl.match(/s-maxage=(\d+)/);
+      if (sMaxAge) {
+        return now + parseInt(sMaxAge[1]!, 10) * 1000;
+      }
+      const maxAge = cacheControl.match(/max-age=(\d+)/);
+      if (maxAge) {
+        const seconds = parseInt(maxAge[1]!, 10);
+        if (seconds === 0) return now;
+        return now + seconds * 1000;
       }
     }
 
@@ -101,10 +148,12 @@ export class ResponseCache {
     if (expires) {
       const expiresDate = Date.parse(expires);
       if (!isNaN(expiresDate)) {
-        return expiresDate;
+        // RFC: If Expires is in the past, it's already stale
+        return Math.max(now, expiresDate);
       }
     }
 
+    console.info("using fallback timestamp for", host);
     // Fallback TTL
     return now + defaultTtlMs;
   }
