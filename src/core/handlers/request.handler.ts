@@ -6,9 +6,8 @@ import type { ProxyContext } from "../types/types.ts";
 import { pipeline } from "stream";
 import { ProxyUtils } from "../utiils/ProxyUtils.ts";
 import { STATE } from "../state/state.ts";
-import Pipeline from "../pipelines/PipelineCompiler.ts";
+import { ResponseCache } from "../cache-manager/ResponseCache.ts";
 
-// import pipeline_agent from "../agent/pipeline.ts";
 export class RequestHandler extends BaseHandler {
   // static order = 25;
   static phase = Phase.REQUEST;
@@ -55,12 +54,20 @@ export class RequestHandler extends BaseHandler {
       return;
     }
 
+    // console.info(targetUrl)
+    
+
     const isHTTPS = targetUrl.protocol === "https:";
     const requestModule = isHTTPS ? https : http;
     const agent = isHTTPS ? this.httpsAgent : this.httpAgent;
+    const cache_key = ResponseCache.generateKey(reqCtx.req);
+    const cached = ResponseCache.get(cache_key);
+
+    if (cached?.etag) {
+      reqCtx.req!.headers.etag = cached.etag;
+    }
 
 
-    
     const upstream = requestModule.request({
       host: targetUrl.hostname,
       port: targetUrl.port || (isHTTPS ? 443 : 80),
@@ -81,23 +88,26 @@ export class RequestHandler extends BaseHandler {
     // Pipe Client Request -> Upstream Server
     pipeline(reqCtx.req, upstream, (err) => {
       if (err) {
-        // console.error(`[Stream Error] Client -> Upstream: ${err.message}`);
+        console.error(`[Stream Error] Client -> Upstream: ${err.message}`);
         if (reqCtx.res && !reqCtx.res.headersSent) {
           reqCtx.res!.setHeader("Connection", "close");
           reqCtx.res!.statusCode = 502; // Bad Gateway
           reqCtx.res!.end("Bad Gateway");
+          console.info("HTTPS", isHTTPS)
           console.error(
             reqCtx.res!.statusCode,
             "Sent to client for ->",
             targetUrl.href,
-            "err:", err
+            "err:",
+            err,
           );
         }
         ProxyUtils.cleanUp([upstream, reqCtx.req?.socket!]);
         reqCtx.state.set(STATE.is_error, true);
+        
       }
     });
     reqCtx.next_phase = Phase.RESPONSE;
-    await Pipeline.run(ctx);
+    // await Pipeline.run(ctx);
   }
 }
