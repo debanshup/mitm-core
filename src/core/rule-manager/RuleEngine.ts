@@ -12,9 +12,11 @@ export class RuleEngine {
     "SELF_SIGNED_CERT_IN_CHAIN",
     "DEPTH_ZERO_SELF_SIGNED_CERT",
     "ERR_TLS_CERT_ALTNAME_INVALID",
+   
     "ERR_SSL_PINNED_KEY_NOT_IN_CERT_CHAIN",
     "ERR_CERT_AUTHORITY_INVALID",
     "ERR_CERT_COMMON_NAME_INVALID",
+    // "HPE_HEADER_OVERFLOW"
   ];
 
   private static bypassRule: RegExp[] = [];
@@ -23,7 +25,7 @@ export class RuleEngine {
 
   static {
     this.init("rules/bypass.rules.txt");
-    console.info(this.bypassRule);
+    // console.info(this.bypassRule);
   }
 
   private static init(fsPath: string) {
@@ -44,7 +46,7 @@ export class RuleEngine {
     if (RuleEngine.reloadTimer) clearTimeout(RuleEngine.reloadTimer);
     RuleEngine.reloadTimer = setTimeout(() => {
       RuleEngine.load(fsPath);
-      console.info("Bypass rules reloaded");
+      console.info(`[Worker ${process.pid}] Rule Engine reloaded`);
     }, 200);
   }
 
@@ -88,7 +90,7 @@ export class RuleEngine {
    * @returns
    */
 
-  public static saveHostToBypass(host: string, error: Error) {
+  public static saveHostToBypass(host: string, error?: Error) {
     if (!this.AUTO_BYPASS_TLS_ERRORS.includes((error as any).code)) {
       return;
     }
@@ -106,7 +108,7 @@ export class RuleEngine {
       const bypassFilePath = "rules/bypass.rules.txt";
       const currentFileContent = fs.readFileSync(bypassFilePath, "utf-8");
       if (currentFileContent.includes(newRule)) return;
-      console.log(`Auto-bypassing host due to ${error["code"]}: ${host}`);
+      console.log(`Auto-bypassing host due to ${error!["code"]}: ${host}`);
       fs.appendFileSync(bypassFilePath, `${os.EOL}${newRule}`);
     } catch (error) {
       console.error("Failed to auto-save bypass rule:", error);

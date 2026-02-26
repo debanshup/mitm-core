@@ -18,6 +18,12 @@
 ^(?:[a-z0-9-]+\.)*google\.com$
 ^(?:[a-z0-9-]+\.)*reddit\.com$
 ^(?:[a-z0-9-]+\.)*quora\.com$
+^(?:[a-z0-9-]+\.)*wellfound\.com$
+^(?:[a-z0-9-]+\.)*ycombinator\.com$
+^(?:[a-z0-9-]+\.)*indeed\.com$
+#^(?:[a-z0-9-]+\.)*chatgpt\.com$
+#^(?:[a-z0-9-]+\.)*bookface-static\.ycombinator\.com $
+#^(?:[a-z0-9-]+\.)*workatastartup\.com$
 
 
 # --- Google Infrastructure & Beacons ---
@@ -25,6 +31,7 @@
 ^(?:[a-z0-9-]+\.)*gcp\.gvt2\.com$
 ^(?:[a-z0-9-]+\.)*googleapis\.com$
 ^(?:[a-z0-9-]+\.)*gstatic\.com$
+^(?:[a-z0-9-]+\.)*googlevideo\.com$
 
 # --- Microsoft Windows & Office Update Services ---
 ^(?:[a-z0-9-]+\.)*windowsupdate\.microsoft\.com$
@@ -36,11 +43,25 @@
 ^(?:[a-z0-9-]+\.)*diagnostics\.office\.com$
 
 # --- Microsoft Store & Modern Apps ---
-^(?:[a-z0-9-]+\.)*microsoft\.com$
-^(?:[a-z0-9-]+\.)*msecnd\.net$
-^(?:[a-z0-9-]+\.)*microsoft\.com\.edgesuite\.net$
-^(?:[a-z0-9-]+\.)*delivery\.mp\.microsoft\.com$
+^(?:[a-z0-9-]+\.)*login\.live\.com$
+^(?:[a-z0-9-]+\.)*account\.microsoft\.com$
+^(?:[a-z0-9-]+\.)*store\.microsoft\.com$
+^(?:[a-z0-9-]+\.)*www\.microsoftstore\.com$
+^(?:[a-z0-9-]+\.)*purchase\.mp\.microsoft\.com$
 ^(?:[a-z0-9-]+\.)*displaycatalog\.mp\.microsoft\.com$
-^(?:[a-z0-9-]+\.)*sls\.update\.microsoft\.com$
+^(?:[a-z0-9-]+\.)*licensing\.mp\.microsoft\.com$
+^(?:[a-z0-9-]+\.)*storeedgefd\.d\.msc\.com$
+^(?:[a-z0-9-]+\.)*img-prod-cms-rt-microsoft-com\.akamaized\.net$
+^(?:[a-z0-9-]+\.)*delivery\.mp\.microsoft\.com$
+^(?:[a-z0-9-]+\.)*graph\.microsoft\.com$
+^(?:[a-z0-9-]+\.)*storeedge\.microsoft\.com$
 ^(?:[a-z0-9-]+\.)*store-images\.s-microsoft\.com$
-^(?:[a-z0-9-]+\.)*azureedge\.net$
+^(?:[a-z0-9-]+\.)*xboxlive\.com$
+^(?:[a-z0-9-]+\.)*xboxservices\.com$
+^(?:[a-z0-9-]+\.)*microsoft\.com$
+
+
+
+^(?:[a-z0-9-]+\.)*bing\.com$
+^(?:[a-z0-9-]+\.)*api\.onedrive\.com$
+^(?:[a-z0-9-]+\.)*my\.microsoftpersonalcontent\.com$
