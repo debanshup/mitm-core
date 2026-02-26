@@ -3,6 +3,7 @@ import path from "path";
 import fs from "fs";
 import * as crypto from "crypto";
 import { pool } from "../workers/pool/Worker_pool.ts";
+import { PATH } from "../../constants/path.ts";
 export class CertCache {
   protected constructor() {}
   // inflite
@@ -29,7 +30,7 @@ export class CertCache {
     host: string,
     data: { key: string | Buffer; cert: string | Buffer }
   ) {
-    const dir = path.join(process.cwd(), "creds", host);
+    const dir = path.join(PATH.CERT_DIR, host);
 
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
@@ -91,12 +92,11 @@ export class CertCache {
     const task = (async () => {
       try {
         const certPath = path.join(
-          process.cwd(),
-          "creds",
+          PATH.CERT_DIR,
           `${host}`,
           "cert.crt"
         );
-        const keyPath = path.join(process.cwd(), "creds", `${host}`, "key.pem");
+        const keyPath = path.join(PATH.CERT_DIR, `${host}`, "key.pem");
         // Check FileSystem
         if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
           // console.info("[FS] cert and key available in fs for", host);
