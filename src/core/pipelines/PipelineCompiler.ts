@@ -38,31 +38,43 @@ export default class Pipeline {
         })),
     };
     // console.info(Pipeline.pipelines);
-    console.info("Pipeline initialized");
+    console.info(`[Worker ${process.pid}] Pipeline initialized successfully`);
   }
 
   /**
-   * @redefine
+   * @redefined
    */
   static async run(ctx: ProxyContext) {
+    // console.info("Fired run for", ctx.reqCtx.req?.url);
     if (!ctx.reqCtx.next_phase) {
-      console.info("Next phase is undefined");
+      console.info("Next phase is undefined. Halting pipeline");
+      return;
     }
 
     // console.info("Next Phase:",ctx.reqCtx.next_phase);
 
-    for (const step of Pipeline.pipelines[ctx.reqCtx.next_phase!]!) {
-      try {
-        await step.handle(ctx);
-      } catch (err) {
-        console.error(`[Plugin Error] ${step.name}:`, err);
-        if (!ctx.reqCtx!.res?.headersSent) {
-          ctx.reqCtx!.res!.statusCode = 502;
-          ctx.reqCtx!.res!.end("Proxy Error: Plugin Failure");
+    while (ctx.reqCtx.next_phase) {
+      const currentPhase = ctx.reqCtx.next_phase;
+      // console.info("next phase", currentPhase);
+      ctx.reqCtx.next_phase = undefined;
+
+      const steps = Pipeline.pipelines[currentPhase];
+      if (!steps || steps.length === 0) {
+        console.warn(`No handlers found for phase: ${currentPhase}`);
+        break;
+      }
+      for (const step of steps) {
+        try {
+          // console.info(step)
+          await step.handle(ctx);
+        } catch (error) {
+          console.error(`[Plugin Error] ${step.name}:`, error);
+          if (!ctx.reqCtx!.res?.headersSent) {
+            ctx.reqCtx!.res!.statusCode = 502;
+            ctx.reqCtx!.res!.end("Proxy Error: Plugin Failure");
+          }
         }
       }
     }
   }
-
-
 }
