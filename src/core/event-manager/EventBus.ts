@@ -5,4 +5,5 @@ export const ConnectionTypes = {
     TCP:"tcp",
     HTTP : "http",
     CONNECT : "connect",
+    DECRYPTED_HTTP :"decrypted_http"
 }
