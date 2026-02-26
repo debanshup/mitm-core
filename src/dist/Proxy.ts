@@ -33,7 +33,7 @@ export default class Proxy {
     if (!this.isMiddlewareRegistered) {
       await import("../middleware/middleware.ts");
       this.isMiddlewareRegistered = true;
-      console.info("Middleware registered successfully");
+      console.info(`[Worker ${process.pid}] Middleware registered successfully`);
     } else {
       throw Error("Middleware already registered!");
     }
@@ -90,7 +90,6 @@ export default class Proxy {
                 "Upgrade: websocket\r\n" +
                 "Connection: Upgrade\r\n\r\n",
             );
-
             upstream.write(head);
 
             // 2. Bidirectional Pipeline
@@ -119,12 +118,13 @@ export default class Proxy {
 
   public listen(port: number, callback?: () => void) {
     if (this.httpServer) {
-      this.httpServer?.listen(port);
-      if (callback) {
-        callback();
-      } else {
-        console.info("Server started\n", this.httpServer.address());
-      }
+      this.httpServer.listen(port, () => {
+        if (callback) {
+          callback();
+        } else {
+          console.info("Server started\n", this.httpServer?.address());
+        }
+      });
     }
   }
 
