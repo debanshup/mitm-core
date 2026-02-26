@@ -9,6 +9,7 @@ import Pipeline from "../core/pipelines/PipelineCompiler.ts";
 import { Phase } from "../core/phase/Phase.ts";
 import { STATE } from "../core/state/state.ts";
 import { ProxyUtils } from "../core/utiils/ProxyUtils.ts";
+import type { ProxyContext } from "../core/types/types.ts";
 
 /**
  * @context_type
@@ -26,19 +27,14 @@ connectionEvents.on(ConnectionTypes.TCP, ({ socket }) => {
     console.error("[TCP_CLIENT_ERROR]", err);
   });
   socket.on("close", () => {
-    // console.error("[Socket destroyed at middleware]", socket.destroyed);
     ProxyUtils.cleanUp([socket]);
     ctx.reqCtx!.state.set(STATE.is_finished, true);
   });
-  // console.info("socket created", ctx.id);
 });
 
 connectionEvents.on(
   ConnectionTypes.HTTP,
   async ({ req, res }: { req: IncomingMessage; res: ServerResponse }) => {
-    // console.info("HTTP_CONNECTION:", req.url);
-
-    //mutate ctx
     const ctx = ContextManager.getContext(req.socket);
     ctx.conn_type = "http";
     ctx.reqCtx!.req = req;
@@ -60,13 +56,36 @@ connectionEvents.on(
     socket: Stream.Duplex;
     head: any;
   }) => {
-    // console.info(req.headers.host)
-    // mutate ctx
     const ctx = ContextManager.getContext(socket);
     ctx.conn_type = "https";
     ctx.head = head;
     ctx.reqCtx!.req = req;
     ctx.reqCtx.next_phase = Phase.HANDSHAKE;
+    // run pipeline
     await Pipeline.run(ctx);
+  },
+);
+
+connectionEvents.on(
+  ConnectionTypes.DECRYPTED_HTTP,
+  async ({
+    ctx
+  }: {
+    ctx: ProxyContext
+  }) => {
+    // console.info("dec https fired!")
+     
+    ctx.reqCtx.next_phase = Phase.REQUEST;
+     
+
+    try {
+      await Pipeline.run(ctx);
+    } catch (err) {
+      console.error(`[Decrypted Pipeline Error] ${ctx.reqCtx.req!.headers.host}`, err);
+      if (!ctx.reqCtx.res!.headersSent) {
+        ctx.reqCtx.res!.statusCode = 502;
+        ctx.reqCtx.res!.end("Proxy Error");
+      }
+    }
   },
 );
