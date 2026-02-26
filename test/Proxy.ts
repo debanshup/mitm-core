@@ -1,6 +1,10 @@
 import Proxy from "../src/dist/Proxy.ts";
 (await Proxy.registerMiddleware()).initPipelines();
 const proxy = new Proxy();
+setInterval(() => {
+  const mem = process.memoryUsage();
+  console.log("Heap Used:", mem.heapUsed / 1024 / 1024, "MB");
+}, 1000);
 
 proxy.onTCPconnection((socket, next) => {
   // console.time("TCP")
