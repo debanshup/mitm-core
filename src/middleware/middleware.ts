@@ -1,8 +1,5 @@
 import { IncomingMessage, ServerResponse } from "http";
-import {
-  ConnectionTypes,
-  connectionEvents,
-} from "../core/event-manager/EventBus.ts";
+connectionEvents;
 import Stream from "stream";
 import { ContextManager } from "../core/context-manager/ContextManager.ts";
 import Pipeline from "../core/pipelines/PipelineCompiler.ts";
@@ -10,12 +7,13 @@ import { Phase } from "../core/phase/Phase.ts";
 import { STATE } from "../core/state/state.ts";
 import { ProxyUtils } from "../core/utiils/ProxyUtils.ts";
 import type { ProxyContext } from "../core/types/types.ts";
+import { connectionEvents } from "../core/event-manager/connection-events/connectionEvents.ts";
 
 /**
  * @context_type
  */
 
-connectionEvents.on(ConnectionTypes.TCP, ({ socket }) => {
+connectionEvents.on("TCP", ({ socket }) => {
   // disable nagle's at tcp level
   socket.setNoDelay(true);
   const ctx = ContextManager.getContext(socket);
@@ -32,60 +30,41 @@ connectionEvents.on(ConnectionTypes.TCP, ({ socket }) => {
   });
 });
 
-connectionEvents.on(
-  ConnectionTypes.HTTP,
-  async ({ req, res }: { req: IncomingMessage; res: ServerResponse }) => {
-    const ctx = ContextManager.getContext(req.socket);
-    ctx.conn_type = "http";
-    ctx.reqCtx!.req = req;
-    ctx.reqCtx!.res = res;
-    ctx.reqCtx.next_phase = Phase.REQUEST;
-    // run pipeline
+connectionEvents.on("HTTP:PLAIN", async ({ req, res }) => {
+  const ctx = ContextManager.getContext(req.socket);
+  ctx.conn_type = "http";
+  ctx.reqCtx!.req = req;
+  ctx.reqCtx!.res = res;
+  ctx.reqCtx.next_phase = Phase.REQUEST;
+  // run pipeline
+  await Pipeline.run(ctx);
+});
+
+connectionEvents.on("CONNECT", async ({ req, socket, head }) => {
+  const ctx = ContextManager.getContext(socket);
+  ctx.conn_type = "https";
+  ctx.head = head;
+  ctx.reqCtx!.req = req;
+  ctx.reqCtx.next_phase = Phase.HANDSHAKE;
+  // run pipeline
+  await Pipeline.run(ctx);
+});
+
+connectionEvents.on("HTTP:DECRYPTED", async ({ ctx }) => {
+  // console.info("dec https fired!")
+
+  ctx.reqCtx.next_phase = Phase.REQUEST;
+
+  try {
     await Pipeline.run(ctx);
-  },
-);
-
-connectionEvents.on(
-  ConnectionTypes.CONNECT,
-  async ({
-    req,
-    socket,
-    head,
-  }: {
-    req: IncomingMessage;
-    socket: Stream.Duplex;
-    head: any;
-  }) => {
-    const ctx = ContextManager.getContext(socket);
-    ctx.conn_type = "https";
-    ctx.head = head;
-    ctx.reqCtx!.req = req;
-    ctx.reqCtx.next_phase = Phase.HANDSHAKE;
-    // run pipeline
-    await Pipeline.run(ctx);
-  },
-);
-
-connectionEvents.on(
-  ConnectionTypes.DECRYPTED_HTTP,
-  async ({
-    ctx
-  }: {
-    ctx: ProxyContext
-  }) => {
-    // console.info("dec https fired!")
-     
-    ctx.reqCtx.next_phase = Phase.REQUEST;
-     
-
-    try {
-      await Pipeline.run(ctx);
-    } catch (err) {
-      console.error(`[Decrypted Pipeline Error] ${ctx.reqCtx.req!.headers.host}`, err);
-      if (!ctx.reqCtx.res!.headersSent) {
-        ctx.reqCtx.res!.statusCode = 502;
-        ctx.reqCtx.res!.end("Proxy Error");
-      }
+  } catch (err) {
+    console.error(
+      `[Decrypted Pipeline Error] ${ctx.reqCtx.req!.headers.host}`,
+      err,
+    );
+    if (!ctx.reqCtx.res!.headersSent) {
+      ctx.reqCtx.res!.statusCode = 502;
+      ctx.reqCtx.res!.end("Proxy Error");
     }
-  },
-);
+  }
+});

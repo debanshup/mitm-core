@@ -9,8 +9,7 @@ import { STATE } from "../state/state.ts";
 import { ProxyUtils } from "../utiils/ProxyUtils.ts";
 import { Tunnel } from "../direct-tunnel/Tunnel.ts";
 import { RuleEngine } from "../rule-manager/RuleEngine.ts";
-import { connectionEvents, ConnectionTypes } from "../event-manager/EventBus.ts";
-
+import { connectionEvents } from "../event-manager/connection-events/connectionEvents.ts";
 export class HandshakeHandler extends BaseHandler {
   static phase = Phase.HANDSHAKE;
   private static httpServer = createServer(
@@ -52,9 +51,9 @@ export class HandshakeHandler extends BaseHandler {
         req.headers = upstreamHeaders;
         parentCtx.reqCtx!.req = req;
         parentCtx.reqCtx!.res = res;
-        connectionEvents.emit(ConnectionTypes.DECRYPTED_HTTP,{
-          ctx: parentCtx
-        })
+        connectionEvents.emit("HTTP:DECRYPTED", {
+          ctx: parentCtx,
+        });
       } catch (err) {
         console.error("[Internal Parser Error]", err);
         if (!req.socket.destroyed) req.socket.destroy();
@@ -68,7 +67,10 @@ export class HandshakeHandler extends BaseHandler {
       // reqCtx.res = res;
     },
   );
-  private static async handleH1Session(ctx: ProxyContext, tlsSocket: tls.TLSSocket) {
+  private static async handleH1Session(
+    ctx: ProxyContext,
+    tlsSocket: tls.TLSSocket,
+  ) {
     // console.log(
     //   "Server hash:",
     //   this.httpServer.constructor.name,
@@ -96,6 +98,14 @@ export class HandshakeHandler extends BaseHandler {
     }
     if (socket.writable && !socket.destroyed) {
       socket.write("HTTP/1.1 200 Connection Established\r\n\r\n");
+    }
+
+    // console.info("head length",ctx.head.length)
+
+    if (ctx.head && ctx.head.length > 0) {
+      // console.info("unshifting head")
+      socket.unshift(ctx.head);
+      ctx.head = null;
     }
 
     const { host } = parseConnectData(reqCtx.req);
@@ -150,7 +160,7 @@ export class HandshakeHandler extends BaseHandler {
         }
         // console.info("tls closed", tlsSocket.destroyed)
         ProxyUtils.cleanUp([socket, tlsSocket]);
-        resolve()
+        resolve();
       });
 
       // timeout for handshake if the client opens the connection but never sends the "ClientHello"
@@ -161,18 +171,14 @@ export class HandshakeHandler extends BaseHandler {
         );
         ProxyUtils.cleanUp([socket, tlsSocket]);
         reqCtx.state.set(STATE.is_error, true);
-
-        // console.info(socket.closed, tlsSocket.closed);
-        resolve()
+        resolve();
       }, 10000);
 
       tlsSocket.on("secure", async () => {
-        // console.info("secure ");
-        // console.info(tlsSocket.alpnProtocol, "for", host);
         if (tlsSocket.alpnProtocol === "h2") {
           RuleEngine.saveHostToBypass(host);
           await Tunnel.createDirectTunnel(ctx);
-          resolve()
+          resolve();
           return;
         }
         clearTimeout(handshakeTimeout);
