@@ -1,14 +1,12 @@
 import * as http from "http";
 // import { WebSocketServer } from "ws";
 import tls from "tls";
-import Stream, { Duplex, pipeline } from "stream";
+import Stream, { pipeline } from "stream";
 import { Socket } from "net";
-import {
-  ConnectionTypes,
-  connectionEvents,
-} from "../core/event-manager/EventBus.ts";
+
 import { PluginRegistry, type Plugin } from "../plugins/PluginRegistry.ts";
 import Pipeline from "../core/pipelines/PipelineCompiler.ts";
+import { connectionEvents } from "../core/event-manager/connection-events/connectionEvents.ts";
 // import ws, { WebSocketServer } from "ws";
 
 /**
@@ -21,6 +19,9 @@ export default class Proxy {
   private httpServer: http.Server | undefined;
   // private wsServer: WebSocketServer | undefined;
   private static isMiddlewareRegistered: boolean = false;
+  private static initPipelines() {
+    Pipeline.compile();
+  }
 
   // private upstream: net.Socket | undefined;
 
@@ -29,11 +30,20 @@ export default class Proxy {
    * @static -> register middleware
    *
    */
-  public static async registerMiddleware() {
+  public static async registerMiddleware({
+    initializePipelines = false,
+  }: {
+    initializePipelines: boolean;
+  }) {
     if (!this.isMiddlewareRegistered) {
       await import("../middleware/middleware.ts");
       this.isMiddlewareRegistered = true;
-      console.info(`[Worker ${process.pid}] Middleware registered successfully`);
+      if (initializePipelines) {
+        this.initPipelines();
+      }
+      console.info(
+        `[Worker ${process.pid}] Middleware registered successfully`,
+      );
     } else {
       throw Error("Middleware already registered!");
     }
@@ -112,10 +122,6 @@ export default class Proxy {
     }
   }
 
-  public static initPipelines() {
-    Pipeline.compile();
-  }
-
   public listen(port: number, callback?: () => void) {
     if (this.httpServer) {
       this.httpServer.listen(port, () => {
@@ -129,11 +135,11 @@ export default class Proxy {
   }
 
   public onTCPconnection(
-    tcpConnectionHandler?: (socket: Socket, next: () => void) => void,
+    tcpConnectionHandler?: (socket: Socket, defaultHandler: () => void) => void,
   ) {
     this.httpServer?.on("connection", (socket) => {
       const defaultCallback = () => {
-        connectionEvents.emit(ConnectionTypes.TCP, { socket });
+        connectionEvents.emit("TCP", { socket });
       };
 
       if (tcpConnectionHandler) {
@@ -149,12 +155,12 @@ export default class Proxy {
       req: http.IncomingMessage,
       socket: Stream.Duplex,
       head: any,
-      next: () => void,
+      defaultHandler: () => void,
     ) => void,
   ) {
     this.httpServer?.on("connect", (req, socket, head) => {
       const defaultCallback = () => {
-        connectionEvents.emit(ConnectionTypes.CONNECT, { req, socket, head });
+        connectionEvents.emit("CONNECT", { req, socket, head });
       };
       if (connectHandler) {
         connectHandler(req, socket, head, defaultCallback);
@@ -168,12 +174,12 @@ export default class Proxy {
     reqHandler?: (
       req: http.IncomingMessage,
       res: http.ServerResponse,
-      next: () => void,
+      defaultHandler: () => void,
     ) => void,
   ) {
     this.httpServer?.on("request", (req, res) => {
       const defaultCallback = () => {
-        connectionEvents.emit(ConnectionTypes.HTTP, { req, res });
+        connectionEvents.emit("HTTP:PLAIN", { req, res });
       };
       if (reqHandler) {
         reqHandler(req, res, defaultCallback);

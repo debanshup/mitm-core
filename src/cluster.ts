@@ -4,7 +4,7 @@ import { availableParallelism } from "os";
 async function startProxy(port: number) {
   const ProxyClass = (await import("../src/dist/Proxy.ts")).default;
 
-  (await ProxyClass.registerMiddleware()).initPipelines();
+  await ProxyClass.registerMiddleware({ initializePipelines: true });
 
   const proxy = new ProxyClass();
 
