@@ -59,6 +59,7 @@
 ^(?:[a-z0-9-]+\.)*xboxlive\.com$
 ^(?:[a-z0-9-]+\.)*xboxservices\.com$
 ^(?:[a-z0-9-]+\.)*microsoft\.com$
+^(?:[a-z0-9-]+\.)*sharepoint\.com$
 
 
 
