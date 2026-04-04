@@ -8,6 +8,7 @@ import { STATE } from "../core/state/state.ts";
 import { ProxyUtils } from "../core/utiils/ProxyUtils.ts";
 import type { ProxyContext } from "../core/types/types.ts";
 import { connectionEvents } from "../core/event-manager/connection-events/connectionEvents.ts";
+import { dataEvents } from "../core/event-manager/data-events/dataEvents.ts";
 
 /**
  * @context_type
@@ -52,6 +53,8 @@ connectionEvents.on("CONNECT", async ({ req, socket, head }) => {
 
 connectionEvents.on("HTTP:DECRYPTED", async ({ ctx }) => {
   // console.info("dec https fired!")
+
+  dataEvents.emit("DATA:DECRYPTED_REQUEST", { ctx });
 
   ctx.reqCtx.next_phase = Phase.REQUEST;
 
