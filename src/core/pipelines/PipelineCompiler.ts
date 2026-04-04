@@ -1,9 +1,6 @@
 import { Phase } from "../phase/Phase.ts";
 import type { ProxyContext } from "../types/types.ts";
 import { HANDLERS } from "../handlers/registry/registry.ts";
-import { STATE } from "../state/state.ts";
-import { ContextManager } from "../context-manager/ContextManager.ts";
-
 export default class Pipeline {
   protected constructor() {}
   private static pipelines: Record<Phase, { name: any; handle: any }[]> = {};
