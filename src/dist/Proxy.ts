@@ -7,6 +7,8 @@ import { Socket } from "net";
 import { PluginRegistry, type Plugin } from "../plugins/PluginRegistry.ts";
 import Pipeline from "../core/pipelines/PipelineCompiler.ts";
 import { connectionEvents } from "../core/event-manager/connection-events/connectionEvents.ts";
+import type { ProxyContext } from "../core/types/types.ts";
+import { dataEvents } from "../core/event-manager/data-events/dataEvents.ts";
 // import ws, { WebSocketServer } from "ws";
 
 /**
@@ -188,13 +190,19 @@ export default class Proxy {
       }
     });
   }
-  //   public onResponse(
-  //     callback: (req: http.IncomingMessage, res: http.ServerResponse) => void
-  //   ) {
-  //     this.httpServer?.on("", (req, res) => {
-  //       callback(req, res);
-  //     });
-  //   }
+  public onDecryptedRequest(
+    callback: (payload: { ctx: ProxyContext }) => void | Promise<void>,
+  ) {
+    // Passes the developer's callback directly to the event listener
+    dataEvents.on("DATA:DECRYPTED_REQUEST", callback);
+  }
+
+  public onResponseData(
+    callback: (payload: { ctx: ProxyContext }) => void | Promise<void>,
+  ) {
+    // Passes the developer's callback directly to the event listener
+    dataEvents.on("DATA:RESPONSE", callback);
+  }
   public onError(errorHandler: (err: Error) => void) {
     this.httpServer?.on("error", (err) => errorHandler(err));
   }
