@@ -12,7 +12,7 @@ interface ConnectionEventMap {
       head: any;
     },
   ];
-  "HTTP:PLAIN": [payload: { req: IncomingMessage; res: ServerResponse }] ;
+  "HTTP:PLAIN": [payload: { req: IncomingMessage; res: ServerResponse }];
   "HTTP:DECRYPTED": [payload: { ctx: ProxyContext }];
 }
 
