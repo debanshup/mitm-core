@@ -5,6 +5,7 @@ import { ResponseCache } from "../cache-manager/ResponseCache.ts";
 import { STATE } from "../state/state.ts";
 import { ProxyUtils } from "../utiils/ProxyUtils.ts";
 import { Transform } from "stream";
+import { dataEvents } from "../event-manager/data-events/dataEvents.ts";
 
 export class ResponseHandler extends BaseHandler {
   /**
@@ -25,7 +26,6 @@ export class ResponseHandler extends BaseHandler {
   });
 
   private static sanitizeCachedHeaders(headers: Record<string, any>) {
-    // 1. Safe Allowlist
     const ALLOW = new Set([
       "content-type",
       // "content-length", // REMOVED: Let Node.js calculate this
@@ -95,6 +95,7 @@ export class ResponseHandler extends BaseHandler {
         return resolve();
       }
       upstream?.on("response", (upstreamRes) => {
+        ctx.reqCtx.upstreamRes = upstreamRes
         if (upstreamRes.statusCode === 304 && cached) {
           console.info(`[Cache Revalidated 304] ${reqCtx.req?.headers.host}`);
 
@@ -167,6 +168,9 @@ export class ResponseHandler extends BaseHandler {
             return resolve();
           }
         });
+
+        // expose RES to public api
+        dataEvents.emit("DATA:RESPONSE", { ctx });
 
         // if headers were already sent by plugins
         if (
