@@ -14,6 +14,7 @@ export type ProxyContext = {
     req?: IncomingMessage | undefined;
     res?: ServerResponse | undefined;
     upstream?: ClientRequest | undefined;
+    upstreamRes?: IncomingMessage | undefined;
     state: Map<State | string, any>;
     next_phase?: Phase | undefined;
   };
