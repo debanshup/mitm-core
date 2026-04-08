@@ -52,6 +52,7 @@ export class RuleEngine {
     if (force) {
       const store = this.stores.get("tls-bypass");
       store?.appendRule(host);
+      return
     }
     if (!error || !this.AUTO_BYPASS_TLS_ERRORS.includes((error as any).code)) {
       return;
