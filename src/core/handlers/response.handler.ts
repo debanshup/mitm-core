@@ -1,11 +1,11 @@
-import { Phase } from "../../core/phase/Phase.ts";
-import type { ProxyContext } from "../types/types.ts";
+import { Phase } from "../../phase/Phase.ts";
+import type { ProxyContext } from "../../types/types.ts";
 import { BaseHandler } from "./base/base.handler.ts";
 import { ResponseCache } from "../cache-manager/ResponseCache.ts";
 import { STATE } from "../state/state.ts";
 import { ProxyUtils } from "../utiils/ProxyUtils.ts";
 import { Transform } from "stream";
-import { dataEvents } from "../event-manager/data-events/dataEvents.ts";
+import { payloadEvents } from "../event-manager/data-events/payloadEvents.ts";
 
 export class ResponseHandler extends BaseHandler {
   /**
@@ -13,17 +13,17 @@ export class ResponseHandler extends BaseHandler {
    */
   static phase = Phase.RESPONSE;
 
-  /**
-   * @use it while modiying response data
-   */
+  // /**
+  //  * @use it while modiying response data
+  //  */
 
-  private static modifier = new Transform({
-    transform(chunk, encoding, callback) {
-      let data = chunk.toString();
-      const modifiedData = data;
-      callback(null, modifiedData);
-    },
-  });
+  // private static modifier = new Transform({
+  //   transform(chunk, encoding, callback) {
+  //     let data = chunk.toString();
+  //     const modifiedData = data;
+  //     callback(null, modifiedData);
+  //   },
+  // });
 
   private static sanitizeCachedHeaders(headers: Record<string, any>) {
     const ALLOW = new Set([
@@ -65,8 +65,8 @@ export class ResponseHandler extends BaseHandler {
   public static async handle(ctx: ProxyContext) {
     // console.info("r- handler");
 
-    return new Promise<void>((resolve) => {
-      const reqCtx = ctx.reqCtx;
+    return new Promise<void>((resolve, reject) => {
+      const reqCtx = ctx.requestContext;
 
       const cache_key = ResponseCache.generateKey(reqCtx.req);
       // console.info(cache_key);
@@ -83,19 +83,19 @@ export class ResponseHandler extends BaseHandler {
         reqCtx.res?.end(cached.body);
         reqCtx.state.set(STATE.response_cache_hit, true);
         reqCtx.state.set(STATE.is_finished, true);
-        reqCtx.next_phase = undefined;
+        reqCtx.nextPhase = undefined;
         return resolve();
       } else if (cached) {
         ResponseCache.delete(cache_key);
       }
 
-      const upstream = reqCtx.upstream;
+      const upstream = reqCtx.upstreamReq;
       if (!upstream) {
         reqCtx.state.set(STATE.is_error, true);
         return resolve();
       }
-      upstream?.on("response", (upstreamRes) => {
-        ctx.reqCtx.upstreamRes = upstreamRes
+      upstream?.on("response", async (upstreamRes) => {
+        ctx.requestContext.upstreamRes = upstreamRes;
         if (upstreamRes.statusCode === 304 && cached) {
           console.info(`[Cache Revalidated 304] ${reqCtx.req?.headers.host}`);
 
@@ -137,24 +137,30 @@ export class ResponseHandler extends BaseHandler {
 
         // });
         upstreamRes.on("end", () => {
-          if (isCacheable) {
-            ResponseCache.set(cache_key, {
-              status: upstreamRes.statusCode!,
-              headers: upstreamRes.headers,
-              etag: upstreamRes.headers.etag || "",
-              body: Buffer.concat(chunks),
-              expires: ResponseCache.getExpirationTimestamp(
-                upstreamRes.headers,
-                30000,
-                reqCtx.req?.headers.host!,
-              ),
-            });
+          try {
+            if (isCacheable) {
+              ResponseCache.set(cache_key, {
+                status: upstreamRes.statusCode!,
+                headers: upstreamRes.headers,
+                etag: upstreamRes.headers.etag || "",
+                body: Buffer.concat(chunks),
+                expires: ResponseCache.getExpirationTimestamp(
+                  upstreamRes.headers,
+                  30000,
+                  reqCtx.req?.headers.host!,
+                ),
+              });
+            }
+            ProxyUtils.cleanUp([upstreamRes, upstream!]);
+            reqCtx.state.set(STATE.is_finished, true);
+            reqCtx.nextPhase = undefined;
+            resolve();
+          } catch (error) {
+            reject();
           }
-          ProxyUtils.cleanUp([upstreamRes, upstream!]);
-          reqCtx.state.set(STATE.is_finished, true);
-          reqCtx.next_phase = undefined;
-          resolve();
         });
+
+        // async safe
 
         upstreamRes.on("error", (err) => {
           if (!["ECONNRESET", "EPIPE"].includes((err as any).code)) {
@@ -162,15 +168,17 @@ export class ResponseHandler extends BaseHandler {
           }
 
           reqCtx.state.set(STATE.is_error, true);
-
+          // if (upstreamSocket && !upstreamSocket.destroyed) {
+          //     upstreamSocket.destroy();
+          //   }
           if (!reqCtx.res!.writableEnded) {
             reqCtx.res!.destroy(err);
-            return resolve();
+            return reject();
           }
         });
 
         // expose RES to public api
-        dataEvents.emit("DATA:RESPONSE", { ctx });
+        payloadEvents.emit("PAYLOAD:RESPONSE", { ctx });
 
         // if headers were already sent by plugins
         if (

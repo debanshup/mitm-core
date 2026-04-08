@@ -1,15 +1,14 @@
 import https from "https";
 import http from "http";
-import { Phase } from "../../core/phase/Phase.ts";
+import { Phase } from "../../phase/Phase.ts";
 import { BaseHandler } from "./base/base.handler.ts";
-import type { ProxyContext } from "../types/types.ts";
+import type { ProxyContext } from "../../types/types.ts";
 import { pipeline } from "stream";
 import { ProxyUtils } from "../utiils/ProxyUtils.ts";
 import { STATE } from "../state/state.ts";
 import { ResponseCache } from "../cache-manager/ResponseCache.ts";
 
 export class RequestHandler extends BaseHandler {
-  // static order = 25;
   static phase = Phase.REQUEST;
   private static httpsAgent = new https.Agent({
     keepAlive: true, // Keep sockets open for reuse
@@ -30,8 +29,8 @@ export class RequestHandler extends BaseHandler {
   });
 
   static async handle(ctx: ProxyContext) {
-    const { reqCtx } = ctx;
-    if (!reqCtx?.req) {
+    const { requestContext } = ctx;
+    if (!requestContext?.req) {
       console.info("REQ not found!");
       return;
     }
@@ -39,42 +38,48 @@ export class RequestHandler extends BaseHandler {
     let targetUrl: URL;
 
     try {
-      if (reqCtx.req.url?.startsWith("http")) {
-        targetUrl = new URL(reqCtx!.req.url);
+      if (ctx.proxyToUpstreamUrl) {
+        targetUrl = new URL(ctx.proxyToUpstreamUrl);
       } else {
-        targetUrl = new URL(
-          reqCtx!.req.url || "/",
-          `https://${reqCtx.req.headers.host}`,
-        );
+        // fail safe
+        if (requestContext.req.url?.startsWith("http")) {
+          targetUrl = new URL(requestContext!.req.url);
+        } else {
+          targetUrl = new URL(
+            requestContext!.req.url || "/",
+            `https://${requestContext.req.headers.host}`,
+          );
+        }
       }
     } catch (error) {
-      console.error("Invalid URL:", reqCtx.req.url);
-      reqCtx.res!.statusCode = 400;
-      reqCtx.res!.end("Invalid URL");
+      console.error(
+        "Invalid URL:",
+        ctx.proxyToUpstreamUrl || requestContext.req.url,
+      );
+      requestContext.res!.statusCode = 400;
+      requestContext.res!.end("Invalid URL");
       return;
     }
 
     // console.info(targetUrl)
-    
 
     const isHTTPS = targetUrl.protocol === "https:";
     const requestModule = isHTTPS ? https : http;
     const agent = isHTTPS ? this.httpsAgent : this.httpAgent;
-    const cache_key = ResponseCache.generateKey(reqCtx.req);
+    const cache_key = ResponseCache.generateKey(requestContext.req);
     const cached = ResponseCache.get(cache_key);
 
     if (cached?.etag) {
-      reqCtx.req!.headers.etag = cached.etag;
+      requestContext.req!.headers.etag = cached.etag;
     }
-
 
     const upstream = requestModule.request({
       host: targetUrl.hostname,
       port: targetUrl.port || (isHTTPS ? 443 : 80),
-      method: reqCtx.req?.method,
-      path: reqCtx.req?.url,
+      method: requestContext.req?.method,
+      path: requestContext.req?.url,
       headers: {
-        ...reqCtx.req?.headers,
+        ...requestContext.req?.headers,
         host: targetUrl.hostname,
         connection: "keep-alive",
       },
@@ -83,31 +88,30 @@ export class RequestHandler extends BaseHandler {
     });
     // disable nagle's
     upstream.setNoDelay(true);
-    reqCtx.upstream = upstream;
+    requestContext.upstreamReq = upstream;
 
     // Pipe Client Request -> Upstream Server
-    pipeline(reqCtx.req, upstream, (err) => {
+    pipeline(requestContext.req, upstream, (err) => {
       if (err) {
         console.error(`[Stream Error] Client -> Upstream: ${err.message}`);
-        if (reqCtx.res && !reqCtx.res.headersSent) {
-          reqCtx.res!.setHeader("Connection", "close");
-          reqCtx.res!.statusCode = 502; // Bad Gateway
-          reqCtx.res!.end("Bad Gateway");
-          console.info("HTTPS", isHTTPS)
+        if (requestContext.res && !requestContext.res.headersSent) {
+          requestContext.res!.setHeader("Connection", "close");
+          requestContext.res!.statusCode = 502; // Bad Gateway
+          requestContext.res!.end("Bad Gateway");
+          // console.info("HTTPS", isHTTPS);
           console.error(
-            reqCtx.res!.statusCode,
-            "Sent to client for ->",
-            targetUrl.href,
-            "err:",
+            // requestContext.res!.statusCode,
+            // "Sent to client for ",
+            // targetUrl.href,
+            // "err:",
             err,
           );
         }
-        ProxyUtils.cleanUp([upstream, reqCtx.req?.socket!]);
-        reqCtx.state.set(STATE.is_error, true);
-        
+        ProxyUtils.cleanUp([upstream, requestContext.req?.socket!]);
+        requestContext.state.set(STATE.is_error, true);
       }
     });
-    reqCtx.next_phase = Phase.RESPONSE;
+    requestContext.nextPhase = Phase.RESPONSE;
     // await Pipeline.run(ctx);
   }
 }
