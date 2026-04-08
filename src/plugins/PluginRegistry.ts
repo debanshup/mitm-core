@@ -1,15 +1,4 @@
-import type { Phase } from "../core/phase/Phase.ts";
-import type { ProxyContext } from "../core/types/types.ts";
-export type Plugin = {
-  name: string;
-  phase: Phase;
-  order: number;
-  execute(ctx: ProxyContext): Promise<void>;
-  register(): void;
-  unregister(): void;
-  isRegistered(): boolean;
-};
-
+import type { Plugin } from "../types/types.ts";
 export class PluginRegistry {
   private static enabledPlugins = new Set<Plugin>();
 
