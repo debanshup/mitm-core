@@ -3,7 +3,7 @@ import path from "path";
 import fs from "fs";
 import * as crypto from "crypto";
 import { pool } from "../workers/pool/Worker_pool.ts";
-import { PATH } from "../../constants/path.ts";
+import { LEAF_PATH } from "../../constants/path.ts";
 export class CertCache {
   protected constructor() {}
   // inflite
@@ -21,16 +21,16 @@ export class CertCache {
   }
   private static addToCache(
     host: string,
-    { key, cert }: { key: Buffer; cert: Buffer }
+    { key, cert }: { key: Buffer; cert: Buffer },
   ) {
     this.cache.set(host.toLowerCase(), { key, cert });
   }
 
   public static addToFile(
     host: string,
-    data: { key: string | Buffer; cert: string | Buffer }
+    data: { key: string | Buffer; cert: string | Buffer },
   ) {
-    const dir = path.join(PATH.CERT_DIR, host);
+    const dir = path.join(LEAF_PATH.CERT_DIR, host);
 
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
@@ -75,6 +75,8 @@ export class CertCache {
   }
 
   public static async getCertFromCache(host: string) {
+    //  first check for force geneartion
+
     // Synchronous LRU Cache Check
     if (this.isCached(host)) {
       // console.info("[CACHE] cert and key available in cache for", host);
@@ -91,15 +93,12 @@ export class CertCache {
 
     const task = (async () => {
       try {
-        const certPath = path.join(
-          PATH.CERT_DIR,
-          `${host}`,
-          "cert.crt"
-        );
-        const keyPath = path.join(PATH.CERT_DIR, `${host}`, "key.pem");
+        const certPath = path.join(LEAF_PATH.CERT_DIR, `${host}`, "cert.crt");
+        const keyPath = path.join(LEAF_PATH.CERT_DIR, `${host}`, "key.pem");
+
         // Check FileSystem
         if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
-          // console.info("[FS] cert and key available in fs for", host);
+          console.info("[FS] cert and key available in fs for", host);
           const data = {
             cert: fs.readFileSync(certPath),
             key: fs.readFileSync(keyPath),
