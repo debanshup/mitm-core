@@ -1,10 +1,10 @@
-import type { ProxyContext } from "../types/types.ts";
+import type { ProxyContext } from "../../types/types.ts";
 import net from "net";
 export class Tunnel {
   protected constructor() {}
   static async createDirectTunnel(ctx: ProxyContext) {
-    console.info("Direct tunnel to", ctx.reqCtx.req?.headers.host);
-    const req = ctx.reqCtx.req;
+    console.info("Direct tunnel to", ctx.clientToProxyHost);
+    const req = ctx.requestContext.req;
     const socket = req?.socket!
     const hostHeader = req!.headers.host!;
     const [host, portStr] = hostHeader.split(":");
