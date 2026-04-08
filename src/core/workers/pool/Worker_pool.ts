@@ -8,7 +8,6 @@ export const pool = new Piscina.Piscina({
   filename: path.resolve(
     __dirname,
     "../Cert_Worker.ts"
-    // path to worker
   ),
   maxThreads: 2,
 });

@@ -1,5 +1,5 @@
 import type Stream from "node:stream";
-import type { Destroyable } from "../types/types.ts";
+import type { Destroyable } from "../../types/types.ts";
 
 export class ProxyUtils {
   static cleanUp(streams: Destroyable<Stream>[]) {

@@ -1,16 +1,21 @@
 import forge from "node-forge";
 import fs from "fs";
+import path from "path";
+import { CA_PATH } from "../../constants/path.ts";
 
-export default ({ host }: { host: string }) => {
+export default ({ host}: { host: string; caDir: string }) => {
   const isIPv6 = host.includes(":");
   const isIPv4 = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(host);
   const isIP = isIPv4 || isIPv6;
   const cleanedHost = host.replace(/[\[\]]/g, "").toLowerCase();
+
+  // console.info("IN worker:", CA_PATH);
+
   const caCert = forge.pki.certificateFromPem(
-    fs.readFileSync("creds/__self__/CA.crt", "utf8")
+    fs.readFileSync(path.join(CA_PATH.CA_DIR, "/CA.crt"), "utf8"),
   );
   const caKey = forge.pki.privateKeyFromPem(
-    fs.readFileSync("creds/__self__/key.pem", "utf8")
+    fs.readFileSync(path.join(CA_PATH.CA_DIR, "/key.pem"), "utf8"),
   );
 
   // *** generate full keypair ***
