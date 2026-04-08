@@ -1,5 +1,5 @@
 import { LRUCache } from "lru-cache";
-import type { CachedResponse } from "../types/types.ts";
+import type { CachedResponse } from "../../types/types.ts";
 import http, { type IncomingHttpHeaders } from "http";
 export class ResponseCache {
   protected constructor() {}
