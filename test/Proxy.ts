@@ -4,9 +4,6 @@ import {
   RuleEngine,
   type IRuleParser,
 } from "../src/index.ts";
-import type { TlsEvent } from "../src/types/types.ts";
-import { parseConnectData } from "../src/utils/parser/parseReqData.ts";
-import { setTimeout } from "node:timers/promises";
 Middleware.register({ initializePipelines: true });
 export class RegexRuleParser implements IRuleParser<RegExp[]> {
   parse(raw: string): RegExp[] {
@@ -49,7 +46,7 @@ const proxy = new Proxy();
 proxy.onTCPconnection(async (socket, next) => {
   next();
 });
-proxy.onConnect(async (req, socket, head, events, next) => {
+proxy.onConnect(async (req, socket, head, {requestDataEvent, tlsEvent}, next) => {
   // events.tlsEvent.once("TLS:LEAF", ({ ctx }) => {
   //   ctx?.customCertificates?.set(ctx.clientToProxyHost!, {
   //     cert: "this is cert",
