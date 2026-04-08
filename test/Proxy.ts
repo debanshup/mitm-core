@@ -1,68 +1,78 @@
-import Proxy from "../src/dist/Proxy.ts";
-await Proxy.registerMiddleware({ initializePipelines: true });
+import {
+  Middleware,
+  Proxy,
+  RuleEngine,
+  type IRuleParser,
+} from "../src/index.ts";
+import type { TlsEvent } from "../src/types/types.ts";
+import { parseConnectData } from "../src/utils/parser/parseReqData.ts";
+import { setTimeout } from "node:timers/promises";
+Middleware.register({ initializePipelines: true });
+export class RegexRuleParser implements IRuleParser<RegExp[]> {
+  parse(raw: string): RegExp[] {
+    return Array.from(
+      new Set(
+        raw
+          .split(/\r?\n/)
+          .map((l) => l.trim())
+          .filter((l) => l && !l.startsWith("#")),
+      ),
+    ).flatMap((l) => {
+      try {
+        return [new RegExp(l, "i")];
+      } catch (error) {
+        console.error(`Invalid regex skipped: "${l}"`);
+        return [];
+      }
+    });
+  }
+
+  match(rules: RegExp[], target: string): boolean {
+    return rules.some((r) => r.test(target));
+  }
+
+  formatForSave(host: string): string {
+    const escapedHost = host.replace(/\./g, "\\.");
+    return `^(?:[a-z0-9-]+\\.)*${escapedHost}$`;
+  }
+}
+
+// RuleEngine.register("demo", "rules/demo.rules.txt", new RegexRuleParser(), []);
+RuleEngine.register(
+  "tls-bypass",
+  "rules/bypass.rules.txt",
+  new RegexRuleParser(),
+  [],
+);
+// RuleEngine.saveHostToBypass("www.xxxx.com")
 const proxy = new Proxy();
-// setInterval(() => {
-//   const mem = process.memoryUsage();
-//   console.log("Heap Used:", mem.heapUsed / 1024 / 1024, "MB");
-// }, 1000);
-
-proxy.onTCPconnection((socket, defaultHandler) => {
-  defaultHandler();
+proxy.onTCPconnection(async (socket, next) => {
+  next();
 });
-proxy.onConnect((req, socket, head, defaultHandler) => {
-  defaultHandler();
+proxy.onConnect(async (req, socket, head, events, next) => {
+  // events.tlsEvent.once("TLS:LEAF", ({ ctx }) => {
+  //   ctx?.customCertificates?.set(ctx.clientToProxyHost!, {
+  //     cert: "this is cert",
+  //     key: "this is key",
+  //   });
+  // });
+  next();
 });
 
-proxy.onRequest((req, res, defaultHandler) => {
-  // if you want to create your custom logic, don't call default handler
-  defaultHandler();
+proxy.onHttpRequest(async (req, res, next) => {
+  next();
 });
 
 proxy.onDecryptedRequest(({ ctx }) => {
-  // handle
-  // ctx.reqCtx.req?.destroy()
-  // console.info(ctx.reqCtx.req?.destroyed)
+  // console.info("proxy to upstream url", ctx.proxyToUpstreamUrl);
 });
 
-proxy.onResponseData(({ ctx }) => {
-  const host = ctx.reqCtx.req?.headers.host || "";
-console.info(host)
-  if (host.includes("example.com")) {
-    // 1. Define your new payload
-    const newBody = "<h1>YOU are under attack!</h1>";
+// proxy.onLeafCertificateCreation(({ ctx }) => {
+//   ctx?.customCertificates?.set(ctx.clientToProxyHost!, {
+//     cert: "this is cert",
+//     key: "this is key",
+//   });
+//   // console.info("injected custom leaf for:", host);
+// });
 
-    const upstreamRes = ctx.reqCtx.upstreamRes!;
-    const clientRes = ctx.reqCtx.res!;
-
-    // 2. CRITICAL HEADER CLEANUP
-    // The original server might have sent the page as 'gzip' or 'br'.
-    // If you don't delete this header, the browser will try to decompress
-    // your plain text string and show a blank page or gibberish!
-    delete upstreamRes.headers["content-encoding"];
-    delete upstreamRes.headers["content-length"];
-
-    // 3. Inject your new headers
-    upstreamRes.headers["content-type"] = "text/html; charset=utf-8";
-    upstreamRes.headers["content-length"] =
-      Buffer.byteLength(newBody).toString();
-
-    // 4. Send the new response to the client
-    // (Because you call .end(), your pipeline knows to skip the default .pipe() behavior!)
-    clientRes.writeHead(200, upstreamRes.headers);
-    clientRes.end(newBody);
-
-    // 5. CRITICAL MEMORY CLEANUP
-    // Because we skipped the default .pipe(), the original data from the server
-    // is still flowing into our proxy's memory with nowhere to go.
-    // We MUST destroy the stream to free the socket.
-    upstreamRes.destroy();
-  }
-});
-proxy.onError((err) => {
-  console.error("proxy error", err.message);
-  proxy.close();
-});
-
-proxy.listen(8001, () => {
-  console.info("Proxy started at PORT:", 8001);
-});
+proxy.listen(8001);
