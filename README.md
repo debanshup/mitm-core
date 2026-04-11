@@ -18,12 +18,19 @@ A high-performance, fully extensible Man-in-the-Middle (MITM) proxy framework fo
 Here is a full example of bootstrapping the proxy, registering a custom bypass rule parser, and hooking into the network pipeline:
 
 ```typescript
-import { Middleware, Proxy, RuleEngine, type IRuleParser } from "mitm-core";
-
-// 1. Initialize the core proxy pipelines
+/**
+ * mitm-core
+ * Core Implementation & Dynamic Routing
+ */
+// 1. CORE INITIALIZATION
+// Bootstraps internal pipeline state machines.
 Middleware.register({ initializePipelines: true });
 
-// 2. Define a Rule Parser for dynamic routing/bypassing (optional)
+/**
+ * 2. RULE ENGINE & PARSING
+ * Handles dynamic routing and bypass logic.
+ * Supports hot-reloading via file-watchers.
+ */
 export class RegexRuleParser implements IRuleParser<RegExp[]> {
   parse(raw: string): RegExp[] {
     return Array.from(
@@ -53,7 +60,7 @@ export class RegexRuleParser implements IRuleParser<RegExp[]> {
   }
 }
 
-// Register the parser to watch a specific file for TLS bypass rules (optional)
+// Register bypass rules
 RuleEngine.register(
   "tls-bypass",
   "rules/bypass.rules.txt",
@@ -61,44 +68,81 @@ RuleEngine.register(
   [],
 );
 
-// 3. Instantiate the Proxy
+/**
+ * 3. PROXY SERVER & EVENT PIPELINES
+ */
 const proxy = new Proxy();
 
-// ---  PIPELINE HOOKS ---
-
-// Hook 1: Raw TCP Connection
-proxy.onTCPconnection(async (socket, next) => {
-  next();
+/**
+ * RAW TCP LAYER
+ * Low-level socket access immediately upon connection.
+ */
+proxy.on("tcp:connection", ({ socket }) => {
+  socket.setNoDelay(true);
 });
 
-// Hook 2: HTTP CONNECT (Pre-TLS Handshake)
-proxy.onConnect(
-  async (req, socket, head, { requestDataEvent, tlsEvent }, next) => {
-    // Example: Inject custom certificates for a specific domain (example.com)
-    tlsEvent.once("TLS:LEAF", ({ ctx }) => {
-      ctx?.customCertificates?.set("example.com", {
-        cert: "custom-cert-string",
-        key: "custom-key-string",
-      });
-    });
-    next();
+/**
+ * TUNNEL HANDSHAKE
+ * Processes the HTTP CONNECT verb before tunnel establishment.
+ */
+proxy.on(
+  "tunnel:connect",
+  ({ req, head, socket, events: { requestDataEvent, tlsEvent } }) => {
+    // Initial request inspection logic.
   },
 );
 
-// Hook 3: Plain HTTP Request
-proxy.onHttpRequest(async (req, res, next) => {
-  next();
+/**
+ * PLAIN HTTP TRAFFIC
+ * Handles standard HTTP (Port 80) traffic.
+ */
+proxy.on("http:plain_request", ({ req, res }) => {
+  // Direct HTTP interception.
 });
 
-// Hook 4: Fully Decrypted Request
-proxy.onDecryptedRequest(({ ctx }) => {
-  console.info("Decrypted Upstream URL:", ctx.proxyToUpstreamUrl);
+/**
+ * MITM DECRYPTED REQUEST
+ * Intercepts fully decrypted HTTPS requests.
+ */
+proxy.on("http:decrypted_request", ({ ctx }) => {
+  // Header/Body modification post-decryption.
 });
 
-// 4. Start listening
-proxy.listen(8001, () => {
-  console.log("MITM Proxy listening on port 8001");
+/**
+ * MITM DECRYPTED RESPONSE
+ * Intercepts upstream responses before re-encryption for the client.
+ */
+proxy.on("decrypted_response", ({ ctx }) => {
+  // Response modification.
 });
+
+/**
+ * TUNNEL PRE-ESTABLISH (Gateway Control)
+ * Decision point for MITM interception vs. Direct TCP Passthrough.
+ */
+proxy.on("tunnel:pre_establish", async ({ ctx, socket }) => {
+  const host = ctx.clientToProxyHost!;
+
+  // Check if host matches bypass rules (e.g., default.exp-tas.com).
+  if (RuleEngine.shouldBypass(host)) {
+    // Execute blind TCP tunnel (no decryption).
+    await Tunnel.createDirectTunnel(ctx);
+
+    // Terminate middleware pipeline to prevent TLS HandshakeHandler.
+    throw new PipelineAbortSignal();
+  }
+});
+
+/**
+ * TUNNEL ESTABLISHED
+ * Triggered after '200 OK' response; begins TLS handshake interception.
+ */
+proxy.on("tunnel:established", async ({ ctx, socket }) => {
+  // Initiates certificate forging/decryption logic.
+});
+
+// Start Proxy Engine
+proxy.listen(8001);
 ```
 
 ## Core Architecture
