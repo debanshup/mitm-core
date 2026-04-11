@@ -22,6 +22,3 @@ export abstract class BasePlugin {
 
   protected constructor() {}
 }
-
-
- 
