@@ -2,10 +2,11 @@ import type { ClientRequest, IncomingMessage, ServerResponse } from "http";
 import type { STATE } from "../core/state/state.ts";
 import type { Phase } from "../phase/Phase.ts";
 import type Stream from "stream";
-import type { tlsLifecycleEvents } from "../core/event-manager/tls-event/tlsLifecycleEvents.ts";
+import type { tlsLifecycleEvents } from "../core/event-manager/tls-events/tlsLifecycleEvents.ts";
 import type { connectionEvents } from "../core/event-manager/connection-events/connectionEvents.ts";
 import type { payloadEvents } from "../core/event-manager/data-events/payloadEvents.ts";
 import type { pipelineEvents } from "../core/event-manager/pipeline-events/pipelineEvents.ts";
+import type { PipelineAbortSignal } from "../core/signals/pipelineAbortSignal.ts";
 
 /**
  * The central context object passed through the proxy pipeline.
@@ -42,6 +43,10 @@ export type ProxyContext = {
    * - `https`: A successfully intercepted and decrypted TLS tunnel.
    */
   connectionType?: "tcp" | "http" | "https";
+  /** flag to indiicate if the whole process is handled by other plug-in
+   *
+   */
+  isHandled?: boolean;
 
   /** * Encapsulates all state, objects, and metadata specific to a single
    * HTTP request/response cycle.
@@ -143,7 +148,7 @@ export type Plugin = {
   isRegistered(): boolean;
 };
 
-export type TlsEvent = typeof tlsLifecycleEvents
-export type ConnectionEvent = typeof connectionEvents
-export type DataEvent = typeof payloadEvents
-export type PipelineEvent = typeof pipelineEvents
+export type TlsLifecycleEvent = typeof tlsLifecycleEvents;
+export type ConnectionEvent = typeof connectionEvents;
+export type PayloadEvent = typeof payloadEvents;
+export type PipelineEvent = typeof pipelineEvents;

@@ -4,7 +4,7 @@ import { BaseHandler } from "./base/base.handler.ts";
 import { ResponseCache } from "../cache-manager/ResponseCache.ts";
 import { STATE } from "../state/state.ts";
 import { ProxyUtils } from "../utiils/ProxyUtils.ts";
-import { Transform } from "stream";
+// import { Transform } from "stream";
 import { payloadEvents } from "../event-manager/data-events/payloadEvents.ts";
 
 export class ResponseHandler extends BaseHandler {
@@ -178,7 +178,7 @@ export class ResponseHandler extends BaseHandler {
         });
 
         // expose RES to public api
-        payloadEvents.emit("PAYLOAD:RESPONSE", { ctx });
+        payloadEvents.emitAsync("PAYLOAD:RESPONSE", { ctx });
 
         // if headers were already sent by plugins
         if (

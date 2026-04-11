@@ -1,6 +1,7 @@
 import { Phase } from "../../phase/Phase.ts";
 import type { ProxyContext } from "../../types/types.ts";
 import { HANDLERS } from "../handlers/registry/registry.ts";
+import { PipelineAbortSignal } from "../signals/pipelineAbortSignal.ts";
 export default class Pipeline {
   protected constructor() {}
   private static pipelines: Record<Phase, { name: any; handle: any }[]> = {};
@@ -46,6 +47,11 @@ export default class Pipeline {
       // console.info("Next phase is undefined. Halting pipeline");
       return;
     }
+    if (ctx.isHandled) {
+      console.info("handled for", ctx.clientToProxyHost);
+      ctx.requestContext.nextPhase = undefined;
+      return;
+    }
 
     while (ctx.requestContext.nextPhase) {
       const currentPhase = ctx.requestContext.nextPhase;
@@ -61,9 +67,18 @@ export default class Pipeline {
         try {
           await step.handle(ctx);
         } catch (error) {
+          if (error instanceof PipelineAbortSignal) {
+            // console.debug(
+            //   `[Pipeline] Halting ${currentPhase} phase early: Socket was taken over.`,
+            // );
+            ctx.requestContext.nextPhase = undefined;
+            return;
+          }
+
           console.error(
             `[Plugin Error] ${step.name} failed during ${currentPhase}:`,
-            error,
+            // (error as Error).message,
+            ctx.clientToProxyHost,
           );
 
           const res = ctx.requestContext.res;
