@@ -5,22 +5,31 @@ export class Tunnel {
   static async createDirectTunnel(ctx: ProxyContext) {
     console.info("Direct tunnel to", ctx.clientToProxyHost);
     const req = ctx.requestContext.req;
-    const socket = req?.socket!
+    const socket = req?.socket!;
     const hostHeader = req!.headers.host!;
     const [host, portStr] = hostHeader.split(":");
     const port = Number(portStr) || 443;
 
     const upstream = net.connect(port, host, () => {
-      // socket.write("HTTP/1.1 200 Connection Established\r\n\r\n");
+      socket.write("HTTP/1.1 200 Connection Established\r\n\r\n");
+      if (ctx.head && ctx.head.length > 0) {
+        upstream.write(ctx.head);
+      }
       socket!.pipe(upstream);
       upstream.pipe(socket!);
     });
 
     upstream.on("error", (err) => {
-      console.error("Direct tunnel error:", err.message);
+      console.error(
+        "Direct tunnel error:",
+        // err.message,
+        // "for:",
+        ctx.clientToProxyHost,
+      );
       socket?.destroy();
     });
 
     upstream.setNoDelay(true);
+    ctx.isHandled = true;
   }
 }
