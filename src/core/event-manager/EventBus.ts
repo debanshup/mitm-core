@@ -38,4 +38,26 @@ export class TypedEventEmitter<T extends object> extends EventEmitter {
   override removeAllListeners(event?: keyof T & (string | symbol)): this {
     return super.removeAllListeners(event as string | symbol);
   }
+
+  /**
+   * Safely executes all asynchronous listeners for an event in parallel.
+   * If any listener rejects, the promise chain halts and throws the error.
+   */
+async emitAsync<K extends keyof T>(
+    eventName: K,
+    ...args: T[K] extends any[] ? T[K] : never[]
+  ): Promise<void> {
+    const listeners = this.listeners(eventName as keyof T & (string | symbol) | any);
+
+    if (listeners.length === 0) return;
+
+    // Execute listeners sequentially, NOT in parallel!
+    for (const listener of listeners) {
+      const fn = listener as (...args: any[]) => void | Promise<void>;
+      
+      // Wait for this specific plugin to finish completely 
+      // before letting the next plugin touch the socket.
+      await fn(...args); 
+    }
+  }
 }
