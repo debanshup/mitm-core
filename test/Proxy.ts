@@ -1,7 +1,9 @@
 import {
   Middleware,
+  PipelineAbortSignal,
   Proxy,
   RuleEngine,
+  Tunnel,
   type IRuleParser,
 } from "../src/index.ts";
 Middleware.register({ initializePipelines: true });
@@ -34,7 +36,6 @@ export class RegexRuleParser implements IRuleParser<RegExp[]> {
   }
 }
 
-// RuleEngine.register("demo", "rules/demo.rules.txt", new RegexRuleParser(), []);
 RuleEngine.register(
   "tls-bypass",
   "rules/bypass.rules.txt",
@@ -43,33 +44,40 @@ RuleEngine.register(
 );
 // RuleEngine.saveHostToBypass("www.xxxx.com")
 const proxy = new Proxy();
-proxy.onTCPconnection(async (socket, next) => {
-  next();
-});
-proxy.onConnect(async (req, socket, head, {requestDataEvent, tlsEvent}, next) => {
-  // events.tlsEvent.once("TLS:LEAF", ({ ctx }) => {
-  //   ctx?.customCertificates?.set(ctx.clientToProxyHost!, {
-  //     cert: "this is cert",
-  //     key: "this is key",
-  //   });
-  // });
-  next();
+
+proxy.on("tcp:connection", ({ socket }) => {
+  // console.info(typeof socket)
 });
 
-proxy.onHttpRequest(async (req, res, next) => {
-  next();
+proxy.on(
+  "tunnel:connect",
+  ({ req, head, socket, events: { requestDataEvent, tlsEvent } }) => {
+    // console.info("connect:", req.headers.host)
+  },
+);
+
+proxy.on("http:plain_request", ({ req, res }) => {
+  // console.info("http:plain_request", req.headers.host);
 });
 
-proxy.onDecryptedRequest(({ ctx }) => {
-  // console.info("proxy to upstream url", ctx.proxyToUpstreamUrl);
+proxy.on("http:decrypted_request", ({ ctx }) => {
+  // console.info("http:decrypted_request", ctx.clientToProxyHost);
 });
 
-// proxy.onLeafCertificateCreation(({ ctx }) => {
-//   ctx?.customCertificates?.set(ctx.clientToProxyHost!, {
-//     cert: "this is cert",
-//     key: "this is key",
-//   });
-//   // console.info("injected custom leaf for:", host);
-// });
+proxy.on("decrypted_response", ({ ctx }) => {
+  // console.info("decrypted_response", ctx.clientToProxyHost);
+});
+
+proxy.on("tunnel:pre_establish", async ({ ctx, socket }) => {
+  // console.info("pre");
+  const host = ctx.clientToProxyHost!;
+  if (RuleEngine.shouldBypass(host)) {
+    await Tunnel.createDirectTunnel(ctx);
+    throw new PipelineAbortSignal();
+  }
+});
+proxy.on("tunnel:established", async ({ ctx, socket }) => {
+  // console.info("post")
+});
 
 proxy.listen(8001);

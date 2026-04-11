@@ -98,7 +98,7 @@ export class CertCache {
 
         // Check FileSystem
         if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
-          console.info("[FS] cert and key available in fs for", host);
+          // console.info("[FS] cert and key available in fs for", host);
           const data = {
             cert: fs.readFileSync(certPath),
             key: fs.readFileSync(keyPath),
@@ -107,7 +107,7 @@ export class CertCache {
           return data;
         } else {
           // generate
-          console.info("generating cert and key for", host);
+          // console.info("generating cert and key for", host);
           const { cert, key } = await pool.run({ host });
           this.addToFile(host, { key, cert });
           this.addToCache(host, { key, cert });

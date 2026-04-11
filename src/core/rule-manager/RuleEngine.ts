@@ -44,6 +44,8 @@ export class RuleEngine {
     return store.match(target);
   }
 
+  // implement this as plug-in
+
   public static shouldBypass(host: string): boolean {
     return this.match("tls-bypass", host);
   }
@@ -52,7 +54,7 @@ export class RuleEngine {
     if (force) {
       const store = this.stores.get("tls-bypass");
       store?.appendRule(host);
-      return
+      return;
     }
     if (!error || !this.AUTO_BYPASS_TLS_ERRORS.includes((error as any).code)) {
       return;

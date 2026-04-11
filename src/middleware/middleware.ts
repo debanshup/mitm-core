@@ -85,7 +85,7 @@ export class Middleware {
       await Pipeline.run(ctx);
     });
 
-    connectionEvents.on("HTTP:DECRYPTED", async ({ ctx }) => {
+    connectionEvents.on("HTTPS:DECRYPTED", async ({ ctx }) => {
       // console.info("dec https fired!")
       const { host, path, fullUrl } = parseHttpRequestData(
         ctx.requestContext.req!,
