@@ -17,20 +17,12 @@ describe("Proxy Core: Async Lifecycle Handlers", () => {
     done();
   });
 
-  it("should await an async [onHttpRequest] handler before continuing the pipeline", (done) => {
+  it("should await an async [http:plain_request] plugin before continuing the pipeline", (done) => {
     let asyncWorkCompleted = false;
-    let defaultHandlerFired = false;
-    proxy.onHttpRequest(async (req, res, defaultHandler) => {
+    proxy.on("http:plain_request", async ({ req, res }) => {
       await new Promise((resolve) => setTimeout(resolve, 50));
 
       asyncWorkCompleted = true;
-
-      const wrappedDefault = () => {
-        defaultHandlerFired = true;
-        defaultHandler();
-      };
-
-      wrappedDefault();
 
       res.writeHead(200);
       res.end("Async test complete");
@@ -50,11 +42,7 @@ describe("Proxy Core: Async Lifecycle Handlers", () => {
             true,
             "The async work did not complete before the response was sent",
           );
-          assert.strictEqual(
-            defaultHandlerFired,
-            true,
-            "The defaultHandler was never called",
-          );
+
           done();
         } catch (err) {
           done(err);
@@ -66,13 +54,12 @@ describe("Proxy Core: Async Lifecycle Handlers", () => {
     req.end();
   });
 
-  it("should await an async [onConnect] handler before continuing the pipeline", (done) => {
+  it("should await an async [tunnel:connect] plugin before continuing the pipeline", (done) => {
     let asyncWorkCompleted = false;
 
-    proxy.onConnect(async (req, socket, head, events, defaultHandler) => {
+    proxy.on("tunnel:connect", async ({ req, socket, head, events }) => {
       await new Promise((resolve) => setTimeout(resolve, 50));
       asyncWorkCompleted = true;
-      defaultHandler();
     });
     const connectReq = http.request({
       hostname: "127.0.0.1",

@@ -3,10 +3,11 @@ import http from "node:http";
 import https from "node:https";
 import tls from "node:tls";
 import { describe, it, before, after } from "mocha";
-import { Middleware, Proxy } from "../../src/index.ts";
+import { Middleware, Proxy } from "../../src/index.ts"; // Adjust path as needed
 import { generateForgeCertificates } from "../utils.ts";
 
 let originalTlsEnv: string | undefined;
+
 describe("Proxy Integrity Test: End-to-End HTTPS Traffic Routing", () => {
   Middleware.register({ initializePipelines: true });
   let proxy: Proxy;
@@ -15,18 +16,21 @@ describe("Proxy Integrity Test: End-to-End HTTPS Traffic Routing", () => {
   const PROXY_PORT = 8001;
   const TARGET_PORT = 9001;
 
+  // Updated to reflect the HTTPS lifecycle events
   let hooksFired = {
-    httpRequest: false,
+    tunnelConnect: false,
     decryptedRequest: false,
-    responseData: false,
+    decryptedResponse: false,
   };
 
   before(async () => {
     originalTlsEnv = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
     process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
-    // generate cert and key for dummy server
+
+    // Generate cert and key for dummy server
     const { key, cert } = generateForgeCertificates();
-    // start target server
+
+    // Start target server
     targetServer = https.createServer({ key, cert }, (req, res) => {
       res.writeHead(200, {
         "Content-Type": "text/plain",
@@ -39,26 +43,24 @@ describe("Proxy Integrity Test: End-to-End HTTPS Traffic Routing", () => {
       targetServer.listen(TARGET_PORT, resolve),
     );
 
+    // Initialize Proxy
     proxy = new Proxy();
 
-    proxy.onTCPconnection((socket, defaultHandler) => defaultHandler());
-    proxy.onConnect((req, socket, head,events,  defaultHandler) => defaultHandler());
+    // --- BIND THE NEW UNIFIED EVENTS ---
 
-    proxy.onHttpRequest((req, res, defaultHandler) => {
-      hooksFired.httpRequest = true;
-      if (defaultHandler) defaultHandler();
+    // 1. The initial tunneling request
+    proxy.on("tunnel:connect", async ({ req }) => {
+      hooksFired.tunnelConnect = true;
     });
 
-    proxy.onDecryptedRequest(({ ctx }) => {
+    // 2. The intercepted payload going to the target
+    proxy.on("http:decrypted_request", async ({ ctx }) => {
       hooksFired.decryptedRequest = true;
     });
 
-    proxy.onResponseData(({ ctx }) => {
-      hooksFired.responseData = true;
-    });
-
-    proxy.onError((err) => {
-      console.error("[Test Proxy Error]", err.message);
+    // 3. The intercepted payload coming back from the target
+    proxy.on("decrypted_response", async ({ ctx }) => {
+      hooksFired.decryptedResponse = true;
     });
 
     await new Promise<void>((resolve) => {
@@ -73,11 +75,10 @@ describe("Proxy Integrity Test: End-to-End HTTPS Traffic Routing", () => {
     else process.env.NODE_TLS_REJECT_UNAUTHORIZED = originalTlsEnv;
 
     proxy.stop();
-
     targetServer.closeAllConnections();
-
     targetServer.close(done);
   });
+
   it("should successfully MITM an HTTPS request, decrypt it, and trigger hooks", (done) => {
     let isDone = false;
     const finish = (err?: Error | unknown) => {
@@ -87,6 +88,7 @@ describe("Proxy Integrity Test: End-to-End HTTPS Traffic Routing", () => {
       else done();
     };
 
+    // 1. Initiate the CONNECT tunnel to the Proxy
     const connectReq = http.request({
       hostname: "127.0.0.1",
       port: PROXY_PORT,
@@ -95,15 +97,17 @@ describe("Proxy Integrity Test: End-to-End HTTPS Traffic Routing", () => {
     });
 
     connectReq.on("connect", (res, socket) => {
+      // 2. Upgrade the raw socket to TLS
       const proxyAgent = new https.Agent({ keepAlive: false });
       proxyAgent.createConnection = () => {
         return tls.connect({
           socket: socket,
           servername: "localhost",
-          rejectUnauthorized: false,
+          rejectUnauthorized: false, // Accept the forged MITM cert
         });
       };
 
+      // 3. Send the actual encrypted GET request through the tunnel
       const httpsReq = https.request(
         {
           hostname: "127.0.0.1",
@@ -123,14 +127,30 @@ describe("Proxy Integrity Test: End-to-End HTTPS Traffic Routing", () => {
 
           res.on("end", () => {
             try {
+              // Assert target server behavior
               assert.strictEqual(res.statusCode, 200);
               assert.strictEqual(
                 res.headers["x-target-header"],
                 "Success-HTTPS",
               );
               assert.strictEqual(body, "Secure Hello from the Target Server!");
-              assert.strictEqual(hooksFired.decryptedRequest, true);
-              assert.strictEqual(hooksFired.responseData, true);
+
+              // Assert the proxy plugin architecture successfully hooked the pipeline
+              assert.strictEqual(
+                hooksFired.tunnelConnect,
+                true,
+                "tunnel:connect event did not fire",
+              );
+              assert.strictEqual(
+                hooksFired.decryptedRequest,
+                true,
+                "http:decrypted_request event did not fire",
+              );
+              assert.strictEqual(
+                hooksFired.decryptedResponse,
+                true,
+                "http:decrypted_response event did not fire",
+              );
 
               finish();
             } catch (err) {

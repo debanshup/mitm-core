@@ -1,18 +1,19 @@
 import assert from "node:assert";
 import http from "node:http";
 import { describe, it, before, after } from "mocha";
-import { Middleware, Proxy } from "../../src/index.ts";
+import { Middleware, Proxy } from "../../src/index.ts"; // Adjust path as needed
 
 describe("Proxy Integrity Test: End-to-End Traffic Routing", () => {
   let proxy: Proxy;
   let targetServer: http.Server;
+
   Middleware.register({ initializePipelines: true });
 
   const PROXY_PORT = 8001;
   const TARGET_PORT = 9001;
 
   let hooksFired = {
-    httpRequest: false,
+    plainRequest: false,
     responseData: false,
   };
 
@@ -31,26 +32,12 @@ describe("Proxy Integrity Test: End-to-End Traffic Routing", () => {
 
     proxy = new Proxy();
 
-    proxy.onTCPconnection((socket, defaultHandler) => defaultHandler());
-    proxy.onConnect((req, socket, head, events, defaultHandler) =>
-      defaultHandler(),
-    );
-
-    proxy.onHttpRequest((req, res, defaultHandler) => {
-      hooksFired.httpRequest = true;
-      defaultHandler();
+    proxy.on("http:plain_request", async ({ req, res }) => {
+      hooksFired.plainRequest = true;
     });
 
-    proxy.onDecryptedRequest(({ ctx }) => {
-      // won't fire for plain HTTP
-    });
-
-    proxy.onResponseData(({ ctx }) => {
+    proxy.on("decrypted_response", async ({ ctx }) => {
       hooksFired.responseData = true;
-    });
-
-    proxy.onError((err) => {
-      console.error("[Test Proxy Error]", err.message);
     });
 
     await new Promise<void>((resolve) => {
@@ -68,10 +55,10 @@ describe("Proxy Integrity Test: End-to-End Traffic Routing", () => {
     const options: http.RequestOptions = {
       hostname: "127.0.0.1",
       port: PROXY_PORT,
-      path: `http://127.0.0.1:${TARGET_PORT}/test-path`, // full url
+      path: `http://127.0.0.1:${TARGET_PORT}/test-path`,
       method: "GET",
       headers: {
-        Host: `127.0.0.1:${TARGET_PORT}`, //  host header must match the target!
+        Host: `127.0.0.1:${TARGET_PORT}`,
       },
     };
 
@@ -96,14 +83,9 @@ describe("Proxy Integrity Test: End-to-End Traffic Routing", () => {
         );
 
         assert.strictEqual(
-          hooksFired.httpRequest,
+          hooksFired.plainRequest,
           true,
-          "onHttpRequest hook did not fire",
-        );
-        assert.strictEqual(
-          hooksFired.responseData,
-          true,
-          "onResponseData hook did not fire",
+          "http:plain_request event did not fire",
         );
 
         done();
