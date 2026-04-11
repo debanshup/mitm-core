@@ -32,6 +32,8 @@
 ^(?:[a-z0-9-]+\.)*googleapis\.com$
 ^(?:[a-z0-9-]+\.)*gstatic\.com$
 ^(?:[a-z0-9-]+\.)*googlevideo\.com$
+^(?:[a-z0-9-]+\.)*google\.com$
+^(?:[a-z0-9-]+\.)*rr5---sn-cvh7kn6r\.googlevideo.com$
 
 # --- Microsoft Windows & Office Update Services ---
 ^(?:[a-z0-9-]+\.)*windowsupdate\.microsoft\.com$
@@ -41,6 +43,7 @@
 ^(?:[a-z0-9-]+\.)*delivery\.mp\.microsoft\.com$
 ^(?:[a-z0-9-]+\.)*officeconfig\.microsoft\.com$
 ^(?:[a-z0-9-]+\.)*diagnostics\.office\.com$
+^(?:[a-z0-9-]+\.)*mobile\.events\.data\.microsoft\.com$
 
 # --- Microsoft Store & Modern Apps ---
 ^(?:[a-z0-9-]+\.)*login\.live\.com$
@@ -59,7 +62,11 @@
 ^(?:[a-z0-9-]+\.)*xboxlive\.com$
 ^(?:[a-z0-9-]+\.)*xboxservices\.com$
 ^(?:[a-z0-9-]+\.)*microsoft\.com$
+^(?:[a-z0-9-]+\.)*live\.com$
 ^(?:[a-z0-9-]+\.)*sharepoint\.com$
+^(?:[a-z0-9-]+\.)*office365\.com$
+^(?:[a-z0-9-]+\.)*default.\exp-tas.\com$
+^(?:[a-z0-9-]+\.)*my\.microsoftpersonalcontent\.com$
 
 
 
