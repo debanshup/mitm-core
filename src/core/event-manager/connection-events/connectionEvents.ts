@@ -12,8 +12,15 @@ interface ConnectionEventMap {
       head: any;
     },
   ];
+  "CONNECT:PRE_ESTABLISH": [
+    payload: { ctx: ProxyContext; socket: Stream.Duplex },
+  ];
+  "CONNECT:ESTABLISHED": [
+    payload: { ctx: ProxyContext; socket: Stream.Duplex },
+  ];
   "HTTP:PLAIN": [payload: { req: IncomingMessage; res: ServerResponse }];
-  "HTTP:DECRYPTED": [payload: { ctx: ProxyContext }];
+  "HTTPS:DECRYPTED": [payload: { ctx: ProxyContext }];
 }
 
 export const connectionEvents = new TypedEventEmitter<ConnectionEventMap>();
+ 
