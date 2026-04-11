@@ -29,7 +29,6 @@ Middleware.register({ initializePipelines: true });
 /**
  * 2. RULE ENGINE & PARSING
  * Handles dynamic routing and bypass logic.
- * Supports hot-reloading via file-watchers.
  */
 export class RegexRuleParser implements IRuleParser<RegExp[]> {
   parse(raw: string): RegExp[] {
@@ -69,7 +68,7 @@ RuleEngine.register(
 );
 
 /**
- * 3. PROXY SERVER & EVENT PIPELINES
+ * 3. PROXY SERVER
  */
 const proxy = new Proxy();
 
