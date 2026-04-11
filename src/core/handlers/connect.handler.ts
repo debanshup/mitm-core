@@ -6,10 +6,7 @@ import { BaseHandler } from "./base/base.handler.ts";
 import type { ProxyContext } from "../../types/types.ts";
 import { STATE } from "../state/state.ts";
 import { ProxyUtils } from "../utiils/ProxyUtils.ts";
-import { Tunnel } from "../direct-tunnel/Tunnel.ts";
-import { RuleEngine } from "../rule-manager/RuleEngine.ts";
 import { connectionEvents } from "../event-manager/connection-events/connectionEvents.ts";
-import { tlsLifecycleEvents } from "../event-manager/tls-event/tlsLifecycleEvents.ts";
 
 export class HandshakeHandler extends BaseHandler {
   static phase = Phase.HANDSHAKE;
@@ -52,7 +49,7 @@ export class HandshakeHandler extends BaseHandler {
         req.headers = upstreamHeaders;
         parentCtx.requestContext!.req = req;
         parentCtx.requestContext!.res = res;
-        connectionEvents.emit("HTTP:DECRYPTED", {
+        connectionEvents.emit("HTTPS:DECRYPTED", {
           ctx: parentCtx,
         });
       } catch (err) {
@@ -97,6 +94,17 @@ export class HandshakeHandler extends BaseHandler {
     if (requestContext.state.get(STATE.is_finished)) {
       return;
     }
+    const host = ctx.clientToProxyHost;
+    if (!host) {
+      if (socket.writable && !socket.destroyed) {
+        socket.write("HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n");
+        socket.destroy();
+      }
+      return;
+    }
+
+
+    await connectionEvents.emitAsync("CONNECT:PRE_ESTABLISH", { ctx, socket });
     if (socket.writable && !socket.destroyed) {
       socket.write("HTTP/1.1 200 Connection Established\r\n\r\n");
     }
@@ -110,25 +118,8 @@ export class HandshakeHandler extends BaseHandler {
     }
 
     // const { host } = parseConnectData(reqCtx.req);
-    const host = ctx.clientToProxyHost;
-    if (!host) {
-      return;
-    }
-    // console.info(host)
-    const shouldBypass = RuleEngine.shouldBypass(host!);
-    // console.info(shouldBypass);
-    if (shouldBypass) {
-      await Tunnel.createDirectTunnel(ctx);
-      return;
-    }
-    // async-safe
-    try {
-      await Promise.all(
-        tlsLifecycleEvents.listeners("TLS:LEAF_GENERATED").map((listener) => listener({ ctx })),
-      );
-    } catch (error) {
-      throw error;
-    }
+
+    await connectionEvents.emitAsync("CONNECT:ESTABLISHED", { ctx, socket });
     let data:
       | {
           key: any;
@@ -145,15 +136,28 @@ export class HandshakeHandler extends BaseHandler {
 
     // console.timeEnd("cert_gen for " + host);
     // tls server
-    return new Promise<void>((resolve) => {
+    return new Promise<void>((resolve, reject) => {
+      let isSettled = false; // GUARD: Prevents double resolve/reject race conditions
+
+      // 1. Timeout Guard
+      const handshakeTimeout = setTimeout(() => {
+        if (isSettled) return;
+        isSettled = true;
+
+        console.warn(
+          `[TLS Timeout] Handshake timed out for ${requestContext.req?.headers.host}`,
+        );
+        ProxyUtils.cleanUp([socket, tlsSocket]);
+        requestContext.state.set(STATE.is_error, true);
+        reject(new Error("TLS Handshake Timeout"));
+      }, 10000);
+
+      // 2. Socket Creation
       const tlsSocket = new tls.TLSSocket(socket, {
         isServer: true,
         cert: data?.cert,
         key: data?.key,
-        /**
-         * @implement later for http/2
-         */
-        ALPNProtocols: ["http/1.1"],
+        ALPNProtocols: ["http/1.1"], // Forces browser to downgrade to HTTP/1.1
         SNICallback: async (servername, cb) => {
           try {
             const target = servername || host;
@@ -162,75 +166,80 @@ export class HandshakeHandler extends BaseHandler {
             }
 
             const customLeaf = ctx.customCertificates?.get(target);
-            let sniData:
-              | {
-                  key: any;
-                  cert: any;
-                }
-              | undefined;
-            if (customLeaf && customLeaf.cert && customLeaf.key) {
-              sniData = customLeaf;
-            } else {
-              sniData = await CertManager.getCert(target);
-            }
+            let sniData =
+              customLeaf && customLeaf.cert && customLeaf.key
+                ? customLeaf
+                : await CertManager.getCert(target);
+
             const secureContext = tls.createSecureContext({
               key: sniData?.key,
               cert: sniData?.cert,
             });
+
             cb(null, secureContext);
           } catch (err) {
-            console.error(`[Fatal Handshake Error] ${err}`);
-            cb(err as Error);
+            console.error(`[Fatal SNI Error] ${err}`);
             requestContext.state.set(STATE.is_error, true);
+            cb(err as Error); // This will naturally trigger the tlsSocket "error" event below
           }
         },
       });
 
-      // timeout for handshake if the client opens the connection but never sends the "ClientHello"
-      const handshakeTimeout = setTimeout(() => {
-        console.info(
-          "socket close! timeout error for",
-          requestContext.req?.headers.host,
-        );
+      // 3. Lifecycle Events
+      tlsSocket.on("secure", async () => {
+        if (isSettled) return;
+        isSettled = true;
+        clearTimeout(handshakeTimeout);
+
+        try {
+          // Handshake is done! Hand it over to the H1 handler.
+          await HandshakeHandler.handleH1Session(ctx, tlsSocket);
+          resolve();
+        } catch (err) {
+          // Catch any errors that happen during the H1 parsing phase
+          console.error(`[H1 Session Error] for ${host}:`, err);
+          ProxyUtils.cleanUp([socket, tlsSocket]);
+          requestContext.state.set(STATE.is_error, true);
+          reject(err);
+        }
+      });
+
+      tlsSocket.on("error", (err: any) => {
+        if (isSettled) return;
+        isSettled = true;
+        clearTimeout(handshakeTimeout);
+
+        if (err.code === "HPE_HEADER_OVERFLOW" && err.rawPacket) {
+          console.info(
+            "Header Overflow Packet Length:",
+            Buffer.from(err.rawPacket).length,
+          );
+        }
+
+        // Suppress normal client aborts, log real errors
+        if (err.code !== "ECONNRESET") {
+          console.error(
+            `[TLS Handshake Error] for ${host}:`,
+            err.message || err.code,
+          );
+        }
+
         ProxyUtils.cleanUp([socket, tlsSocket]);
         requestContext.state.set(STATE.is_error, true);
-        resolve();
-      }, 10000);
+        reject(err);
+      });
 
       tlsSocket.on("close", (hadErr) => {
+        if (isSettled) return;
+        isSettled = true;
         clearTimeout(handshakeTimeout);
 
         if (hadErr) {
-          console.warn(`[TLS Close] Socket closed due to error for ${host}`);
+          console.warn(`[TLS Close] Socket closed abruptly for ${host}`);
         }
-        // console.info("tls closed", tlsSocket.destroyed)
+
         ProxyUtils.cleanUp([socket, tlsSocket]);
-        resolve();
-      });
-
-      tlsSocket.on("secure", async () => {
-        if (tlsSocket.alpnProtocol === "h2") {
-          // RuleEngine.saveHostToBypass(host);
-          await Tunnel.createDirectTunnel(ctx);
-          resolve();
-          return;
-        }
-        clearTimeout(handshakeTimeout);
-        await HandshakeHandler.handleH1Session(ctx, tlsSocket)!;
-        // reqCtx.next_phase = Phase.REQUEST;
-        resolve();
-      });
-
-      tlsSocket.on("error", (err) => {
-        clearTimeout(handshakeTimeout);
-
-        if (err.code === "HPE_HEADER_OVERFLOW") {
-          console.info(Buffer.from(err.rawPacket).length, "utf-8");
-        }
-        console.error(`[TLS Handshake Error] for ${host}:`, err);
-        ProxyUtils.cleanUp([socket, tlsSocket]);
-        requestContext.state.set(STATE.is_error, true);
-        // RuleEngine.saveHostToBypass(host, err);
+        // If it closed without erroring or becoming secure, we resolve cleanly to prevent unhandled rejections
         resolve();
       });
     });
