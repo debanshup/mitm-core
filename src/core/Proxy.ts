@@ -1,39 +1,150 @@
 await import("../middleware/middleware.ts");
 import * as http from "http";
-import tls from "tls";
-import Stream, { pipeline } from "stream";
+import Stream from "stream";
 import { Socket } from "net";
 import { PluginRegistry } from "../plugins/PluginRegistry.ts";
 import { connectionEvents } from "./event-manager/connection-events/connectionEvents.ts";
 import type {
   ProxyContext,
   Plugin,
-  TlsEvent,
-  DataEvent,
+  TlsLifecycleEvent,
+  PayloadEvent,
+  ConnectionEvent,
 } from "../types/types.ts";
 import { payloadEvents } from "./event-manager/data-events/payloadEvents.ts";
 import { RuleEngine } from "./rule-manager/RuleEngine.ts";
-import { tlsLifecycleEvents } from "./event-manager/tls-event/tlsLifecycleEvents.ts";
+import { tlsLifecycleEvents } from "./event-manager/tls-events/tlsLifecycleEvents.ts";
+import { TypedEventEmitter } from "./event-manager/EventBus.ts";
+import type {
+  ProxyEventMap,
+  ProxyPlugin,
+} from "./event-manager/proxy-events/proxyEvents.ts";
 
-/**
- * @important register middleware in the main app / here to auto forward req or res to middleware
- */
-export class Proxy {
+interface ProxyOptions {
+  /** * An existing HTTP server to attach the proxy to.
+   * If omitted, a new one is created.
+   */
+  server?: http.Server;
+
+  /** * Maximum time (in milliseconds) to wait for plugins to finish.
+   * Defaults to 5000ms. Set to 0 to disable the timeout completely.
+   */
+  pluginTimeoutMs?: number;
+}
+
+export class Proxy extends TypedEventEmitter<ProxyEventMap> {
   /**
    * @private
    */
-  private httpServer: http.Server | undefined;
-  // private wsServer: WebSocketServer | undefined;
+  private pluginTimeoutMs: number;
+
+  private httpServer: http.Server;
+  // events
+  private connectionEvents?: ConnectionEvent;
+  private tlsLifecycleEvents?: TlsLifecycleEvent;
+  private payloadEvents?: PayloadEvent;
 
   /**
-   *
-   * @static -> register handlers
-   *
+   * @critical
+   * Safely executes plugins with an enforced timeout.
    */
-  public static registerPlugins(plugins: Plugin[]) {
-    PluginRegistry.registerPlugins(plugins);
-    return this;
+  private async executePluginsWithTimeout<K extends keyof ProxyEventMap>(
+    eventName: K,
+    ...args: ProxyEventMap[K] // caller is strictly typed here!
+  ): Promise<void> {
+    const pluginExecution = this.emitAsync(eventName, ...(args as any)); // used `as any` strictly on the spread to bypass TS's generic tuple limitation
+
+    if (this.pluginTimeoutMs <= 0) {
+      await pluginExecution;
+      return;
+    }
+
+    let timerId: NodeJS.Timeout;
+    const timeoutTimer = new Promise<never>((_, reject) => {
+      timerId = setTimeout(
+        () => reject(new Error("PLUGIN_TIMEOUT")),
+        this.pluginTimeoutMs,
+      );
+    });
+
+    try {
+      await Promise.race([pluginExecution, timeoutTimer]);
+    } finally {
+      clearTimeout(timerId!);
+    }
   }
+
+  private bindAllEvents() {
+    this.httpServer.on("connection", async (socket) => {
+      await this.executePluginsWithTimeout("tcp:connection", { socket });
+      this.connectionEvents?.emit("TCP", { socket });
+    });
+
+    this.httpServer.on("connect", async (req, socket, head) => {
+      await this.executePluginsWithTimeout("tunnel:connect", {
+        req,
+        socket,
+        head: head as Buffer,
+        events: {
+          tlsEvent: this.tlsLifecycleEvents!,
+          requestDataEvent: this.payloadEvents!,
+        },
+      });
+      this.connectionEvents?.emit("CONNECT", { req, socket, head });
+    });
+    this.httpServer.on("request", async (req, res) => {
+      await this.executePluginsWithTimeout("http:plain_request", {
+        req,
+        res,
+      });
+      this.connectionEvents?.emit("HTTP:PLAIN", { req, res });
+    });
+
+    // bind server error
+    this.httpServer.on("error", async (err) => {
+      await this.executePluginsWithTimeout("error", err);
+    });
+
+    // other events (inner)
+
+    this.connectionEvents?.on(
+      "CONNECT:PRE_ESTABLISH",
+      async ({ ctx, socket }) => {
+        await this.executePluginsWithTimeout("tunnel:pre_establish", {
+          ctx,
+          socket,
+        });
+      },
+    );
+    this.connectionEvents?.on(
+      "CONNECT:ESTABLISHED",
+      async ({ ctx, socket }) => {
+        await this.executePluginsWithTimeout("tunnel:established", {
+          ctx,
+          socket,
+        });
+      },
+    );
+
+    this.tlsLifecycleEvents?.on("TLS:LEAF_GENERATED", async ({ ctx }) => {
+      await this.executePluginsWithTimeout("tls:leaf_generated", {
+        ctx,
+      });
+    });
+    this.tlsLifecycleEvents?.on("TLS:SERVER_CREATED", async ({ ctx }) => {
+      await this.executePluginsWithTimeout("tls:server_created", {
+        ctx,
+      });
+    });
+
+    this.payloadEvents?.on("PAYLOAD:REQUEST", async ({ ctx }) => {
+      await this.executePluginsWithTimeout("http:decrypted_request", { ctx });
+    });
+    this.payloadEvents?.on("PAYLOAD:RESPONSE", async ({ ctx }) => {
+      await this.executePluginsWithTimeout("decrypted_response", { ctx });
+    });
+  }
+
   /**
    *
    * @static -> unregister middleware
@@ -44,53 +155,32 @@ export class Proxy {
   }
 
   /**
-   * @constructor
+   * Accepts an existing HTTP server (e.g., from Express),
+   * or creates a new one if none is provided.
    */
-  constructor() {
-    if (!this.httpServer) {
-      this.httpServer = http.createServer({
-        keepAlive: true,
-      });
-      this.httpServer?.on("upgrade", (req, socket, head) => {
-        console.info("Upgrading for", req.url);
-        const host = req.headers.host;
-        if (!host) return socket.destroy();
+  constructor(options: ProxyOptions = {}) {
+    super();
+    // initialize plugin timeout
+    this.pluginTimeoutMs = options.pluginTimeoutMs ?? 5000;
+    // initialize server
+    this.httpServer = options.server || http.createServer({ keepAlive: true });
+    // initialize events
+    this.connectionEvents = connectionEvents;
+    this.tlsLifecycleEvents = tlsLifecycleEvents;
+    this.payloadEvents = payloadEvents;
+    // bind all events
+    this.bindAllEvents();
+  }
 
-        const [hostname, portStr] = host.split(":");
-        const port = parseInt(portStr!) || 443;
-
-        // Use TLS for the upstream connection to handle HTTPS/WSS
-        const upstream = tls.connect(
-          port,
-          hostname,
-          { rejectUnauthorized: false },
-          () => {
-            // 1. Manually finish the handshake for the browser
-            socket.write(
-              "HTTP/1.1 101 Switching Protocols\r\n" +
-                "Upgrade: websocket\r\n" +
-                "Connection: Upgrade\r\n\r\n",
-            );
-            upstream.write(head);
-
-            // 2. Bidirectional Pipeline
-            pipeline(socket, upstream, () => {
-              socket.destroy();
-              upstream.destroy();
-            });
-            pipeline(upstream, socket, () => {
-              socket.destroy();
-              upstream.destroy();
-            });
-          },
-        );
-
-        upstream.on("error", () => {
-          socket.destroy();
-          upstream.destroy();
-        });
-      });
+  // --- PLUGIN SYSTEM ---
+  public use(plugin: ProxyPlugin | ((proxy: Proxy) => void)) {
+    if (typeof plugin === "function") {
+      plugin(this);
+    } else {
+      plugin.apply(this);
+      if (plugin.name) console.info(`Loaded plugin: ${plugin.name}`);
     }
+    return this; // Enable chaining
   }
 
   public listen(port: number, callback?: () => void | Promise<void>) {
@@ -105,111 +195,21 @@ export class Proxy {
     }
   }
 
-  public onTCPconnection(
-    tcpConnectionHandler?: (
-      socket: Socket,
-      defaultHandler: () => void,
-    ) => void | Promise<void>,
-  ) {
-    this.httpServer?.on("connection", async (socket) => {
-      const defaultCallback = () => {
-        connectionEvents.emit("TCP", { socket });
-      };
-
-      if (tcpConnectionHandler) {
-        await tcpConnectionHandler(socket, defaultCallback);
-      } else {
-        defaultCallback();
-      }
-    });
-  }
-
-  public onConnect(
-    connectHandler?: (
-      req: http.IncomingMessage,
-      socket: Stream.Duplex,
-      head: any,
-      events: { tlsEvent: TlsEvent; requestDataEvent: DataEvent },
-
-      defaultHandler: () => void,
-    ) => void | Promise<void>,
-  ) {
-    this.httpServer?.on("connect", async (req, socket, head) => {
-      const defaultCallback = () => {
-        connectionEvents.emit("CONNECT", { req, socket, head });
-      };
-      if (connectHandler) {
-        await connectHandler(
-          req,
-          socket,
-          head,
-          { tlsEvent: tlsLifecycleEvents, requestDataEvent: payloadEvents },
-          defaultCallback,
-        );
-      } else {
-        defaultCallback();
-      }
-    });
-  }
-
-  public onHttpRequest(
-    reqHandler?: (
-      req: http.IncomingMessage,
-      res: http.ServerResponse,
-      defaultHandler: () => void,
-    ) => void | Promise<void>,
-  ) {
-    this.httpServer?.on("request", async (req, res) => {
-      const defaultCallback = () => {
-        connectionEvents.emit("HTTP:PLAIN", { req, res });
-      };
-      if (reqHandler) {
-        await reqHandler(req, res, defaultCallback);
-      } else {
-        defaultCallback();
-      }
-    });
-  }
-  public onDecryptedRequest(
-    callback: (payload: { ctx: ProxyContext }) => void | Promise<void>,
-  ) {
-    // Passes the developer's callback directly to the event listener
-    payloadEvents.on("PAYLOAD:REQUEST", callback);
-  }
-
-  public onResponseData(
-    callback: (payload: { ctx: ProxyContext }) => void | Promise<void>,
-  ) {
-    // Passes the developer's callback directly to the event listener
-    payloadEvents.on("PAYLOAD:RESPONSE", callback);
-  }
-
-  public onTlsServerCreation(
-    callback: (payload: { ctx?: ProxyContext }) => void | Promise<void>,
-  ) {
-    tlsLifecycleEvents.on("TLS:SERVER_CREATED", callback);
-  }
-  public onLeafCertificateCreation(
-    callback: (payload: { ctx?: ProxyContext }) => void | Promise<void>,
-  ) {
-    tlsLifecycleEvents.on("TLS:LEAF_GENERATED", callback);
-  }
-
-  public onError(errorHandler: (err: Error) => void | Promise<void>) {
-    this.httpServer?.on("error", (err) => errorHandler(err));
-  }
-
   public stop(): Promise<void> {
     if (!this.httpServer?.listening) return Promise.resolve();
 
     return new Promise((resolve, reject) => {
-      this.httpServer!.close((err) => {
+      // force close all active and idle sockets
+      if ("closeAllConnections" in this.httpServer) {
+        this.httpServer.closeAllConnections();
+      }
+      this.httpServer.close((err) => {
         if (err) reject(err);
-        else resolve(); // wait until fully closed
+        else resolve();
       });
     });
   }
-  // ----------------------
+  // ---------- this will be plugin level ----------------
 
   public saveHostToBypass(host: string | string[], error?: Error) {
     if (Array.isArray(host)) {
