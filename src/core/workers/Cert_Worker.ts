@@ -3,11 +3,11 @@ import fs from "fs";
 import path from "path";
 import { CA_PATH } from "../../constants/path.ts";
 
-export default ({ host}: { host: string; caDir: string }) => {
+export default ({ host }: { host: string; caDir: string }) => {
   const isIPv6 = host.includes(":");
   const isIPv4 = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(host);
   const isIP = isIPv4 || isIPv6;
-  const cleanedHost = host.replace(/[\[\]]/g, "").toLowerCase();
+  const cleanedHost = host.replace(/[[\]]/g, "").toLowerCase();
 
   // console.info("IN worker:", CA_PATH);
 
