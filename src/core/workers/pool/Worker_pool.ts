@@ -5,9 +5,6 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 export const pool = new Piscina.Piscina({
-  filename: path.resolve(
-    __dirname,
-    "../Cert_Worker.ts"
-  ),
+  filename: path.resolve(__dirname, "../Cert_Worker.ts"),
   maxThreads: 2,
 });
