@@ -2,25 +2,31 @@ import type { Socket } from "net";
 import { TypedEventEmitter } from "../EventBus.ts";
 import type { IncomingMessage, ServerResponse } from "http";
 import type Stream from "stream";
-import type { ProxyContext } from "../../../types/types.ts";
-interface ConnectionEventMap {
-  TCP: [payload: { socket: Socket }];
+import type { ProxyContext } from "../../context-manager/ContextManager.ts";
+export interface ConnectionEventMap {
+  TCP: [payload: { socket: Socket; ctx?: ProxyContext }];
   CONNECT: [
     payload: {
       req: IncomingMessage;
       socket: Stream.Duplex;
       head: any;
+      ctx?: ProxyContext;
     },
   ];
   "CONNECT:PRE_ESTABLISH": [
-    payload: { ctx: ProxyContext; socket: Stream.Duplex },
+    payload: { socket: Stream.Duplex; ctx?: ProxyContext },
   ];
   "CONNECT:ESTABLISHED": [
-    payload: { ctx: ProxyContext; socket: Stream.Duplex },
+    payload: { socket: Stream.Duplex; ctx?: ProxyContext },
   ];
-  "HTTP:PLAIN": [payload: { req: IncomingMessage; res: ServerResponse }];
+  "HTTP:PLAIN": [
+    payload: {
+      req: IncomingMessage;
+      res: ServerResponse;
+      ctx?: ProxyContext;
+    },
+  ];
   "HTTPS:DECRYPTED": [payload: { ctx: ProxyContext }];
 }
 
 export const connectionEvents = new TypedEventEmitter<ConnectionEventMap>();
- 
