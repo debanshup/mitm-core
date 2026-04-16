@@ -1,38 +1,40 @@
 import https from "https";
 import http from "http";
-import { Phase } from "../../phase/Phase.ts";
+import tls from "tls";
+// import type { Phase } from "../../phase/Phase.ts";
 import { BaseHandler } from "./base/base.handler.ts";
-import type { ProxyContext } from "../../types/types.ts";
 import { pipeline } from "stream";
-import { ProxyUtils } from "../utiils/ProxyUtils.ts";
-import { STATE } from "../state/state.ts";
+import { ProxyUtils } from "../utils/ProxyUtils.ts";
 import { ResponseCache } from "../cache-manager/ResponseCache.ts";
 import { readFileSync } from "fs";
 import { CA_PATH } from "../../constants/path.ts";
 import path from "path";
-
+import type { ProxyContext } from "../context-manager/ContextManager.ts";
 export class RequestHandler extends BaseHandler {
-  static phase = Phase.REQUEST;
+  readonly phase = "request";
   private static httpsAgent = new https.Agent({
-    keepAlive: true, // Keep sockets open for reuse
-    keepAliveMsecs: 1000, // send TCP keep-alive packets every 1s
-    maxSockets: Infinity, // Allow unlimited concurrent connections per host
-    maxFreeSockets: 256, // Allow plenty of idle sockets to stay open
-    timeout: 30000, // Close socket if idle for 30s (avoids stale connection errors)
-    scheduling: "lifo", // Use most recently used socket (better for reused connections)
-    ca: readFileSync(path.join(CA_PATH.CA_DIR, "CA.crt")),
+    keepAlive: true,
+    keepAliveMsecs: 60000,
+    timeout: 30000,
+    maxSockets: Infinity,
+    maxFreeSockets: 64,
+    scheduling: "lifo",
+    ca: [
+      ...tls.rootCertificates,
+      readFileSync(path.join(CA_PATH.CA_DIR, "CA.crt")), // support for proxy chaining (eg. proxying a proxy ) and corporate proxy
+    ],
   });
 
   private static httpAgent = new http.Agent({
     keepAlive: true,
-    keepAliveMsecs: 1000,
-    maxSockets: Infinity,
-    maxFreeSockets: 256,
+    keepAliveMsecs: 60000,
     timeout: 30000,
+    maxSockets: Infinity,
+    maxFreeSockets: 64,
     scheduling: "lifo",
   });
 
-  static async handle(ctx: ProxyContext) {
+  async handle(ctx: ProxyContext) {
     const { requestContext } = ctx;
     if (!requestContext?.req) {
       console.info("REQ not found!");
@@ -56,10 +58,7 @@ export class RequestHandler extends BaseHandler {
         }
       }
     } catch (error) {
-      console.error(
-        "Invalid URL:",
-        ctx.proxyToUpstreamUrl || requestContext.req.url,
-      );
+      console.error(error);
       requestContext.res!.statusCode = 400;
       requestContext.res!.end("Invalid URL");
       return;
@@ -69,7 +68,9 @@ export class RequestHandler extends BaseHandler {
 
     const isHTTPS = targetUrl.protocol === "https:";
     const requestModule = isHTTPS ? https : http;
-    const agent = isHTTPS ? this.httpsAgent : this.httpAgent;
+    const agent = isHTTPS
+      ? RequestHandler.httpsAgent
+      : RequestHandler.httpAgent;
     const cache_key = ResponseCache.generateKey(requestContext.req);
     const cached = ResponseCache.get(cache_key);
 
@@ -95,7 +96,7 @@ export class RequestHandler extends BaseHandler {
     requestContext.upstreamReq = upstream;
 
     // Pipe Client Request -> Upstream Server
-   
+
     pipeline(requestContext.req, upstream, (err) => {
       if (err) {
         const isClientAbort =
@@ -105,7 +106,7 @@ export class RequestHandler extends BaseHandler {
           console.debug(`[Stream] Client aborted the request mid-upload.`);
         } else {
           console.error(
-            `[Stream Error] Client to Upstream: ${err.message || err.code}`,
+            `[Stream Error] Client to Upstream: ${err.message || err.code}:${ctx.clientToProxyHost}`,
           );
 
           if (requestContext.res && !requestContext.res.headersSent) {
@@ -121,10 +122,11 @@ export class RequestHandler extends BaseHandler {
             }
           }
         }
+        // eslint-disable-next-line @typescript-eslint/no-non-null-asserted-optional-chain
         ProxyUtils.cleanUp([upstream, requestContext.req?.socket!]);
-        requestContext.state.set(STATE.is_error, true);
+        requestContext.state.set("error", true);
       }
     });
-    requestContext.nextPhase = Phase.RESPONSE;
+    requestContext.nextPhase = "response";
   }
 }
