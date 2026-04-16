@@ -65,7 +65,10 @@
 ^(?:[a-z0-9-]+\.)*live\.com$
 ^(?:[a-z0-9-]+\.)*sharepoint\.com$
 ^(?:[a-z0-9-]+\.)*office365\.com$
-^(?:[a-z0-9-]+\.)*default.\exp-tas.\com$
+^(?:[a-z0-9-]+\.)*windows\.net$
+^(?:[a-z0-9-]+\.)*windows\.com$
+^(?:[a-z0-9-]+\.)*msn\.com$
+^(?:[a-z0-9-]+\.)*exp-tas.\com$
 ^(?:[a-z0-9-]+\.)*my\.microsoftpersonalcontent\.com$
 
 
