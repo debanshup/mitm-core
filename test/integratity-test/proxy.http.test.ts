@@ -1,7 +1,8 @@
 import assert from "node:assert";
 import http from "node:http";
 import { describe, it, before, after } from "mocha";
-import { Middleware, Proxy } from "../../src/index.ts"; // Adjust path as needed
+import {   Proxy } from "../../src/index.ts"; // Adjust path as needed
+import { Middleware } from "../../src/middleware/middleware.ts";
 
 describe("Proxy Integrity Test: End-to-End Traffic Routing", () => {
   let proxy: Proxy;
@@ -12,7 +13,7 @@ describe("Proxy Integrity Test: End-to-End Traffic Routing", () => {
   const PROXY_PORT = 8001;
   const TARGET_PORT = 9001;
 
-  let hooksFired = {
+  const hooksFired = {
     plainRequest: false,
     responseData: false,
   };

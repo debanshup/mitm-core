@@ -3,8 +3,9 @@ import http from "node:http";
 import https from "node:https";
 import tls from "node:tls";
 import { describe, it, before, after } from "mocha";
-import { Middleware, Proxy } from "../../src/index.ts"; // Adjust path as needed
+import { Proxy } from "../../src/index.ts"; // Adjust path as needed
 import { generateForgeCertificates } from "../utils.ts";
+import { Middleware } from "../../src/middleware/middleware.ts";
 
 let originalTlsEnv: string | undefined;
 
@@ -17,7 +18,7 @@ describe("Proxy Integrity Test: End-to-End HTTPS Traffic Routing", () => {
   const TARGET_PORT = 9001;
 
   // Updated to reflect the HTTPS lifecycle events
-  let hooksFired = {
+  const hooksFired = {
     tunnelConnect: false,
     decryptedRequest: false,
     decryptedResponse: false,

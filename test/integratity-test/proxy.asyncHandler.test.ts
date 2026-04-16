@@ -57,7 +57,7 @@ describe("Proxy Core: Async Lifecycle Handlers", () => {
   it("should await an async [tunnel:connect] plugin before continuing the pipeline", (done) => {
     let asyncWorkCompleted = false;
 
-    proxy.on("tunnel:connect", async ({ req, socket, head, events }) => {
+    proxy.on("tunnel:connect", async ({ req, socket, head, event  }) => {
       await new Promise((resolve) => setTimeout(resolve, 50));
       asyncWorkCompleted = true;
     });
