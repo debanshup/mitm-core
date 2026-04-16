@@ -1,19 +1,16 @@
 import type Stream from "stream";
-import type {
-  PayloadEvent,
-  ProxyContext,
-  TlsLifecycleEvent,
-} from "../../../types/types.ts";
+
 import http from "http";
-import { Proxy } from "../../Proxy.ts";
 import type { Socket } from "net";
+import type { ProxyContext } from "../../context-manager/ContextManager.ts";
+import type { PayloadEvents } from "../payload-events/payloadEvents.ts";
 
 /**
  * Defines the comprehensive event lifecycle for the Proxy server.
  * All events utilize a single-payload object pattern to ensure backward compatibility
  * and predictable plugin development.
  */
-export interface ProxyEventMap  {
+export interface ProxyEventMap {
   //  tcp / tunneling
   /**
    * Fired when a raw TCP connection is made to the proxy server.
@@ -30,7 +27,7 @@ export interface ProxyEventMap  {
       req: http.IncomingMessage;
       socket: Stream.Duplex;
       head: Buffer;
-      events: { tlsEvent: TlsLifecycleEvent; requestDataEvent: PayloadEvent };
+      event: PayloadEvents;
     },
   ];
 
@@ -59,22 +56,6 @@ export interface ProxyEventMap  {
     payload: { req: http.IncomingMessage; res: http.ServerResponse },
   ];
 
-  // tls lifecycle
-
-  /**
-   * Fired when a local TLS/SNI server is dynamically spun up to intercept
-   * secure traffic for a specific target domain.
-   */
-  "tls:server_created": [payload: { ctx: ProxyContext }];
-
-  /**
-   * Fired when a forged "leaf" SSL certificate is successfully generated
-   * for the target domain to facilitate Man-In-The-Middle (MITM) decryption.
-   */
-  "tls:leaf_generated": [payload: { ctx: ProxyContext }];
-
-  // decrypted request (Inside the Tunnel)
-
   /**
    * Fired when an HTTPS request has been successfully intercepted and decrypted.
    * Hook into this event to read or modify secure request headers, bodies, or routing.
@@ -95,8 +76,4 @@ export interface ProxyEventMap  {
    * or during the execution of a plugin.
    */
   error: [err: Error | any];
-};
-export interface ProxyPlugin {
-  name?: string;
-  apply: (proxy: Proxy) => void;
 }
