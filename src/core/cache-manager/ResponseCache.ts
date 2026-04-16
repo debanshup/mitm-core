@@ -1,6 +1,15 @@
 import { LRUCache } from "lru-cache";
-import type { CachedResponse } from "../../types/types.ts";
+
 import http, { type IncomingHttpHeaders } from "http";
+
+type CachedResponse = {
+  status: number;
+  etag?: string;
+  headers: Record<string, string | string[] | undefined>;
+  body: Buffer;
+  expires: number;
+};
+
 export class ResponseCache {
   protected constructor() {}
 
@@ -29,28 +38,57 @@ export class ResponseCache {
     return `${req.method}:${host}${req.url}:${encoding}`;
   }
 
- 
   static isCacheableResponse(
     req: http.IncomingMessage,
     res: http.IncomingMessage,
     bodySize: number,
   ): boolean {
+    if (!req || !res) {
+      return false;
+    }
+
     // Method Check
     if (req.method !== "GET" && req.method !== "HEAD") {
       return false;
     }
-    if (req.headers["authorization"]) {
+    // status check
+    const status = res.statusCode || 0;
+    if (!ResponseCache.CACHEABLE_STATUS_CODES.has(status)) return false;
+    //  Cache-Control, pragma and vary check
+    const cacheControl = (res.headers["cache-control"] || "").toLowerCase();
+    const pragma = (res.headers["pragma"] || "").toLowerCase();
+    const vary = res.headers["vary"] || "";
+    // console.info("cache-control", cacheControl);
+    if (
+      cacheControl.includes("no-store") ||
+      cacheControl.includes("no-cache") ||
+      pragma.includes("no-cache") ||
+      vary === "*"
+    ) {
       return false;
     }
+    // authorization
+    if (req.headers["authorization"]) {
+      const isExplicitlyPublic =
+        cacheControl.includes("public") ||
+        cacheControl.includes("must-revalidate") ||
+        cacheControl.includes("s-maxage");
+
+      if (!isExplicitlyPublic) return false;
+    }
+
+    // check for private
+    if (cacheControl.includes("private")) return false;
 
     // Matrix / Long-Polling failsafe
     // If the server doesn't provide a content-length, it's likely a stream
     // or chunked transfer (like Server-Sent Events). Don't cache it.
 
     const reqAccept = (req.headers["accept"] || "").toLowerCase();
-    const resContentType = (res.headers["content-type"] || "").toLowerCase();
     const reqUpgrade = (req.headers["upgrade"] || "").toLowerCase();
+    const resContentType = (res.headers["content-type"] || "").toLowerCase();
 
+    // console.info(reqAccept, reqUpgrade, resContentType);
     // Block Server-Sent Events (SSE) and WebSockets
     if (
       reqAccept.includes("text/event-stream") ||
@@ -67,26 +105,13 @@ export class ResponseCache {
     if (!hasLength && !isChunked) {
       return false;
     }
-    const status = res.statusCode || 0;
-    if (!ResponseCache.CACHEABLE_STATUS_CODES.has(status)) return false;
-
-    //  Cache-Control "no-store" Check (Privacy/Security)
-    const cacheControl = (res.headers["cache-control"] || "").toLowerCase();
-    if (
-      cacheControl.includes("no-store") ||
-      cacheControl.includes("no-cache") ||
-      cacheControl.includes("private") ||
-      cacheControl.includes("must-revalidate")
-    ) {
-      return false;
-    }
 
     //   Size Guard
     const sizeLimit = 5 * 1024 * 1024; // 5MB
     if (bodySize > sizeLimit) return false;
 
     //  Content-Type Strategy
-    const ct = res.headers["content-type"] || "";
+    const contentType = res.headers["content-type"] || "";
 
     // Always cache Redirects and No-Content (even if body is 0)
     if (status >= 300 || status === 204) return true;
@@ -94,12 +119,11 @@ export class ResponseCache {
     // For 200 OK, be selective to save LRU space
     const isCachableType =
       // ct.includes("text/html") ||
-      ct.includes("text/css") ||
-      ct.includes("javascript") ||
-      ct.includes("json") || // Added JSON for API heavy sites
-      ct.startsWith("image/") ||
-      ct.startsWith("font/"); // Added Fonts (essential for speed)
-
+      contentType.includes("text/css") ||
+      contentType.includes("javascript") ||
+      contentType.includes("json") || // Added JSON for API heavy sites
+      contentType.startsWith("image/") ||
+      contentType.startsWith("font/"); // Added Fonts (essential for speedcontentType
     return isCachableType;
   }
 
