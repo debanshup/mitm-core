@@ -1,31 +1,57 @@
 {
-  "name": "mitm_basic",
+  "name": "mitm-core",
   "version": "1.0.0",
-  "description": "",
+  "description": "> **Documentation is under active development and coming soon!**",
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "start": "tsx watch --inspect ./test/Proxy.ts",
-    "test": "mocha --config mocha.config.json"
+    "dev": "tsx watch --inspect ./example/with-plugin/Proxy.ts",
+    "clean": "node -e \"fs.rmSync('dist', { recursive: true, force: true })\"",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint \"src/**/*.ts\"",
+    "lint:fix": "eslint \"src/**/*.ts\" --fix",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "test": "mocha --config mocha.config.json",
+    "build": "npm run clean && tsup",
+    "prepare": "npm run build",
+    "prepublishOnly": "npm run test && npm run lint && npm run typecheck"
   },
   "keywords": [],
   "author": "Debanshu Panigrahi",
   "license": "MIT",
   "devDependencies": {
     "@babel/preset-typescript": "^7.28.5",
+    "@eslint/js": "^10.0.1",
     "@types/mocha": "^10.0.10",
     "@types/node": "^24.10.2",
     "@types/node-forge": "^1.3.14",
     "@types/ws": "^8.18.1",
     "cross-env": "^10.1.0",
+    "eslint": "^10.2.0",
     "mocha": "^11.7.5",
+    "node-forge": "^1.4.0",
     "nodemon": "^3.1.11",
+    "prettier": "^3.8.2",
+    "tsup": "^8.5.1",
     "tsx": "^4.21.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.58.2",
+    "undici": "^7.25.0"
   },
   "dependencies": {
     "lru-cache": "^11.2.4",
-    "node-forge": "^1.3.3",
     "piscina": "^5.1.4"
-  }
+  },
+  "directories": {
+    "example": "example",
+    "test": "test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/debanshup/mitm-core.git"
+  },
+  "bugs": {
+    "url": "https://github.com/debanshup/mitm-core/issues"
+  },
+  "homepage": "https://github.com/debanshup/mitm-core#readme"
 }
