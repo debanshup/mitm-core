@@ -1,24 +1,45 @@
-await import("../middleware/middleware.ts");
+// await import("../middleware/middleware.ts");
 import * as http from "http";
-import Stream from "stream";
-import { Socket } from "net";
-import { PluginRegistry } from "../plugins/PluginRegistry.ts";
-import { connectionEvents } from "./event-manager/connection-events/connectionEvents.ts";
-import type {
-  ProxyContext,
-  Plugin,
-  TlsLifecycleEvent,
-  PayloadEvent,
-  ConnectionEvent,
-} from "../types/types.ts";
-import { payloadEvents } from "./event-manager/data-events/payloadEvents.ts";
-import { RuleEngine } from "./rule-manager/RuleEngine.ts";
-import { tlsLifecycleEvents } from "./event-manager/tls-events/tlsLifecycleEvents.ts";
-import { TypedEventEmitter } from "./event-manager/EventBus.ts";
-import type {
-  ProxyEventMap,
-  ProxyPlugin,
-} from "./event-manager/proxy-events/proxyEvents.ts";
+import { connectionEvents } from "./event-manager/connection-events/connectionEvents";
+import { TypedEventEmitter } from "./event-manager/EventBus";
+import type { ProxyEventMap } from "./event-manager/proxy-events/proxyEvents";
+import type { BasePlugin } from "./plugin-manager/BasePlugin";
+import { payloadEvents } from "./event-manager/payload-events/payloadEvents";
+import { ContextManager } from "./context-manager/ContextManager";
+import { Middleware } from "../middleware/middleware";
+
+/**
+ * Interface for the Proxy class, managing plugin execution,
+ * HTTP server events, and lifecycle management.
+ */
+export interface IProxy {
+  /**
+   * Registers a plugin to its explicitly defined proxy event.
+   */
+  use<K extends keyof ProxyEventMap>(plugin: BasePlugin<K>): this;
+
+  /**
+   * Unregisters a plugin.
+   */
+  unuse(plugin: BasePlugin): this;
+
+  /**
+   * Starts the HTTP server on the specified port.
+   * @param port - The network port to listen on.
+   * @param callback - Optional sync or async function to execute once the server is ready.
+   */
+  listen(port: number, callback?: () => void | Promise<void>): void;
+
+  /**
+   * Gracefully shuts down the server and forcibly closes all active and idle connections.
+   * @returns A promise that resolves when the server has successfully closed.
+   */
+  stop(): Promise<void>;
+}
+
+/**
+ * Configuration options for the Proxy instance.
+ */
 
 interface ProxyOptions {
   /** * An existing HTTP server to attach the proxy to.
@@ -32,17 +53,16 @@ interface ProxyOptions {
   pluginTimeoutMs?: number;
 }
 
-export class Proxy extends TypedEventEmitter<ProxyEventMap> {
+export class Proxy extends TypedEventEmitter<ProxyEventMap> implements IProxy {
   /**
    * @private
    */
+  // timeout for plugn execution
   private pluginTimeoutMs: number;
-
   private httpServer: http.Server;
-  // events
-  private connectionEvents?: ConnectionEvent;
-  private tlsLifecycleEvents?: TlsLifecycleEvent;
-  private payloadEvents?: PayloadEvent;
+
+  // plugins
+  private activePlugins = new Set<BasePlugin>();
 
   /**
    * @critical
@@ -77,7 +97,8 @@ export class Proxy extends TypedEventEmitter<ProxyEventMap> {
   private bindAllEvents() {
     this.httpServer.on("connection", async (socket) => {
       await this.executePluginsWithTimeout("tcp:connection", { socket });
-      this.connectionEvents?.emit("TCP", { socket });
+      const ctx = ContextManager.getContext(socket);
+      connectionEvents?.emit("TCP", { socket, ctx });
     });
 
     this.httpServer.on("connect", async (req, socket, head) => {
@@ -85,19 +106,18 @@ export class Proxy extends TypedEventEmitter<ProxyEventMap> {
         req,
         socket,
         head: head as Buffer,
-        events: {
-          tlsEvent: this.tlsLifecycleEvents!,
-          requestDataEvent: this.payloadEvents!,
-        },
+        event: payloadEvents,
       });
-      this.connectionEvents?.emit("CONNECT", { req, socket, head });
+      const ctx = ContextManager.getContext(req.socket);
+      connectionEvents?.emit("CONNECT", { req, socket, head, ctx });
     });
     this.httpServer.on("request", async (req, res) => {
       await this.executePluginsWithTimeout("http:plain_request", {
         req,
         res,
       });
-      this.connectionEvents?.emit("HTTP:PLAIN", { req, res });
+      const ctx = ContextManager.getContext(req.socket);
+      connectionEvents?.emit("HTTP:PLAIN", { req, res, ctx });
     });
 
     // bind server error
@@ -107,51 +127,25 @@ export class Proxy extends TypedEventEmitter<ProxyEventMap> {
 
     // other events (inner)
 
-    this.connectionEvents?.on(
-      "CONNECT:PRE_ESTABLISH",
-      async ({ ctx, socket }) => {
-        await this.executePluginsWithTimeout("tunnel:pre_establish", {
-          ctx,
-          socket,
-        });
-      },
-    );
-    this.connectionEvents?.on(
-      "CONNECT:ESTABLISHED",
-      async ({ ctx, socket }) => {
-        await this.executePluginsWithTimeout("tunnel:established", {
-          ctx,
-          socket,
-        });
-      },
-    );
-
-    this.tlsLifecycleEvents?.on("TLS:LEAF_GENERATED", async ({ ctx }) => {
-      await this.executePluginsWithTimeout("tls:leaf_generated", {
-        ctx,
+    connectionEvents?.on("CONNECT:PRE_ESTABLISH", async ({ ctx, socket }) => {
+      await this.executePluginsWithTimeout("tunnel:pre_establish", {
+        socket,
+        ctx: ctx || ContextManager.getContext(socket),
       });
     });
-    this.tlsLifecycleEvents?.on("TLS:SERVER_CREATED", async ({ ctx }) => {
-      await this.executePluginsWithTimeout("tls:server_created", {
-        ctx,
+    connectionEvents?.on("CONNECT:ESTABLISHED", async ({ ctx, socket }) => {
+      await this.executePluginsWithTimeout("tunnel:established", {
+        socket,
+        ctx: ctx || ContextManager.getContext(socket),
       });
     });
 
-    this.payloadEvents?.on("PAYLOAD:REQUEST", async ({ ctx }) => {
+    payloadEvents?.on("PAYLOAD:REQUEST", async ({ ctx }) => {
       await this.executePluginsWithTimeout("http:decrypted_request", { ctx });
     });
-    this.payloadEvents?.on("PAYLOAD:RESPONSE", async ({ ctx }) => {
+    payloadEvents?.on("PAYLOAD:RESPONSE", async ({ ctx }) => {
       await this.executePluginsWithTimeout("decrypted_response", { ctx });
     });
-  }
-
-  /**
-   *
-   * @static -> unregister middleware
-   *
-   */
-  public static unRegisterPlugins(plugins: Plugin[]) {
-    PluginRegistry.unRegisterPlugins(plugins);
   }
 
   /**
@@ -164,23 +158,31 @@ export class Proxy extends TypedEventEmitter<ProxyEventMap> {
     this.pluginTimeoutMs = options.pluginTimeoutMs ?? 5000;
     // initialize server
     this.httpServer = options.server || http.createServer({ keepAlive: true });
-    // initialize events
-    this.connectionEvents = connectionEvents;
-    this.tlsLifecycleEvents = tlsLifecycleEvents;
-    this.payloadEvents = payloadEvents;
     // bind all events
     this.bindAllEvents();
+    // initialize middleware
+    Middleware.register({ initializePipelines: true });
   }
 
-  // --- PLUGIN SYSTEM ---
-  public use(plugin: ProxyPlugin | ((proxy: Proxy) => void)) {
-    if (typeof plugin === "function") {
-      plugin(this);
-    } else {
-      plugin.apply(this);
-      if (plugin.name) console.info(`Loaded plugin: ${plugin.name}`);
-    }
-    return this; // Enable chaining
+  public use<K extends keyof ProxyEventMap>(plugin: BasePlugin<K>): this {
+    this.activePlugins.add(plugin);
+
+    this.on(plugin.event, (async (...args: any[]) => {
+      // first argument is always the payload object
+      await plugin.run(args[0]);
+    }) as any);
+
+    console.debug(
+      `[Registry] Registered ${plugin.name} on event -> ${plugin.event}`,
+    );
+
+    return this;
+  }
+  public unuse(plugin: BasePlugin): this {
+    // Note: To fully unregister, you'd also need to call this.off()
+    // which requires modifying your EventEmitter logic to support removing listeners.
+    this.activePlugins.delete(plugin);
+    return this;
   }
 
   public listen(port: number, callback?: () => void | Promise<void>) {
@@ -196,7 +198,8 @@ export class Proxy extends TypedEventEmitter<ProxyEventMap> {
   }
 
   public stop(): Promise<void> {
-    if (!this.httpServer?.listening) return Promise.resolve();
+    if (!this.httpServer || !this.httpServer.listening)
+      return Promise.resolve();
 
     return new Promise((resolve, reject) => {
       // force close all active and idle sockets
@@ -208,15 +211,6 @@ export class Proxy extends TypedEventEmitter<ProxyEventMap> {
         else resolve();
       });
     });
-  }
-  // ---------- this will be plugin level ----------------
-
-  public saveHostToBypass(host: string | string[], error?: Error) {
-    if (Array.isArray(host)) {
-      host.forEach((h) => RuleEngine.saveHostToBypass(h, error));
-    } else {
-      RuleEngine.saveHostToBypass(host, error);
-    }
   }
 }
 
