@@ -1,42 +1,37 @@
-import { Phase } from "../../phase/Phase.ts";
-import type { ProxyContext } from "../../types/types.ts";
+import type { Phase } from "../../phase/Phase.ts";
+import type { ProxyContext } from "../context-manager/ContextManager.ts";
+import type { BaseHandler } from "../handlers/base/base.handler.ts";
 import { HANDLERS } from "../handlers/registry/registry.ts";
 import { PipelineAbortSignal } from "../signals/pipelineAbortSignal.ts";
 export default class Pipeline {
   protected constructor() {}
-  private static pipelines: Record<Phase, { name: any; handle: any }[]> = {};
+  private static pipelines: Record<Phase, BaseHandler[]> = {
+    tcp: [],
+    handshake: [],
+    request: [],
+    response: [],
+  };
   static compile() {
-    const handlers = HANDLERS;
-    // console.info(handlers);
-    Pipeline.pipelines = {
-      // tcp: [...handlers]
-      //   .filter((h) => h.phase === Phase.TCP)
-      //   .map((h) => ({
-      //     name: h.name,
-      //     handle: h.handle,
-      //   })),
-      handshake: [...handlers]
-        .filter((h) => h.phase === Phase.HANDSHAKE)
-        .map((h) => ({
-          name: h.name,
-          handle: h.handle,
-        })),
+    // 2. Reset the pipelines (useful if you ever implement hot-reloading)
+    this.pipelines = { tcp: [], handshake: [], request: [], response: [] };
 
-      request: [...handlers]
-        .filter((h) => h.phase === Phase.REQUEST)
-        .map((h) => ({
-          name: h.name,
-          handle: h.handle,
-        })),
-      response: [...handlers]
-        .filter((h) => h.phase === Phase.RESPONSE)
-        .map((h) => ({
-          name: h.name,
-          handle: h.handle,
-        })),
-    };
-    // console.info(Pipeline.pipelines);
-    // console.info(`[Worker ${process.pid}] Pipeline initialized successfully`);
+    // 3. Iterate over the strictly typed Set<HandlerConstructor>
+    for (const HandlerClass of HANDLERS) {
+      // Instantiate cleanly (TypeScript knows this returns a BaseHandler)
+      const instance = new HandlerClass();
+
+      // Access the instance property instead of the static property
+      const phase = instance.phase;
+
+      // Dynamically push to the correct bucket based on the string literal
+      if (this.pipelines[phase]) {
+        this.pipelines[phase].push(instance);
+      } else {
+        console.warn(`[Pipeline] Ignored handler with unknown phase: ${phase}`);
+      }
+    }
+
+    console.info(`[Worker ${process.pid}] Pipeline initialized successfully`);
   }
 
   /**
