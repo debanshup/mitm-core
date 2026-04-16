@@ -1,7 +1,14 @@
 import fs from "fs";
 import os from "os";
 import path from "path";
-import type { IRuleParser } from "./parser.ts";
+export interface RuleParser<T> {
+  /** Parses raw file content into an internal rule format */
+  parse(rawContent: string): T;
+  /** Evaluates a target against the parsed rules */
+  match(rules: T, target: string): boolean;
+  /** Formats a string to be safely appended to the file (optional) */
+  formatForSave?(input: string): string;
+}
 
 export class WatchableRuleFile<T> {
   private rules: T;
@@ -11,7 +18,7 @@ export class WatchableRuleFile<T> {
   constructor(
     public readonly name: string,
     public readonly filePath: string,
-    private readonly parser: IRuleParser<T>,
+    private readonly parser: RuleParser<T>,
     defaultState: T,
   ) {
     this.rules = defaultState;
@@ -34,7 +41,7 @@ export class WatchableRuleFile<T> {
     if (this.reloadTimer) clearTimeout(this.reloadTimer);
     this.reloadTimer = setTimeout(() => {
       this.loadRules();
-      console.info(
+      console.debug(
         `[Worker ${process.pid}] Rule Store '${this.name}' reloaded`,
       );
     }, 200);
