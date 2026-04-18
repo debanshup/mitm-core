@@ -2,8 +2,8 @@ import { LRUCache } from "lru-cache";
 import path from "path";
 import fs from "fs";
 import * as crypto from "crypto";
-import { pool } from "../workers/pool/Worker_pool.ts";
-import { LEAF_PATH } from "../../constants/path.ts";
+import { pool } from "../workers/pool/Worker_pool";
+import { LEAF_PATH } from "../../constants/path";
 export class CertCache {
   protected constructor() {}
   // inflite

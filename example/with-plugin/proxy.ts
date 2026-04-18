@@ -1,5 +1,5 @@
-import { Proxy } from "../../src/index.ts";
-import { BypassPlugin } from "./bypass.plugin.ts";
+import { Proxy } from "../../src/index";
+import { BypassPlugin } from "./bypass.plugin";
 
 const proxy = new Proxy();
 const bypassPlugin = new BypassPlugin();

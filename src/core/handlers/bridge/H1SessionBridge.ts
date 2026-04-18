@@ -1,8 +1,8 @@
 import { createServer } from "http";
 import tls from "tls";
 import net from "net";
-import { connectionEvents } from "../../event-manager/connection-events/connectionEvents.ts";
-import type { ProxyContext } from "../../context-manager/ContextManager.ts";
+import { connectionEvents } from "../../event-manager/connection-events/connectionEvents";
+import type { ProxyContext } from "../../context-manager/ContextManager";
 
 export class H1SessionBridge {
   private static tlsContextMap = new WeakMap<net.Socket, ProxyContext>();

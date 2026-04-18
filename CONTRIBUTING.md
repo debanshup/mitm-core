@@ -1,18 +1,20 @@
-<!-- ignore --MD033 -->
+<!-- markdownlint-disable MD033 -->
 
 # Contributing
 
-Thank you for your interest in this project.
+Thank you for your interest in contributing to `mitm-core`.
 
 ## Important Notice: Solo Development
 
-This project is currently being developed and maintained by a <a href="https://debanshupanigrahi.dev" target="_blank" rel="noopener noreferrer">single developer</a>. To avoid wasted effort and merge conflicts, **you must open a Discussion or Issue before making any internal or architectural changes.** Major pull requests that have not been discussed and approved beforehand will be closed. This ensures the project maintains a consistent architecture and stays aligned with the current development roadmap.
+This project is currently developed and maintained by a <a href="https://debanshupanigrahi.dev" target="_blank" rel="noopener noreferrer">single developer</a>. To avoid wasted effort and merge conflicts, **you must open a Discussion or Issue before making any internal or architectural changes.** Pull requests that introduce major or architectural changes without prior discussion will be closed. This keeps the codebase consistent and aligned with the current development roadmap.
+
+---
 
 ## How to Contribute
 
 ### Reporting Bugs
 
-If you find a bug, please open an issue. Include:
+Open an Issue and include:
 
 - A clear description of the problem.
 - Steps to reproduce the issue.
@@ -21,26 +23,65 @@ If you find a bug, please open an issue. Include:
 
 ### Suggesting Features
 
-If you have an idea for a new feature, open a Discussion or Issue to propose it. Please explain the motivation and how it benefits the proxy framework.
+Open a Discussion or Issue to propose your idea. Explain the motivation and how it benefits the proxy framework before writing any code.
 
 ### Minor Fixes
 
-For small changes like fixing typos, correcting documentation, or simple bug fixes, you can submit a Pull Request directly without opening a prior discussion.
+For small changes — typos, documentation corrections, or isolated bug fixes — you may submit a Pull Request directly without opening a prior Discussion.
+
+---
+
+## Local Development
+
+### Prerequisites
+
+- **Node.js** >= 18
+- **npm** >= 9
+
+### Setup
+
+```bash
+# 1. Clone your fork
+git clone https://github.com/<your-username>/mitm-core.git
+cd mitm-core
+
+# 2. Install dependencies
+npm install
+
+# 3. Build the project
+npm run build
+
+# 4. Start the dev watcher (runs the example proxy with built in bypass plugin)
+npm run dev
+```
+
+### Before Submitting a Pull Request
+
+Run the full check suite and ensure everything passes cleanly:
+
+```bash
+npm run typecheck
+npm run lint
+npm run test
+```
+
+If `lint` reports formatting issues, run `npm run format` to fix them automatically, then re-check.
+
+---
 
 ## Pull Request Process
 
 1. Fork the repository to your own GitHub account.
-2. Create a new branch for your fix or feature (`git checkout -b feature/your-feature-name`).
-3. Write your code. Ensure it follows the existing strict TypeScript patterns used throughout the codebase.
-4. Commit your changes with clear, descriptive commit messages.
-5. Push the branch to your fork (`git push origin feature/your-feature-name`).
+2. Create a new branch: `git checkout -b feature/your-feature-name`.
+3. Write your code, following the strict TypeScript patterns used throughout the codebase.
+4. Commit with clear, descriptive messages.
+5. Push your branch: `git push origin feature/your-feature-name`.
 6. Open a Pull Request against the `main` branch of the upstream repository.
 
-## Local Development
+---
 
-To set up the project locally for development:
+## Code Style
 
-1. Clone your fork.
-2. Run `npm install` to install dependencies.
-3. Run `npm run build` to compile the TypeScript compiler.
-4. Test your changes locally before submitting a pull request.
+- All source files are in **TypeScript** with strict mode enabled.
+- Formatting is enforced by **Prettier**. Run `npm run format` before committing.
+- No `any` abuse — the codebase tends to use strict typing throughout. Prefer precise types over broad ones.

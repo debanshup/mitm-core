@@ -177,7 +177,7 @@ export class ResponseCache {
       }
     }
 
-    console.info("using fallback timestamp for", host);
+    // console.info("using fallback timestamp for", host);
     // Fallback TTL
     return now + defaultTtlMs;
   }

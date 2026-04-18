@@ -1,9 +1,9 @@
 /* eslint-disable @typescript-eslint/no-non-null-asserted-optional-chain */
-import { BaseHandler } from "./base/base.handler.ts";
-import { ResponseCache } from "../cache-manager/ResponseCache.ts";
-import { ProxyUtils } from "../utils/ProxyUtils.ts";
-import { payloadEvents } from "../event-manager/payload-events/payloadEvents.ts";
-import type { ProxyContext } from "../context-manager/ContextManager.ts";
+import { BaseHandler } from "./base/base.handler";
+import { ResponseCache } from "../cache-manager/ResponseCache";
+import { ProxyUtils } from "../utils/ProxyUtils";
+import { payloadEvents } from "../event-manager/payload-events/payloadEvents";
+import type { ProxyContext } from "../context-manager/ContextManager";
 
 export class ResponseHandler extends BaseHandler {
   /**
@@ -72,7 +72,7 @@ export class ResponseHandler extends BaseHandler {
       // console.info(cached, "for", reqCtx.req.headers.host, reqCtx.req.url);
 
       if (cached && Date.now() <= cached.expires) {
-        console.info(`[Cache Hit] ${reqCtx.req!.headers.host}`);
+        // console.info(`[Cache Hit] ${reqCtx.req!.headers.host}`);
         if (!reqCtx.res || reqCtx.res.headersSent || reqCtx.res.writableEnded) {
           return resolve();
         }
@@ -95,7 +95,7 @@ export class ResponseHandler extends BaseHandler {
       upstream?.on("response", async (upstreamRes) => {
         ctx.requestContext.upstreamRes = upstreamRes;
         if (upstreamRes.statusCode === 304 && cached) {
-          console.info(`[Cache Revalidated 304] ${reqCtx.req?.headers.host}`);
+          // console.info(`[Cache Revalidated 304] ${reqCtx.req?.headers.host}`);
 
           cached.expires = ResponseCache.getExpirationTimestamp(
             upstreamRes.headers,
@@ -162,7 +162,7 @@ export class ResponseHandler extends BaseHandler {
 
         upstreamRes.on("error", (err) => {
           if (!["ECONNRESET", "EPIPE"].includes((err as any).code)) {
-            console.error("UpstreamRes error:", err);
+            console.error("[Upstream Response Error]:", err);
           }
 
           reqCtx.state.set("error", true);

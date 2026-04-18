@@ -1,8 +1,15 @@
 import type { Phase } from "../../phase/Phase.ts";
 import type { ProxyContext } from "../context-manager/ContextManager.ts";
 import type { BaseHandler } from "../handlers/base/base.handler.ts";
-import { HANDLERS } from "../handlers/registry/registry.ts";
-import { PipelineAbortSignal } from "../signals/pipelineAbortSignal.ts";
+import { HANDLERS } from "../handlers/registry/registry";
+import { PipelineAbortSignal } from "../signals/pipelineAbortSignal";
+
+/**
+ * Orchestrates the proxy request lifecycle by managing and executing handler pipelines.
+ *
+ * It maps registered handlers to specific lifecycle phases, executes them sequentially,
+ * manages state transitions, and provides centralized error handling for the proxy.
+ */
 export default class Pipeline {
   protected constructor() {}
   private static pipelines: Record<Phase, BaseHandler[]> = {
@@ -12,18 +19,10 @@ export default class Pipeline {
     response: [],
   };
   static compile() {
-    // 2. Reset the pipelines (useful if you ever implement hot-reloading)
     this.pipelines = { tcp: [], handshake: [], request: [], response: [] };
-
-    // 3. Iterate over the strictly typed Set<HandlerConstructor>
     for (const HandlerClass of HANDLERS) {
-      // Instantiate cleanly (TypeScript knows this returns a BaseHandler)
       const instance = new HandlerClass();
-
-      // Access the instance property instead of the static property
       const phase = instance.phase;
-
-      // Dynamically push to the correct bucket based on the string literal
       if (this.pipelines[phase]) {
         this.pipelines[phase].push(instance);
       } else {
@@ -31,11 +30,12 @@ export default class Pipeline {
       }
     }
 
-    console.info(`[Worker ${process.pid}] Pipeline initialized successfully`);
+    console.info(`Pipeline initialized successfully`);
   }
-
+  
   /**
-   * @redefined
+   * Executes handlers for the current phase in the provided proxy context.
+   * Handles phase sequencing, pipeline abortion, and error recovery (502 response).
    */
   static async run(ctx: ProxyContext) {
     if (!ctx.requestContext.nextPhase) {
@@ -43,7 +43,7 @@ export default class Pipeline {
       return;
     }
     if (ctx.isHandled) {
-      console.info("handled for", ctx.clientToProxyHost);
+      // console.info("handled for", ctx.clientToProxyHost);
       ctx.requestContext.nextPhase = undefined;
       return;
     }
@@ -71,7 +71,7 @@ export default class Pipeline {
           }
 
           console.error(
-            `[Plugin Error] ${step.name} failed during ${currentPhase}:`,
+            `[Handler Error] ${step.name} failed during ${currentPhase}:`,
             // (error as Error).message,
             ctx.clientToProxyHost,
           );

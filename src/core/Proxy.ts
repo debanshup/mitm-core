@@ -1,4 +1,3 @@
-// await import("../middleware/middleware.ts");
 import * as http from "http";
 import { connectionEvents } from "./event-manager/connection-events/connectionEvents";
 import { TypedEventEmitter } from "./event-manager/EventBus";
@@ -7,6 +6,7 @@ import type { BasePlugin } from "./plugin-manager/BasePlugin";
 import { payloadEvents } from "./event-manager/payload-events/payloadEvents";
 import { ContextManager } from "./context-manager/ContextManager";
 import { Middleware } from "../middleware/middleware";
+import type { Socket } from "net";
 
 /**
  * Interface for the Proxy class, managing plugin execution,
@@ -53,6 +53,9 @@ interface ProxyOptions {
   pluginTimeoutMs?: number;
 }
 
+/**
+ * The main proxy server implementation.
+ */
 export class Proxy extends TypedEventEmitter<ProxyEventMap> implements IProxy {
   /**
    * @private
@@ -98,7 +101,7 @@ export class Proxy extends TypedEventEmitter<ProxyEventMap> implements IProxy {
     this.httpServer.on("connection", async (socket) => {
       await this.executePluginsWithTimeout("tcp:connection", { socket });
       const ctx = ContextManager.getContext(socket);
-      connectionEvents?.emit("TCP", { socket, ctx });
+      connectionEvents?.emitAsync("TCP", { socket, ctx });
     });
 
     this.httpServer.on("connect", async (req, socket, head) => {
@@ -106,10 +109,10 @@ export class Proxy extends TypedEventEmitter<ProxyEventMap> implements IProxy {
         req,
         socket,
         head: head as Buffer,
-        event: payloadEvents,
+        payloadEvent: payloadEvents,
       });
       const ctx = ContextManager.getContext(req.socket);
-      connectionEvents?.emit("CONNECT", { req, socket, head, ctx });
+      connectionEvents?.emitAsync("CONNECT", { req, socket, head, ctx });
     });
     this.httpServer.on("request", async (req, res) => {
       await this.executePluginsWithTimeout("http:plain_request", {
@@ -117,7 +120,7 @@ export class Proxy extends TypedEventEmitter<ProxyEventMap> implements IProxy {
         res,
       });
       const ctx = ContextManager.getContext(req.socket);
-      connectionEvents?.emit("HTTP:PLAIN", { req, res, ctx });
+      connectionEvents?.emitAsync("HTTP:PLAIN", { req, res, ctx });
     });
 
     // bind server error
@@ -173,52 +176,71 @@ export class Proxy extends TypedEventEmitter<ProxyEventMap> implements IProxy {
     }) as any);
 
     console.debug(
-      `[Registry] Registered ${plugin.name} on event -> ${plugin.event}`,
+      `[REGISTRY] Registered: ${plugin.name} | event: (${plugin.event})`,
     );
-
     return this;
   }
+  /**
+   * Removes a plugin from the active tracking set.
+   * * @experimental This method is a partial implementation and may change in future versions.
+   * @param plugin - The plugin instance to deactivate.
+   * @limitations This does **not** automatically detach event listeners.
+   * Manual cleanup via `this.off()` is required to prevent ghost executions.
+   */
   public unuse(plugin: BasePlugin): this {
-    // Note: To fully unregister, you'd also need to call this.off()
-    // which requires modifying your EventEmitter logic to support removing listeners.
     this.activePlugins.delete(plugin);
     return this;
   }
 
+  /**
+   * Starts the HTTP server on the specified port.
+   * @param port - The port number to listen on.
+   * @param callback - Optional function to execute once the server starts. Defaults to logging the server address if omitted.
+   */
   public listen(port: number, callback?: () => void | Promise<void>) {
     if (this.httpServer) {
       this.httpServer.listen(port, async () => {
         if (callback) {
           await callback();
         } else {
-          console.info("Server started\n", this.httpServer?.address());
+          console.info(
+            `[SERVER] Started | Address:`,
+            this.httpServer?.address(),
+          );
         }
       });
     }
   }
 
+  /**
+   * Stops the HTTP server and forcibly closes all active connections.
+   * @returns A promise that resolves when the server is successfully closed, or rejects if an error occurs.
+   */
   public stop(): Promise<void> {
-    if (!this.httpServer || !this.httpServer.listening)
-      return Promise.resolve();
+    if (!this.httpServer || !this.httpServer.listening) Promise.resolve();
+    // force close all active and idle sockets
+    if ("closeAllConnections" in this.httpServer) {
+      this.httpServer.closeAllConnections();
+    }
 
     return new Promise((resolve, reject) => {
-      // force close all active and idle sockets
-      if ("closeAllConnections" in this.httpServer) {
-        this.httpServer.closeAllConnections();
-      }
-      this.httpServer.close((err) => {
-        if (err) reject(err);
-        else resolve();
+      this.httpServer!.close((err) => {
+        if (err) {
+          console.error(err);
+          reject(err);
+        } else {
+          resolve();
+        }
       });
     });
   }
 }
 
 process.on("uncaughtException", (err) => {
-  console.error("Uncaught Exception:", err.message);
-  console.error(err.stack);
+  console.error(`[FATAL_EXCEPTION]`, err);
+  process.exit(1);
 });
 
-process.on("unhandledRejection", (reason, promise) => {
-  console.error("Unhandled Rejection at:", promise, "reason:", reason);
+process.on("unhandledRejection", (reason) => {
+  console.error(`[UNHANDLED_REJECTION]`, reason);
 });

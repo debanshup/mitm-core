@@ -1,29 +1,28 @@
 {
   "compilerOptions": {
-    //  Environment & Resolution
     "target": "ES2022",
+    // Switch to Bundler since tsup owns compilation — no more .js extension enforcement
     "module": "ESNext",
-    "moduleResolution": "bundler",
+    "moduleResolution": "Bundler",
     "types": [
       "node",
       "mocha"
     ],
-    // Interop & Build Tools (Optimized for tsup/esbuild)
-    "isolatedModules": true,
-    "verbatimModuleSyntax": true,
-    "moduleDetection": "force",
-    "skipLibCheck": true,
-    // 3. Type Checking
-    "strict": true,
-    "noImplicitAny": false,
-    "noUncheckedIndexedAccess": true,
-    "exactOptionalPropertyTypes": true,
-    // Editor Experience (tsup handles actual file generation)
-    "sourceMap": true,
+    "outDir": "./dist",
+    "rootDir": ".",
+    /* Emit */
+    "noEmit": false,
     "declaration": true,
     "declarationMap": true,
-    "allowImportingTsExtensions": true,
-    "noEmit": true
+    "sourceMap": true,
+    "removeComments": false,
+    "noEmitOnError": true, // ← added: don't emit broken output
+    /* Strictness */
+    "strict": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true
   },
   "include": [
     "src/**/*",
@@ -32,6 +31,6 @@
   ],
   "exclude": [
     "node_modules",
-    "dist"
+    "dist",
   ]
 }

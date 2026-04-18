@@ -2,8 +2,8 @@ import type Stream from "stream";
 
 import http from "http";
 import type { Socket } from "net";
-import type { ProxyContext } from "../../context-manager/ContextManager.ts";
-import type { PayloadEvents } from "../payload-events/payloadEvents.ts";
+import type { ProxyContext } from "../../context-manager/ContextManager";
+import type { PayloadEvents } from "../payload-events/payloadEvents";
 
 /**
  * Defines the comprehensive event lifecycle for the Proxy server.
@@ -27,7 +27,7 @@ export interface ProxyEventMap {
       req: http.IncomingMessage;
       socket: Stream.Duplex;
       head: Buffer;
-      event: PayloadEvents;
+      payloadEvent: PayloadEvents;
     },
   ];
 

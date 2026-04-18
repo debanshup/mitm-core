@@ -2,14 +2,14 @@ import https from "https";
 import http from "http";
 import tls from "tls";
 // import type { Phase } from "../../phase/Phase.ts";
-import { BaseHandler } from "./base/base.handler.ts";
+import { BaseHandler } from "./base/base.handler";
 import { pipeline } from "stream";
-import { ProxyUtils } from "../utils/ProxyUtils.ts";
-import { ResponseCache } from "../cache-manager/ResponseCache.ts";
+import { ProxyUtils } from "../utils/ProxyUtils";
+import { ResponseCache } from "../cache-manager/ResponseCache";
 import { readFileSync } from "fs";
-import { CA_PATH } from "../../constants/path.ts";
+import { CA_PATH } from "../../constants/path";
 import path from "path";
-import type { ProxyContext } from "../context-manager/ContextManager.ts";
+import type { ProxyContext } from "../context-manager/ContextManager";
 export class RequestHandler extends BaseHandler {
   readonly phase = "request";
   private static httpsAgent = new https.Agent({
@@ -37,10 +37,8 @@ export class RequestHandler extends BaseHandler {
   async handle(ctx: ProxyContext) {
     const { requestContext } = ctx;
     if (!requestContext?.req) {
-      console.info("REQ not found!");
       return;
     }
-    // console.info("running req handler...");
     let targetUrl: URL;
 
     try {
@@ -66,7 +64,7 @@ export class RequestHandler extends BaseHandler {
 
     // console.info(targetUrl)
 
-    const isHTTPS = targetUrl.protocol === "https:";
+    const isHTTPS = ctx.connectionType === "https";
     const requestModule = isHTTPS ? https : http;
     const agent = isHTTPS
       ? RequestHandler.httpsAgent
@@ -116,8 +114,7 @@ export class RequestHandler extends BaseHandler {
               requestContext.res.end("Bad Gateway");
             } catch (resErr) {
               console.error(
-                "[Stream Error] Failed to send 502 to client for",
-                ctx.clientToProxyHost,
+                `[STREAM_ERR] 502_SEND_FAIL | Host: ${ctx.clientToProxyHost}`,
               );
             }
           }

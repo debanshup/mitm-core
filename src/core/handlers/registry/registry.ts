@@ -1,5 +1,5 @@
-import type { BaseHandler } from "../base/base.handler.ts";
-import * as handlers from "./index.ts";
+import type { BaseHandler } from "../base/base.handler";
+import * as handlers from "./index";
 export type HandlerConstructor = new () => BaseHandler;
 
 export const HANDLERS = new Set<HandlerConstructor>(

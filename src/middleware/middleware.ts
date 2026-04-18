@@ -1,14 +1,23 @@
-import { ContextManager } from "../core/context-manager/ContextManager.ts";
-import Pipeline from "../core/pipelines/PipelineCompiler.ts";
-import { ProxyUtils } from "../core/utils/ProxyUtils.ts";
-import { connectionEvents } from "../core/event-manager/connection-events/connectionEvents.ts";
-import { payloadEvents } from "../core/event-manager/payload-events/payloadEvents.ts";
+import { ContextManager } from "../core/context-manager/ContextManager";
+import Pipeline from "../core/pipelines/PipelineCompiler";
+import { connectionEvents } from "../core/event-manager/connection-events/connectionEvents";
+import { payloadEvents } from "../core/event-manager/payload-events/payloadEvents";
 import {
   parseConnectData,
   parseHttpRequestData,
-} from "../utils/parser/parseReqData.ts";
-
+} from "../utils/parser/parseReqData";
+/**
+ * Manages middleware registration and orchestrates the proxy connection lifecycle.
+ * Configures event listeners to intercept network traffic, initializes request contexts,
+ * and triggers the processing pipeline.
+ */
 export class Middleware {
+  /**
+   * Registers event listeners for various connection types (TCP, HTTP, CONNECT, HTTPS)
+   * and initializes the proxy pipeline.
+   *
+   * @param options.initializePipelines - Whether to trigger pipeline compilation upon registration.
+   */
   public static register({
     initializePipelines,
   }: {
@@ -17,35 +26,12 @@ export class Middleware {
     if (initializePipelines) {
       Pipeline.compile();
     }
-    connectionEvents.on("TCP", ({ socket }) => {
-      // disable nagle's at tcp level
-      socket.setNoDelay(true);
+    connectionEvents.on("TCP", async ({ socket }) => {
+      socket.on("error", () => {
+        // fail-safe: do nothing
+      });
       const ctx = ContextManager.getContext(socket);
-      socket.on("error", async (err: any) => {
-        ProxyUtils.cleanUp([socket]);
-        ctx.error = err;
-        if (ctx.requestContext) {
-          ctx.requestContext.state.set("error", true);
-        }
-        const isExpectedDrop =
-          err.code === "ECONNABORTED" ||
-          err.code === "ECONNRESET" ||
-          err.code === "EPIPE";
-
-        if (!isExpectedDrop) {
-          console.error(
-            `[TCP_CLIENT_ERROR] ${err.code || "UNKNOWN"}:`,
-            err.message,
-          );
-        }
-      });
-
-      socket.on("close", () => {
-        ProxyUtils.cleanUp([socket]);
-        if (ctx.requestContext) {
-          ctx.requestContext.state.set("isFinished", true);
-        }
-      });
+      await Pipeline.run(ctx);
     });
     connectionEvents.on("HTTP:PLAIN", async ({ req, res }) => {
       const ctx = ContextManager.getContext(req.socket);

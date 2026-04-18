@@ -1,7 +1,7 @@
 import forge from "node-forge";
 import fs from "fs";
 import path from "path";
-import { CA_PATH } from "../../constants/path.ts";
+import { CA_PATH } from "../../constants/path";
 
 export default ({ host }: { host: string; caDir: string }) => {
   const isIPv6 = host.includes(":");

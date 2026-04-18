@@ -1,5 +1,10 @@
-import { BasePlugin, PipelineAbortSignal, RuleEngine } from "../../src/index.ts";
-import { BypassRuleEngine } from "./bypass.Rule.ts";
+import {
+  BasePlugin,
+  PipelineAbortSignal,
+  RuleEngine,
+  type ProxyContext,
+} from "../../src/index";
+import { BypassRuleEngine } from "./bypass.Rule";
 import net from "net";
 
 export class BypassPlugin extends BasePlugin<"tunnel:pre_establish"> {
@@ -10,7 +15,7 @@ export class BypassPlugin extends BasePlugin<"tunnel:pre_establish"> {
     super();
     this.bypassEngine = RuleEngine.createRule(BypassRuleEngine);
   }
-  async run({ ctx }) {
+  async run({ ctx }: { ctx: ProxyContext }) {
     const host = ctx.clientToProxyHost;
     if (!host) return;
 

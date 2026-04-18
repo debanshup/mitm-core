@@ -2,9 +2,10 @@ import type { Socket } from "net";
 import type Stream from "stream";
 
 import crypto from "crypto";
-import { StateStore } from "../state/StateStore.ts";
+import { StateStore } from "../state/StateStore";
 import type { ClientRequest, IncomingMessage, ServerResponse } from "http";
-import type { Phase } from "../../phase/Phase.ts";
+import type { Phase } from "../../phase/Phase";
+import type { Duplex } from "stream";
 
 /**
  * The central context object passed through the proxy pipeline.
@@ -14,6 +15,9 @@ import type { Phase } from "../../phase/Phase.ts";
 export type ProxyContext = {
   /** UUID for the TCP connection; tracks multiplexed requests. */
   connectionId: string;
+
+  /** The underlying duplex stream for the network connection. */
+  socket: Duplex;
 
   /** Initial buffer chunk for protocol sniffing (e.g., TLS ClientHello). */
   head?: any;
@@ -100,6 +104,7 @@ export class ContextManager {
       const connectionId = crypto.randomUUID();
       const context: ProxyContext = {
         connectionId,
+        socket,
         requestContext: {
           requestId: crypto.randomUUID(),
           state: new StateStore(), // initialize state store

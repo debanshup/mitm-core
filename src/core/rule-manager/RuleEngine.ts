@@ -1,24 +1,32 @@
 import path from "path";
-import { WatchableRuleFile, type RuleParser } from "./ruleStore.ts";
+import { WatchableRuleFile, type IRuleParser } from "./ruleStore";
 
+/**
+ * An abstract base class that provides a framework for managing rule configurations.
+ * Handles file watching, state parsing, and storage for specific rule implementations.
+ */
 export abstract class RuleEngine<T> {
   private static stores = new Map<string, WatchableRuleFile<any>>();
   protected abstract readonly ruleName: string;
-  protected abstract readonly relativePath: string;
-  protected abstract readonly parser: RuleParser<T>;
+  protected abstract readonly rulePath: string;
+  protected abstract readonly parser: IRuleParser<T>;
   protected abstract readonly defaultState: T;
 
   // active store for this specific instance
   public store!: WatchableRuleFile<T>;
 
-  /** * The Factory: Instantiates the child, sets up the file watcher,
-   * and attaches the active store to the instance.
+  /**
+   * Factory method to instantiate a rule engine, initialize its file watcher,
+   * and link the resulting store to the instance.
+   *
+   * @param ChildClass - The constructor of the rule class to instantiate.
+   * @returns An initialized instance of the rule engine.
    */
   public static createRule<E extends RuleEngine<any>>(
     ChildClass: new () => E,
   ): E {
     const instance = new ChildClass();
-    const fullPath = path.join(process.cwd(), instance.relativePath);
+    const fullPath = path.join(instance.rulePath);
 
     const store = new WatchableRuleFile(
       instance.ruleName,
@@ -33,6 +41,9 @@ export abstract class RuleEngine<T> {
     return instance;
   }
 
+  /**
+   * Retrieves a rule store instance by its unique name.
+   */
   public static getRuleStore(storeName: string) {
     return this.stores.get(storeName);
   }

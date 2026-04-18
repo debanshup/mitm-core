@@ -1,10 +1,10 @@
 import tls from "tls";
-import { CertManager } from "../../core/cert-manager/CertManager.ts";
-import { BaseHandler } from "./base/base.handler.ts";
-import { ProxyUtils } from "../utils/ProxyUtils.ts";
-import { connectionEvents } from "../event-manager/connection-events/connectionEvents.ts";
-import { H1SessionBridge } from "./bridge/H1SessionBridge.ts";
-import type { ProxyContext } from "../context-manager/ContextManager.ts";
+import { CertManager } from "../../core/cert-manager/CertManager";
+import { BaseHandler } from "./base/base.handler";
+import { ProxyUtils } from "../utils/ProxyUtils";
+import { connectionEvents } from "../event-manager/connection-events/connectionEvents";
+import { H1SessionBridge } from "./bridge/H1SessionBridge";
+import type { ProxyContext } from "../context-manager/ContextManager";
 
 export class HandshakeHandler extends BaseHandler {
   readonly phase = "handshake";
@@ -69,7 +69,7 @@ export class HandshakeHandler extends BaseHandler {
         isSettled = true;
 
         console.warn(
-          `[TLS Timeout] Handshake timed out for ${requestContext.req?.headers.host}`,
+          `[TLS Timeout] | Host: ${requestContext.req?.headers.host}`,
         );
         ProxyUtils.cleanUp([socket, tlsSocket]);
         requestContext.state.set("error", true);
@@ -121,7 +121,6 @@ export class HandshakeHandler extends BaseHandler {
           resolve();
         } catch (err) {
           // Catch any errors that happen during the H1 parsing phase
-          console.error(`[H1 Session Error] for ${host}:`, err);
           ProxyUtils.cleanUp([socket, tlsSocket]);
           requestContext.state.set("error", true);
           reject(err);
@@ -142,10 +141,7 @@ export class HandshakeHandler extends BaseHandler {
 
         // Suppress normal client aborts, log real errors
         if (err.code !== "ECONNRESET") {
-          console.error(
-            `[TLS Handshake Error] for ${host}:`,
-            err.message || err.code,
-          );
+          console.error(`[TLS_ERR] ${host} |`, err.message || err.code);
         }
 
         ProxyUtils.cleanUp([socket, tlsSocket]);
@@ -163,7 +159,6 @@ export class HandshakeHandler extends BaseHandler {
         }
 
         ProxyUtils.cleanUp([socket, tlsSocket]);
-        // If it closed without erroring or becoming secure, we resolve cleanly to prevent unhandled rejections
         resolve();
       });
     });

@@ -1,6 +1,6 @@
-import { RuleEngine, type RuleParser } from "../../src/index.ts";
+import { RuleEngine, type IRuleParser } from "../../src/index";
 
-export class BypassRuleParser implements RuleParser<RegExp[]> {
+export class BypassRuleParser implements IRuleParser<RegExp[]> {
   parse(raw: string): RegExp[] {
     return Array.from(
       new Set(
@@ -30,7 +30,7 @@ export class BypassRuleParser implements RuleParser<RegExp[]> {
 }
 export class BypassRuleEngine extends RuleEngine<string[] | RegExp[]> {
   public readonly ruleName = "tls-bypass";
-  public readonly relativePath = "rules/bypass.rules.txt";
+  public readonly rulePath = "rules/bypass.rules.txt";
   public readonly parser = new BypassRuleParser();
   public readonly defaultState: string[] = [];
 

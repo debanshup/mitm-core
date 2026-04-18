@@ -2,8 +2,8 @@
  * @experimental : will be used later if needed
  */
 
-import type { ProxyContext } from "../../context-manager/ContextManager.ts";
-import { TypedEventEmitter } from "../EventBus.ts";
+import type { ProxyContext } from "../../context-manager/ContextManager";
+import { TypedEventEmitter } from "../EventBus";
 
 export interface PipelineEventMap {
   PAUSE: [payload: { ctx: ProxyContext }];

@@ -1,8 +1,8 @@
 import type { Socket } from "net";
-import { TypedEventEmitter } from "../EventBus.ts";
+import { TypedEventEmitter } from "../EventBus";
 import type { IncomingMessage, ServerResponse } from "http";
 import type Stream from "stream";
-import type { ProxyContext } from "../../context-manager/ContextManager.ts";
+import type { ProxyContext } from "../../context-manager/ContextManager";
 export interface ConnectionEventMap {
   TCP: [payload: { socket: Socket; ctx?: ProxyContext }];
   CONNECT: [
