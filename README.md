@@ -1,8 +1,6 @@
 # mitm-core
 
-> ⚠️ **EXPERIMENTAL** — This project is under active development. APIs, behavior, and internals may change without notice.
-
-![Logo](https://github.com/debanshup/mitm-core/raw/main/assets/logo.png?raw=true)
+<!-- ![Logo](https://github.com/debanshup/mitm-core/raw/main/assets/logo.png?raw=true) -->
 
 **An optimized, scalable, and fully extensible Man-in-the-Middle (MITM) proxy framework for Node.js.**
 
@@ -570,7 +568,7 @@ proxy.on("error", (err) => {
 - [x] Async Plugin Support & Error Boundaries
 - [ ] HTTP/2 Support
 - [ ] WebSocket Interception
-- [ ] npm package publish
+- [x] npm package publish
 
 ---
 
