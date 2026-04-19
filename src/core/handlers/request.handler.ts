@@ -1,7 +1,6 @@
 import https from "https";
 import http from "http";
 import tls from "tls";
-// import type { Phase } from "../../phase/Phase.ts";
 import { BaseHandler } from "./base/base.handler";
 import { pipeline } from "stream";
 import { ProxyUtils } from "../utils/ProxyUtils";
@@ -10,6 +9,7 @@ import { readFileSync } from "fs";
 import { CA_PATH } from "../../constants/path";
 import path from "path";
 import type { ProxyContext } from "../context-manager/ContextManager";
+import { connectionManager } from "../connection-manager/ConnectionManager";
 export class RequestHandler extends BaseHandler {
   readonly phase = "request";
   private static httpsAgent = new https.Agent({
@@ -92,6 +92,11 @@ export class RequestHandler extends BaseHandler {
     // disable nagle's
     upstream.setNoDelay(true);
     requestContext.upstreamReq = upstream;
+
+    // track upstream socket
+    upstream.on("socket", (socket) => {
+      connectionManager.track(socket);
+    });
 
     // Pipe Client Request -> Upstream Server
 

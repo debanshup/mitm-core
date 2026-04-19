@@ -10,8 +10,6 @@ export class TcpHandler extends BaseHandler {
     const socket = ctx.socket;
 
     (socket as Socket).setNoDelay(true);
-    // remove pre assigned error handler
-    socket.removeAllListeners("error");
 
     socket.on("error", (err: any) => {
       ProxyUtils.cleanUp([socket]);

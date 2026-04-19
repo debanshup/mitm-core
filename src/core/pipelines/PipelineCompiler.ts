@@ -32,7 +32,7 @@ export default class Pipeline {
 
     console.info(`Pipeline initialized successfully`);
   }
-  
+
   /**
    * Executes handlers for the current phase in the provided proxy context.
    * Handles phase sequencing, pipeline abortion, and error recovery (502 response).

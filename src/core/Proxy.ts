@@ -7,6 +7,7 @@ import { payloadEvents } from "./event-manager/payload-events/payloadEvents";
 import { ContextManager } from "./context-manager/ContextManager";
 import { Middleware } from "../middleware/middleware";
 import type { Socket } from "net";
+import { connectionManager } from "./connection-manager/ConnectionManager";
 
 /**
  * Interface for the Proxy class, managing plugin execution,
@@ -99,9 +100,11 @@ export class Proxy extends TypedEventEmitter<ProxyEventMap> implements IProxy {
 
   private bindAllEvents() {
     this.httpServer.on("connection", async (socket) => {
+      // track socket
+      connectionManager.track(socket);
       await this.executePluginsWithTimeout("tcp:connection", { socket });
       const ctx = ContextManager.getContext(socket);
-      connectionEvents?.emitAsync("TCP", { socket, ctx });
+      connectionEvents?.emit("TCP", { socket, ctx });
     });
 
     this.httpServer.on("connect", async (req, socket, head) => {
@@ -112,7 +115,7 @@ export class Proxy extends TypedEventEmitter<ProxyEventMap> implements IProxy {
         payloadEvent: payloadEvents,
       });
       const ctx = ContextManager.getContext(req.socket);
-      connectionEvents?.emitAsync("CONNECT", { req, socket, head, ctx });
+      connectionEvents?.emit("CONNECT", { req, socket, head, ctx });
     });
     this.httpServer.on("request", async (req, res) => {
       await this.executePluginsWithTimeout("http:plain_request", {
@@ -120,7 +123,7 @@ export class Proxy extends TypedEventEmitter<ProxyEventMap> implements IProxy {
         res,
       });
       const ctx = ContextManager.getContext(req.socket);
-      connectionEvents?.emitAsync("HTTP:PLAIN", { req, res, ctx });
+      connectionEvents?.emit("HTTP:PLAIN", { req, res, ctx });
     });
 
     // bind server error
@@ -217,19 +220,21 @@ export class Proxy extends TypedEventEmitter<ProxyEventMap> implements IProxy {
    * @returns A promise that resolves when the server is successfully closed, or rejects if an error occurs.
    */
   public stop(): Promise<void> {
-    if (!this.httpServer || !this.httpServer.listening) Promise.resolve();
+    if (!this.httpServer || !this.httpServer.listening)
+      return Promise.resolve();
     // force close all active and idle sockets
     if ("closeAllConnections" in this.httpServer) {
       this.httpServer.closeAllConnections();
     }
 
     return new Promise((resolve, reject) => {
+      connectionManager.destroyAll();
       this.httpServer!.close((err) => {
         if (err) {
           console.error(err);
-          reject(err);
+          return reject(err);
         } else {
-          resolve();
+          return resolve();
         }
       });
     });

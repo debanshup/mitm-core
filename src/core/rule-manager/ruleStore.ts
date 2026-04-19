@@ -32,11 +32,9 @@ export class WatchableRuleFile<T> {
     defaultState: T,
   ) {
     if (path.isAbsolute(inputPath)) {
-      console.info("abs");
       this.filePath = path.normalize(inputPath);
-      console.info(this.filePath)
+      console.info(this.filePath);
     } else {
-      console.info("rel");
       this.filePath = path.resolve(process.cwd(), inputPath);
     }
 
