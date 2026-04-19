@@ -266,7 +266,7 @@ import net from "net";
 import { type IRuleParser } from "mitm-core";
 
 // Custom parser to load and compile bypass regex rules from a file
-export class BypassRuleParser implements IRuleParser<RegExp[]> {
+class BypassRuleParser implements IRuleParser<RegExp[]> {
   parse(raw: string): RegExp[] {
     return Array.from(
       new Set(
@@ -296,11 +296,11 @@ export class BypassRuleParser implements IRuleParser<RegExp[]> {
 }
 
 // Engine to manage, query, and update the bypass rule store
-export class BypassRuleEngine extends RuleEngine<string[] | RegExp[]> {
-  public readonly ruleName = "tls-bypass";
-  public readonly relativePath = "rules/bypass.rules.txt";
-  public readonly parser = new BypassRuleParser();
-  public readonly defaultState: string[] = [];
+class BypassRuleEngine extends RuleEngine<string[] | RegExp[]> {
+  readonly ruleName = "tls-bypass";
+  readonly rulePath = "rules/bypass.rules.txt";
+  readonly parser = new BypassRuleParser();
+  readonly defaultState: string[] = [];
 
   public match(storeName: string, target: string): boolean {
     const store = RuleEngine.getRuleStore(storeName);
@@ -325,7 +325,7 @@ export class BypassRuleEngine extends RuleEngine<string[] | RegExp[]> {
 }
 
 // Plugin to intercept 'tunnel:pre_establish'
-export class BypassPlugin extends BasePlugin<"tunnel:pre_establish"> {
+class BypassPlugin extends BasePlugin<"tunnel:pre_establish"> {
   readonly event = "tunnel:pre_establish";
   private bypassEngine: BypassRuleEngine;
 
