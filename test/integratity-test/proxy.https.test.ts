@@ -3,19 +3,17 @@ import http from "node:http";
 import https from "node:https";
 import tls from "node:tls";
 import { describe, it, before, after } from "mocha";
-import { Proxy } from "../../src/index.ts"; // Adjust path as needed
-import { generateForgeCertificates } from "../utils.ts";
-import { Middleware } from "../../src/middleware/middleware.ts";
+import { Proxy } from "../../src/index"; // Adjust path as needed
+import { generateForgeCertificates } from "../utils";
 
 let originalTlsEnv: string | undefined;
 
 describe("Proxy Integrity Test: End-to-End HTTPS Traffic Routing", () => {
-  Middleware.register({ initializePipelines: true });
   let proxy: Proxy;
   let targetServer: https.Server;
 
-  const PROXY_PORT = 8001;
-  const TARGET_PORT = 9001;
+  const PROXY_PORT = 8002;
+  const TARGET_PORT = 9002;
 
   // Updated to reflect the HTTPS lifecycle events
   const hooksFired = {
@@ -103,7 +101,7 @@ describe("Proxy Integrity Test: End-to-End HTTPS Traffic Routing", () => {
       proxyAgent.createConnection = () => {
         return tls.connect({
           socket: socket,
-          servername: "localhost",
+          servername: "127.0.0.1",
           rejectUnauthorized: false, // Accept the forged MITM cert
         });
       };

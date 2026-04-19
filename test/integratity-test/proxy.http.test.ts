@@ -1,14 +1,11 @@
 import assert from "node:assert";
 import http from "node:http";
 import { describe, it, before, after } from "mocha";
-import {   Proxy } from "../../src/index.ts"; // Adjust path as needed
-import { Middleware } from "../../src/middleware/middleware.ts";
+import { Proxy } from "../../src/index";
 
 describe("Proxy Integrity Test: End-to-End Traffic Routing", () => {
   let proxy: Proxy;
   let targetServer: http.Server;
-
-  Middleware.register({ initializePipelines: true });
 
   const PROXY_PORT = 8001;
   const TARGET_PORT = 9001;

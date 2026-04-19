@@ -1,11 +1,11 @@
 import assert from "node:assert";
 import http from "node:http";
 import { describe, it, before, after } from "mocha";
-import { Proxy } from "../../src/index.ts";
+import { Proxy } from "../../src/index";
 
 describe("Proxy Core: Async Lifecycle Handlers", () => {
   let proxy: Proxy;
-  const PROXY_PORT = 8002;
+  const PROXY_PORT = 8003;
 
   before(async () => {
     proxy = new Proxy();
@@ -57,7 +57,7 @@ describe("Proxy Core: Async Lifecycle Handlers", () => {
   it("should await an async [tunnel:connect] plugin before continuing the pipeline", (done) => {
     let asyncWorkCompleted = false;
 
-    proxy.on("tunnel:connect", async ({ req, socket, head, event  }) => {
+    proxy.on("tunnel:connect", async ({ req, socket, head, payloadEvent  }) => {
       await new Promise((resolve) => setTimeout(resolve, 50));
       asyncWorkCompleted = true;
     });
