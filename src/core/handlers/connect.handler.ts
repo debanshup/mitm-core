@@ -29,9 +29,16 @@ export class HandshakeHandler extends BaseHandler {
     }
 
     await connectionEvents.emitAsync("CONNECT:PRE_ESTABLISH", { ctx, socket });
-    if (socket.writable && !socket.destroyed) {
-      socket.write("HTTP/1.1 200 Connection Established\r\n\r\n");
-    }
+    await new Promise<void>((resolve, reject) => {
+      if (!socket.writable || socket.destroyed) return resolve();
+      socket.write("HTTP/1.1 200 Connection Established\r\n\r\n", (err) => {
+        if (err) {
+          return reject(err);
+        } else {
+          resolve();
+        }
+      });
+    });
 
     // console.info("head length",ctx.head.length)
 
@@ -58,8 +65,6 @@ export class HandshakeHandler extends BaseHandler {
       data = await CertManager.getCert(host!);
     }
 
-    // console.timeEnd("cert_gen for " + host);
-    // tls server
     return new Promise<void>((resolve, reject) => {
       let isSettled = false; // GUARD: Prevents double resolve/reject race conditions
 
@@ -76,7 +81,8 @@ export class HandshakeHandler extends BaseHandler {
         reject(new Error("TLS Handshake Timeout"));
       }, 10000);
 
-      // 2. Socket Creation
+      // tls server
+
       const tlsSocket = new tls.TLSSocket(socket, {
         isServer: true,
         cert: data?.cert,
