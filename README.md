@@ -16,10 +16,8 @@ Built entirely in TypeScript, `mitm-core` provides a strictly-typed, phased pipe
 
 - [Prerequisites](#prerequisites)
   - [1. Generating the Root CA](#1-generating-the-root-ca)
-  - [2. Trusting the Root CA](#2-trusting-the-root-ca)
-    - [Windows](#windows)
-    - [macOS](#macos)
-    - [Linux (Ubuntu/Debian)](#linux-ubuntudebian)
+  - [2. Trusting the Root CA](#2-trusting-the-root-ca) - [Windows](#windows) - [macOS](#macos) - [Linux (Ubuntu/Debian)](#linux-ubuntudebian)
+- [Installation](#installation)
 - [Features](#features)
 - [Architecture Overview](#architecture-overview)
   - [Key Components](#key-components)
@@ -118,6 +116,12 @@ For your OS and browser to accept the intercepted HTTPS traffic without throwing
 _(Note: Firefox uses its own certificate store. If you are testing with Firefox, you will need to manually import `CA.crt` in Firefox Settings -> Privacy & Security -> View Certificates)._
 
 ---
+
+## Installation
+
+```bash
+npm install mitm-core
+```
 
 ## Features
 
