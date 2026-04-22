@@ -44,7 +44,11 @@ export class BypassPlugin extends BasePlugin<"tunnel:pre_establish"> {
       ctx.isHandled = true;
       try {
       } finally {
-        throw new PipelineAbortSignal();
+        throw new PipelineAbortSignal({
+          event: this.event,
+          plugin: this,
+          message: "Pipeline halted intentionally",
+        });
       }
     }
   }
