@@ -1,13 +1,15 @@
 import * as http from "http";
-import { connectionEvents } from "./event-manager/connection-events/connectionEvents";
-import { TypedEventEmitter } from "./event-manager/EventBus";
-import type { ProxyEventMap } from "./event-manager/proxy-events/proxyEvents";
-import type { BasePlugin } from "./plugin-manager/BasePlugin";
-import { payloadEvents } from "./event-manager/payload-events/payloadEvents";
-import { ContextManager } from "./context-manager/ContextManager";
+import { connectionEvents } from "../core/event-manager/connection-events/connectionEvents";
+import { TypedEventEmitter } from "../core/event-manager/EventBus";
+import type { ProxyEventMap } from "../core/event-manager/proxy-events/proxyEvents";
+import type { BasePlugin } from "../core/plugin-manager/BasePlugin";
+import { payloadEvents } from "../core/event-manager/payload-events/payloadEvents";
+import {
+  ContextManager,
+  type RequestScope,
+} from "../core/context-manager/ContextManager";
 import { Middleware } from "../middleware/middleware";
-import type { Socket } from "net";
-import { connectionManager } from "./connection-manager/ConnectionManager";
+import { connectionManager } from "../core/connection-manager/ConnectionManager";
 
 /**
  * Interface for the Proxy class, managing plugin execution,
@@ -100,11 +102,18 @@ export class Proxy extends TypedEventEmitter<ProxyEventMap> implements IProxy {
 
   private bindAllEvents() {
     this.httpServer.on("connection", async (socket) => {
-      // track socket
       connectionManager.track(socket);
+
       await this.executePluginsWithTimeout("tcp:connection", { socket });
-      const ctx = ContextManager.getContext(socket);
-      connectionEvents?.emit("TCP", { socket, ctx });
+
+      const ctx = ContextManager.getOrCreateContext(socket);
+      const requestContext = ContextManager.createRequestContext(ctx);
+      const scope = { ctx, requestContext };
+
+      connectionEvents.emit("TCP", {
+        socket,
+        scope,
+      });
     });
 
     this.httpServer.on("connect", async (req, socket, head) => {
@@ -114,43 +123,79 @@ export class Proxy extends TypedEventEmitter<ProxyEventMap> implements IProxy {
         head: head as Buffer,
         payloadEvent: payloadEvents,
       });
-      const ctx = ContextManager.getContext(req.socket);
-      connectionEvents?.emit("CONNECT", { req, socket, head, ctx });
+
+      const ctx = ContextManager.getOrCreateContext(socket);
+
+      // ctx.socket = socket
+
+      const requestContext = ContextManager.createRequestContext(ctx);
+
+      requestContext.req = req;
+
+      const scope: RequestScope = {
+        ctx,
+        requestContext,
+      };
+
+      connectionEvents.emit("CONNECT", {
+        req,
+        socket,
+        head,
+        scope,
+      });
     });
+
     this.httpServer.on("request", async (req, res) => {
       await this.executePluginsWithTimeout("http:plain_request", {
         req,
         res,
       });
-      const ctx = ContextManager.getContext(req.socket);
-      connectionEvents?.emit("HTTP:PLAIN", { req, res, ctx });
+
+      const ctx = ContextManager.getOrCreateContext(req.socket);
+
+      const requestContext = ContextManager.createRequestContext(ctx);
+
+      requestContext.req = req;
+      requestContext.res = res;
+
+      const scope: RequestScope = {
+        ctx,
+        requestContext,
+      };
+
+      connectionEvents.emit("HTTP:PLAIN", {
+        req,
+        res,
+        scope,
+      });
     });
 
-    // bind server error
     this.httpServer.on("error", async (err) => {
       await this.executePluginsWithTimeout("error", err);
     });
 
-    // other events (inner)
+    // internal events
 
-    connectionEvents?.on("CONNECT:PRE_ESTABLISH", async ({ ctx, socket }) => {
+    connectionEvents.on("CONNECT:PRE_ESTABLISH", async ({ scope, socket }) => {
       await this.executePluginsWithTimeout("tunnel:pre_establish", {
         socket,
-        ctx: ctx || ContextManager.getContext(socket),
-      });
-    });
-    connectionEvents?.on("CONNECT:ESTABLISHED", async ({ ctx, socket }) => {
-      await this.executePluginsWithTimeout("tunnel:established", {
-        socket,
-        ctx: ctx || ContextManager.getContext(socket),
+        scope,
       });
     });
 
-    payloadEvents?.on("PAYLOAD:REQUEST", async ({ ctx }) => {
-      await this.executePluginsWithTimeout("http:decrypted_request", { ctx });
+    connectionEvents.on("CONNECT:ESTABLISHED", async ({ scope, socket }) => {
+      await this.executePluginsWithTimeout("tunnel:established", {
+        socket,
+        scope,
+      });
     });
-    payloadEvents?.on("PAYLOAD:RESPONSE", async ({ ctx }) => {
-      await this.executePluginsWithTimeout("decrypted_response", { ctx });
+
+    payloadEvents.on("PAYLOAD:REQUEST", async ({ scope }) => {
+      await this.executePluginsWithTimeout("http:decrypted_request", { scope });
+    });
+
+    payloadEvents.on("PAYLOAD:RESPONSE", async ({ scope }) => {
+      await this.executePluginsWithTimeout("decrypted_response", { scope });
     });
   }
 
@@ -175,6 +220,25 @@ export class Proxy extends TypedEventEmitter<ProxyEventMap> implements IProxy {
 
     this.on(plugin.event, (async (...args: any[]) => {
       // first argument is always the payload object
+
+      // 1. Extract the exact type of args[0] from the plugin.run method
+      type ArgsZero<T> = T extends {
+        run: (arg: infer P, ...args: any[]) => any;
+      }
+        ? P
+        : never;
+
+      type TargetPayload = ArgsZero<typeof plugin>;
+
+      // 2. Map and display all its keys and their respective types
+      type InspectPayload<T> = {
+        [K in keyof T]: T[K];
+      };
+
+      type Result = InspectPayload<TargetPayload>;
+
+      // console.info(args[0])
+
       await plugin.run(args[0]);
     }) as any);
 
