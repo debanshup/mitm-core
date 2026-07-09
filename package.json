@@ -41,7 +41,7 @@
     "src"
   ],
   "scripts": {
-    "dev": "tsx watch --inspect ./example/with-plugin/Proxy.ts",
+    "dev": "tsx watch --inspect ./example/with-plugin/proxy.ts",
     "clean": "node -e \"fs.rmSync('dist', { recursive: true, force: true })\"",
     "typecheck": "tsc --noEmit",
     "lint": "prettier --check src",
