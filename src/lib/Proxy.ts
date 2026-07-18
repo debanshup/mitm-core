@@ -1,3 +1,4 @@
+import { registerGlobalConfig } from "../config.registry";
 import * as http from "http";
 import { connectionEvents } from "../core/event-manager/connection-events/connectionEvents";
 import { TypedEventEmitter } from "../core/event-manager/EventBus";
@@ -10,6 +11,32 @@ import {
 } from "../core/context-manager/ContextManager";
 import { Middleware } from "../middleware/middleware";
 import { connectionManager } from "../core/connection-manager/ConnectionManager";
+
+export type ProxyConfig = {
+  useCertificateCache?: boolean;
+  useResponseCache?: boolean;
+  useDefaultPipelines?: boolean;
+
+  /**
+   * The Root Certificate Authority (CA) used to dynamically sign forged leaf certificates.
+   */
+  rootCa?: {
+    key: string | Buffer;
+    cert: string | Buffer;
+  };
+
+  /**
+   * If false, the proxy will allow upstream connections to servers with invalid/self-signed certs.
+   * @default true
+   */
+  rejectUnauthorized?: boolean;
+
+  /**
+   * Maximum time (in ms) to wait for a client to complete the TLS ClientHello.
+   * @default 10000
+   */
+  handshakeTimeoutMs?: number;
+};
 
 /**
  * Interface for the Proxy class, managing plugin execution,
@@ -44,7 +71,7 @@ export interface IProxy {
  * Configuration options for the Proxy instance.
  */
 
-interface ProxyOptions {
+type ProxyOptions = {
   /** * An existing HTTP server to attach the proxy to.
    * If omitted, a new one is created.
    */
@@ -54,7 +81,7 @@ interface ProxyOptions {
    * Defaults to 5000ms. Set to 0 to disable the timeout completely.
    */
   pluginTimeoutMs?: number;
-}
+};
 
 /**
  * The main proxy server implementation.
@@ -70,6 +97,34 @@ export class Proxy extends TypedEventEmitter<ProxyEventMap> implements IProxy {
   // plugins
   private activePlugins = new Set<BasePlugin>();
 
+  private config: Required<ProxyConfig>;
+
+  /**
+   * Accepts an existing HTTP server (e.g., from Express),
+   * or creates a new one if none is provided.
+   */
+  constructor(options: ProxyOptions & ProxyConfig = {}) {
+    super();
+    this.pluginTimeoutMs = options.pluginTimeoutMs ?? 5000;
+    this.httpServer = options.server || http.createServer({ keepAlive: true });
+
+    this.config = {
+      useCertificateCache: options.useCertificateCache ?? true,
+      useResponseCache: options.useResponseCache ?? false,
+      useDefaultPipelines: options.useDefaultPipelines ?? true,
+      rootCa: options.rootCa || { key: "", cert: "" },
+      rejectUnauthorized: options.rejectUnauthorized ?? true,
+      handshakeTimeoutMs: options.handshakeTimeoutMs ?? 10000,
+    };
+
+    // initialization
+    this.bindAllEvents();
+
+    Middleware.register({
+      initializePipelines: this.config.useDefaultPipelines,
+    });
+    registerGlobalConfig(this.config);
+  }
   /**
    * @critical
    * Safely executes plugins with an enforced timeout.
@@ -106,9 +161,14 @@ export class Proxy extends TypedEventEmitter<ProxyEventMap> implements IProxy {
 
       await this.executePluginsWithTimeout("tcp:connection", { socket });
 
-      const ctx = ContextManager.getOrCreateContext(socket);
-      const requestContext = ContextManager.createRequestContext(ctx);
-      const scope = { ctx, requestContext };
+      const sessionContext = ContextManager.getOrCreateSessionContext(socket);
+      const requestContext =
+        ContextManager.getOrCreateRequestContext(sessionContext);
+      const lifecycle = ContextManager.getOrCreateRequestLifeCycle(
+        requestContext.requestId,
+      );
+
+      const scope: RequestScope = { sessionContext, requestContext, lifecycle };
 
       connectionEvents.emit("TCP", {
         socket,
@@ -117,25 +177,33 @@ export class Proxy extends TypedEventEmitter<ProxyEventMap> implements IProxy {
     });
 
     this.httpServer.on("connect", async (req, socket, head) => {
+      const sessionContext = ContextManager.getOrCreateSessionContext(socket);
+
+      // proxyContext.socket = socket
+
+      const requestContext = ContextManager.getOrCreateRequestContext(
+        sessionContext,
+        req,
+      );
+      const lifecycle = ContextManager.getOrCreateRequestLifeCycle(
+        requestContext.requestId,
+      );
+
+      requestContext.req = req;
+
+      const scope: RequestScope = {
+        sessionContext,
+        requestContext,
+        lifecycle,
+      };
+
       await this.executePluginsWithTimeout("tunnel:connect", {
+        scope,
         req,
         socket,
         head: head as Buffer,
         payloadEvent: payloadEvents,
       });
-
-      const ctx = ContextManager.getOrCreateContext(socket);
-
-      // ctx.socket = socket
-
-      const requestContext = ContextManager.createRequestContext(ctx);
-
-      requestContext.req = req;
-
-      const scope: RequestScope = {
-        ctx,
-        requestContext,
-      };
 
       connectionEvents.emit("CONNECT", {
         req,
@@ -151,24 +219,33 @@ export class Proxy extends TypedEventEmitter<ProxyEventMap> implements IProxy {
         res,
       });
 
-      const ctx = ContextManager.getOrCreateContext(req.socket);
-
-      const requestContext = ContextManager.createRequestContext(ctx);
+      const sessionContext = ContextManager.getOrCreateSessionContext(
+        req.socket,
+      );
+      // const oldRequestContext = ContextManager
+      const requestContext =
+        ContextManager.getOrCreateRequestContext(sessionContext);
+      const lifecycle = ContextManager.getOrCreateRequestLifeCycle(
+        requestContext.requestId,
+      );
 
       requestContext.req = req;
       requestContext.res = res;
 
       const scope: RequestScope = {
-        ctx,
+        sessionContext,
         requestContext,
+        lifecycle,
       };
 
       connectionEvents.emit("HTTP:PLAIN", {
         req,
         res,
         scope,
-      });
+      });  
     });
+
+    
 
     this.httpServer.on("error", async (err) => {
       await this.executePluginsWithTimeout("error", err);
@@ -197,22 +274,6 @@ export class Proxy extends TypedEventEmitter<ProxyEventMap> implements IProxy {
     payloadEvents.on("PAYLOAD:RESPONSE", async ({ scope }) => {
       await this.executePluginsWithTimeout("decrypted_response", { scope });
     });
-  }
-
-  /**
-   * Accepts an existing HTTP server (e.g., from Express),
-   * or creates a new one if none is provided.
-   */
-  constructor(options: ProxyOptions = {}) {
-    super();
-    // initialize plugin timeout
-    this.pluginTimeoutMs = options.pluginTimeoutMs ?? 5000;
-    // initialize server
-    this.httpServer = options.server || http.createServer({ keepAlive: true });
-    // bind all events
-    this.bindAllEvents();
-    // initialize middleware
-    Middleware.register({ initializePipelines: true });
   }
 
   public use<K extends keyof ProxyEventMap>(plugin: BasePlugin<K>): this {
