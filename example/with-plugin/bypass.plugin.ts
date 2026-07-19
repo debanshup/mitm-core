@@ -1,8 +1,9 @@
+ ;
 import {
   BasePlugin,
   PipelineAbortSignal,
   RuleEngine,
-  type ProxyContext,
+  type RequestScope,
 } from "../../src/index";
 import { BypassRuleEngine } from "./bypass.Rule";
 import net from "net";
@@ -15,34 +16,38 @@ export class BypassPlugin extends BasePlugin<"tunnel:pre_establish"> {
     super();
     this.bypassEngine = RuleEngine.createRule(BypassRuleEngine);
   }
-  async run({ ctx }: { ctx: ProxyContext }) {
-    const host = ctx.clientToProxyHost;
+  async run({ scope }: { scope: RequestScope }) {
+    const { sessionContext, requestContext, lifecycle } = scope;
+
+    // console.info("sessionContext socket:",sessionContext.socket);
+
+    const host = requestContext.clientToProxyHost;
     if (!host) return;
 
     if (this.bypassEngine.shouldBypass(host)) {
-      const req = ctx.requestContext.req;
-      const socket = req?.socket!;
+      const req = requestContext.req;
       const hostHeader = req!.headers.host!;
       const [host, portStr] = hostHeader.split(":");
       const port = Number(portStr) || 443;
-
+      const socket = sessionContext.socket;
       const upstream = net.connect(port, host, () => {
         socket.write("HTTP/1.1 200 Connection Established\r\n\r\n");
-        if (ctx.head && ctx.head.length > 0) {
-          upstream.write(ctx.head);
+        if (sessionContext.head && sessionContext.head.length > 0) {
+          upstream.write(sessionContext.head);
         }
         socket!.pipe(upstream);
         upstream.pipe(socket!);
       });
 
       upstream.on("error", (err) => {
-        console.error("Direct tunnel error:", ctx.clientToProxyHost, err);
+        console.error("Direct tunnel error:", requestContext.clientToProxyHost, err);
         socket?.destroy();
       });
 
       upstream.setNoDelay(true);
-      ctx.isHandled = true;
+      lifecycle.isHijacked = true;
       try {
+        // do something
       } finally {
         throw new PipelineAbortSignal({
           event: this.event,

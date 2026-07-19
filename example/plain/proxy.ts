@@ -1,24 +1,34 @@
 import { Proxy } from "../../src/index";
-const proxy = new Proxy();
-proxy.on("tcp:connection", ({ socket }) => {
-});
+import fs from "fs";
+import { CA_PATH } from "../../src/constants/path";
+import path from "path";
 
-proxy.on("tunnel:connect", ({ req, head, socket, payloadEvent }) => {
-});
-proxy.on("tunnel:pre_establish", async ({ ctx, socket }) => {
-});
-proxy.on("tunnel:established", async ({ ctx, socket }) => {
-});
+const rootCa = {
+  key: fs.readFileSync(path.join(CA_PATH.CA_DIR, "/key.pem"), "utf8"),
+  cert: fs.readFileSync(path.join(CA_PATH.CA_DIR, "/CA.crt"), "utf8"),
+};
 
-proxy.on("http:plain_request", ({ req, res }) => {
-});
+const proxy = new Proxy({ rootCa });
 
-proxy.on("http:decrypted_request", ({ ctx }) => {
-});
+proxy.on("tcp:connection", () => {});
 
-proxy.on("decrypted_response", ({ ctx }) => {
+proxy.on("tunnel:connect", ({ payloadEvent }) => {
+  payloadEvent.on("PAYLOAD:REQUEST", ({ scope }) => {
+    console.info("req",scope)
+  });
+  payloadEvent.on("PAYLOAD:RESPONSE", ({ scope }) => {
+    console.info("res",scope)
+  });
 });
+proxy.on("tunnel:pre_establish", async ({ scope, socket }) => {});
+proxy.on("tunnel:established", async ({ scope, socket }) => {});
 
-proxy.on("error", (err) => {});
+proxy.on("http:plain_request", ({ req, res }) => {});
+
+proxy.on("http:decrypted_request", ({ scope }) => {});
+
+proxy.on("decrypted_response", ({ scope }) => {});
+
+proxy.on("error", () => {});
 
 proxy.listen(8001);
