@@ -1,11 +1,5 @@
-import type { ProxyEventMap } from "../event-manager/proxy-events/proxyEvents";
-import type { BasePlugin } from "../plugin-manager/BasePlugin";
+import type { AbortMessage } from "./types";
 
-export type AbortMessage = {
-  message: string;
-  plugin: BasePlugin;
-  event: keyof ProxyEventMap | string;
-};
 
 /**
  * Custom error signaled to stop the execution of a pipeline.
