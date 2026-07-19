@@ -1,6 +1,6 @@
 import { Proxy } from "../../src/index";
 import fs from "fs";
-import { CA_PATH } from "../../src/constants/path";
+import { CA_PATH } from "../../constants/path";
 import path from "path";
 
 const rootCa = {

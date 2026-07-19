@@ -2,7 +2,7 @@ import path from "path";
 import { Proxy } from "../../src/index";
 import { BypassPlugin } from "./bypass.plugin";
 import fs from "fs";
-import { CA_PATH } from "../../src/constants/path";
+import { CA_PATH } from "../../constants/path";
 
 const rootCa = {
   key: fs.readFileSync(path.join(CA_PATH.CA_DIR, "/key.pem"), "utf8"),
