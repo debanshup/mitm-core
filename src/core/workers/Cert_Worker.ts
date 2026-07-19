@@ -1,22 +1,17 @@
 import forge from "node-forge";
-import fs from "fs";
-import path from "path";
-import { CA_PATH } from "../../constants/path";
 
-export default ({ host }: { host: string; caDir: string }) => {
+export default ({ host, caConfig }: { host: string, caConfig: any}) => {
+
+  const CA_CONFIG = caConfig
+
+  // console.info(CA_CONFIG)
   const isIPv6 = host.includes(":");
   const isIPv4 = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(host);
   const isIP = isIPv4 || isIPv6;
   const cleanedHost = host.replace(/[[\]]/g, "").toLowerCase();
-
-  // console.info("IN worker:", CA_PATH);
-
-  const caCert = forge.pki.certificateFromPem(
-    fs.readFileSync(path.join(CA_PATH.CA_DIR, "/CA.crt"), "utf8"),
-  );
-  const caKey = forge.pki.privateKeyFromPem(
-    fs.readFileSync(path.join(CA_PATH.CA_DIR, "/key.pem"), "utf8"),
-  );
+  // remove fs.read from here
+  const caCert = forge.pki.certificateFromPem(CA_CONFIG?.cert as string);
+  const caKey = forge.pki.privateKeyFromPem(CA_CONFIG?.key as string);
 
   // *** generate full keypair ***
   const keys = forge.pki.rsa.generateKeyPair(2048);
@@ -79,8 +74,11 @@ export default ({ host }: { host: string; caDir: string }) => {
   // *** sign leaf cert using CA private key ***
   cert.sign(caKey, forge.md.sha256.create());
 
-  return {
+  const leaf = {
     cert: forge.pki.certificateToPem(cert),
     key: forge.pki.privateKeyToPem(keys.privateKey),
-  };
+  }
+
+
+  return leaf;
 };
