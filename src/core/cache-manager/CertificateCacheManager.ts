@@ -4,7 +4,8 @@ import fs from "fs";
 import * as crypto from "crypto";
 import { pool } from "../workers/pool/Worker_pool";
 import { LEAF_PATH } from "../../constants/path";
-export class CertCache {
+export class CertificateCacheManager {
+  // private static readonly caConfig = getConfig().rootCa
   protected constructor() {}
   // inflite
   private static inFlight = new Map<
@@ -74,7 +75,10 @@ export class CertCache {
     this.cache.clear();
   }
 
-  public static async getCertFromCache(host: string) {
+  public static async getCAFromCache(
+    host: string,
+    caConfig: { key: any; cert: any },
+  ) {
     //  first check for force geneartion
 
     // Synchronous LRU Cache Check
@@ -103,12 +107,13 @@ export class CertCache {
             cert: fs.readFileSync(certPath),
             key: fs.readFileSync(keyPath),
           };
+
           this.addToCache(host, data);
           return data;
         } else {
           // generate
-          // console.info("generating cert and key for", host);
-          const { cert, key } = await pool.run({ host });
+          console.info("generating cert and key for", host);
+          const { cert, key } = await pool.run({ host, caConfig });
           this.addToFile(host, { key, cert });
           this.addToCache(host, { key, cert });
           return { key, cert };
