@@ -1,5 +1,7 @@
 import type { Phase } from "../../phase/Phase.ts";
-import type { ProxyContext } from "../context-manager/ContextManager.ts";
+import type {
+  RequestScope,
+} from "../context-manager/types.js";
 import type { BaseHandler } from "../handlers/base/base.handler.ts";
 import { HANDLERS } from "../handlers/registry/registry";
 import { PipelineAbortSignal } from "../signals/pipelineAbortSignal";
@@ -37,20 +39,22 @@ export default class Pipeline {
    * Executes handlers for the current phase in the provided proxy context.
    * Handles phase sequencing, pipeline abortion, and error recovery (502 response).
    */
-  static async run(ctx: ProxyContext) {
-    if (!ctx.requestContext.nextPhase) {
+  static async run(scope: RequestScope) {
+    const { sessionContext, requestContext, lifecycle } = scope;
+
+    if (!lifecycle.nextPhase) {
       // console.info("Next phase is undefined. Halting pipeline");
       return;
     }
-    if (ctx.isHandled) {
-      // console.info("handled for", ctx.clientToProxyHost);
-      ctx.requestContext.nextPhase = undefined;
+    if (lifecycle.isHijacked) {
+      // console.info("handled for", sessionContext.clientToProxyHost);
+      lifecycle.nextPhase = undefined;
       return;
     }
 
-    while (ctx.requestContext.nextPhase) {
-      const currentPhase = ctx.requestContext.nextPhase;
-      ctx.requestContext.nextPhase = undefined;
+    while (lifecycle.nextPhase) {
+      const currentPhase = lifecycle.nextPhase;
+      lifecycle.nextPhase = undefined;
 
       const steps = Pipeline.pipelines[currentPhase];
       if (!steps || steps.length === 0) {
@@ -60,23 +64,24 @@ export default class Pipeline {
 
       for (const step of steps) {
         try {
-          await step.handle(ctx);
-        } catch (error) {
+          // console.info("scope socket", scope.sessionContext.socket)
+          await step.handle(scope);
+        } catch (error: any) {
+          console.info({message: error.message, url: scope.requestContext.clientToProxyUrl})
           if (error instanceof PipelineAbortSignal) {
-            // console.debug(
-            //   `[Pipeline] Halting ${currentPhase} phase early: Socket was taken over.`,
-            // );
-            ctx.requestContext.nextPhase = undefined;
+            lifecycle.nextPhase = undefined;
             return;
           }
+
+          // console.error(error)
 
           console.error(
             `[Handler Error] ${step.name} failed during ${currentPhase}:`,
             // (error as Error).message,
-            ctx.clientToProxyHost,
+            requestContext.clientToProxyHost,
           );
 
-          const res = ctx.requestContext.res;
+          const res = requestContext.res;
 
           if (res) {
             if (!res.headersSent && !res.writableEnded) {
@@ -87,7 +92,7 @@ export default class Pipeline {
             }
           }
 
-          ctx.requestContext.nextPhase = undefined;
+          lifecycle.nextPhase = undefined;
           return;
         }
       }
