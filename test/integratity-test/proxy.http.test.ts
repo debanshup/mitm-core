@@ -34,7 +34,7 @@ describe("Proxy Integrity Test: End-to-End Traffic Routing", () => {
       hooksFired.plainRequest = true;
     });
 
-    proxy.on("decrypted_response", async ({ ctx }) => {
+    proxy.on("decrypted_response", async ({ scope }) => {
       hooksFired.responseData = true;
     });
 

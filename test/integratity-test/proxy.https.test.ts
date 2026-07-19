@@ -53,12 +53,12 @@ describe("Proxy Integrity Test: End-to-End HTTPS Traffic Routing", () => {
     });
 
     // 2. The intercepted payload going to the target
-    proxy.on("http:decrypted_request", async ({ ctx }) => {
+    proxy.on("http:decrypted_request", async ({ scope }) => {
       hooksFired.decryptedRequest = true;
     });
 
     // 3. The intercepted payload coming back from the target
-    proxy.on("decrypted_response", async ({ ctx }) => {
+    proxy.on("decrypted_response", async ({ scope }) => {
       hooksFired.decryptedResponse = true;
     });
 
