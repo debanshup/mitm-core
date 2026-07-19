@@ -1,126 +1,167 @@
 import type { Socket } from "net";
 import type Stream from "stream";
-
 import crypto from "crypto";
 import { StateStore } from "../state/StateStore";
-import type { ClientRequest, IncomingMessage, ServerResponse } from "http";
-import type { Phase } from "../../phase/Phase";
-import type { Duplex } from "stream";
+import type { IncomingMessage } from "http";
+import type { SessionContext, RequestContext, RequestLifecycle } from "./types";
 
-/**
- * The central context object passed through the proxy pipeline.
- * It encapsulates all state, networking objects, and metadata for both
- * the underlying TCP connection and the individual HTTP transactions over it.
- */
-export type ProxyContext = {
-  /** UUID for the TCP connection; tracks multiplexed requests. */
-  connectionId: string;
-
-  /** The underlying duplex stream for the network connection. */
-  socket: Duplex;
-
-  /** Initial buffer chunk for protocol sniffing (e.g., TLS ClientHello). */
-  head?: any;
-
-  /** Captures socket or handshake level errors. */
-  error?: Error;
-
-  /** Current protocol layer: raw 'tcp', plaintext 'http', or decrypted 'https'. */
-  connectionType?: "tcp" | "http" | "https";
-
-  /** True if a plugin has taken full control of the lifecycle. */
-  isHandled?: boolean;
-
-  /** State scoped strictly to a single HTTP request/response cycle. */
-  requestContext: {
-    /** UUID for this specific HTTP transaction. */
-    requestId: string;
-
-    /** Incoming client request (headers/body). */
-    req?: IncomingMessage;
-
-    /** Response stream sent back to the client. */
-    res?: ServerResponse;
-
-    /** Outbound request directed to the target server. */
-    upstreamReq?: ClientRequest;
-
-    /** Raw response received from the target server. */
-    upstreamRes?: IncomingMessage;
-
-    /** Transaction-specific store; cleared when request finishes. */
-    state: StateStore;
-
-    /** Target phase for the next middleware execution. */
-    nextPhase?: Phase | undefined;
-  };
-
-  /** Overrides dynamic MITM certificates for specific domains. */
-  customCertificates?: Map<
-    string,
-    { cert: string | Buffer; key: string | Buffer }
-  >;
-
-  /** The host/port the client intended to reach. */
-  clientToProxyHost?: string;
-
-  /** The actual destination host the proxy will dial. */
-  proxyToUpstreamHost?: string;
-
-  /** The original URL requested by the client. */
-  clientToProxyUrl?: string;
-
-  /** The final URL requested upstream (use for decrypted paths). */
-  proxyToUpstreamUrl?: string;
-};
 
 export class ContextManager {
   private static contextStore = new WeakMap<
     Stream.Duplex | Socket,
-    ProxyContext
+    SessionContext
   >();
-  private static idStore = new Map<string, ProxyContext>();
-  // track if the socket has a listener
-  private static cleanupAttached = new WeakSet<Stream.Duplex | Socket>();
 
-  private static attachCleanup(socket: Stream.Duplex | Socket, id: string) {
-    if (!this.cleanupAttached.has(socket)) {
-      socket.once("close", () => {
-        this.idStore.delete(id);
-      });
-      this.cleanupAttached.add(socket);
-    }
+  // connection index
+  private static connectionIndex = new Map<string, SessionContext>();
+  //  request index
+  private static requestIndex = new Map<string, RequestContext>();
+  // lifecycle index
+  private static requestLifeCycleIndex = new Map<string, RequestLifecycle>();
+
+  private static getRequestKey(
+    connectionId: string,
+    streamId: string | number = "h1",
+  ): string {
+    return `${connectionId}:${streamId}`;
   }
 
-  public static setContext(socket: Stream.Duplex, context: ProxyContext) {
+  public static setContext(
+    socket: Stream.Duplex | Socket,
+    context: SessionContext,
+  ) {
     this.contextStore.set(socket, context);
-    if (context.connectionId) {
-      this.idStore.set(context.connectionId, context);
-      this.attachCleanup(socket, context.connectionId);
-    }
+
+    this.connectionIndex.set(context.connectionId, context);
   }
-  public static getContext(socket: Stream.Duplex) {
-    if (!this.contextStore.has(socket)) {
-      const connectionId = crypto.randomUUID();
-      const context: ProxyContext = {
-        connectionId,
+
+  public static getOrCreateSessionContext(
+    socket: Stream.Duplex | Socket,
+  ): SessionContext {
+    let ctx = this.contextStore.get(socket);
+
+    if (!ctx) {
+      ctx = {
+        connectionId: crypto.randomUUID(),
+
         socket,
-        requestContext: {
-          requestId: crypto.randomUUID(),
-          state: new StateStore(), // initialize state store
-        },
+
         customCertificates: new Map(),
+      } as SessionContext;
+
+      this.contextStore.set(socket, ctx);
+
+      this.connectionIndex.set(ctx.connectionId, ctx);
+
+      const cleanup = () => {
+        // console.info("clean up root ctx");
+        this.connectionIndex.delete(ctx!.connectionId);
       };
-      this.contextStore.set(socket, context);
-      // secure memory leak
-      this.idStore.set(connectionId, context);
+
+      socket.once("close", cleanup);
+      socket.once("error", cleanup);
     }
-    return this.contextStore.get(socket)!;
+
+    return ctx;
+  }
+
+  public static getProxyCtxByID(id: string): SessionContext | undefined {
+    return this.connectionIndex.get(id);
+  }
+
+  public static removeContext(socket: Stream.Duplex | Socket) {
+    const ctx = this.contextStore.get(socket);
+
+    if (ctx) {
+      this.connectionIndex.delete(ctx.connectionId);
+    }
   }
   /**
-   * retrieves a context globally using its connectionId.
+   * Instantiates a comprehensive RequestContext when an HTTP (h1) transaction starts,
+   * matching standard request structures and mapping telemetry markers.
    */
-  public static getCtxByID(id: string): ProxyContext | undefined {
-    return this.idStore.get(id);
+  public static getOrCreateRequestContext(
+    sessionContext: SessionContext,
+    req?: IncomingMessage,
+    streamId: string | number = "h1",
+  ): RequestContext {
+    const requestKey = this.getRequestKey(
+      sessionContext.connectionId,
+      streamId,
+    );
+
+    const existingContext = this.requestIndex.get(requestKey);
+
+    if (existingContext) {
+      return existingContext;
+    } else {
+      const headers = req?.headers;
+      let sanitized: Record<string, any> | undefined = undefined;
+
+      if (headers) {
+        sanitized = { ...headers };
+        delete sanitized["proxy-authorization"];
+        delete sanitized["proxy-connection"];
+      }
+
+      const requestContext = {
+        requestId: crypto.randomUUID(),
+        connectionId: sessionContext.connectionId,
+        req,
+        res: req ? (req as any).res : undefined,
+        requestMethod: req?.method,
+        requestUrl: req?.url, // fallback
+        requestHeaders: headers,
+        sanitizedHeaders: sanitized,
+        state: new StateStore(),
+        timestamps: {
+          receivedAt: Date.now(),
+        },
+      };
+
+      // cleanup
+      this.requestIndex.set(requestKey, requestContext);
+      sessionContext.socket.once("close", () =>
+        // for h1 only
+        {
+          this.requestIndex.delete(requestKey);
+        },
+      );
+
+      return requestContext;
+    }
+  }
+
+  /**
+   * Retrieves an existing lifecycle or initializes a fresh one for the request.
+   */
+  public static getOrCreateRequestLifeCycle(
+    requestId: string,
+  ): RequestLifecycle {
+    let lifecycle = this.requestLifeCycleIndex.get(requestId);
+
+    if (!lifecycle) {
+      lifecycle = {
+        state: new StateStore(), // Assuming StateStore is a class/constructor
+        isHijacked: false,
+        timestamps: {
+          receivedAt: Date.now(),
+        },
+        // currentPhase and nextPhase remain undefined initially
+      };
+
+      this.requestLifeCycleIndex.set(requestId, lifecycle);
+      this.destroyRequestLifeCycle(requestId);
+    }
+
+    return lifecycle;
+  }
+
+  /**
+   * CRITICAL: Must be called when the proxy finishes serving the request
+   * or when the socket abruptly closes to prevent OOM memory leaks.
+   */
+  private static destroyRequestLifeCycle(requestId: string): void {
+    this.requestLifeCycleIndex.delete(requestId);
   }
 }
