@@ -2,7 +2,7 @@ import type Stream from "stream";
 
 import http from "http";
 import type { Socket } from "net";
-import type { ProxyContext } from "../../context-manager/ContextManager";
+import type { RequestScope } from "../../context-manager/types";
 import type { PayloadEvents } from "../payload-events/payloadEvents";
 
 /**
@@ -24,6 +24,7 @@ export interface ProxyEventMap {
    */
   "tunnel:connect": [
     payload: {
+      scope: RequestScope
       req: http.IncomingMessage;
       socket: Stream.Duplex;
       head: Buffer;
@@ -36,14 +37,14 @@ export interface ProxyEventMap {
    * bidirectional data streams (client <-> proxy <-> upstream) are piped together.
    */
   "tunnel:pre_establish": [
-    payload: { ctx: ProxyContext; socket: Stream.Duplex },
+    payload: { scope: RequestScope; socket: Stream.Duplex },
   ];
 
   /**
    * Fired when the secure tunnel is fully established and data is actively
    * capable of flowing between the client and the destination.
    */
-  "tunnel:established": [payload: { ctx: ProxyContext; socket: Stream.Duplex }];
+  "tunnel:established": [payload: { scope: RequestScope; socket: Stream.Duplex }];
 
   // plain http traffic (Unencrypted)
 
@@ -60,14 +61,14 @@ export interface ProxyEventMap {
    * Fired when an HTTPS request has been successfully intercepted and decrypted.
    * Hook into this event to read or modify secure request headers, bodies, or routing.
    */
-  "http:decrypted_request": [payload: { ctx: ProxyContext }];
+  "http:decrypted_request": [payload: { scope: RequestScope }];
 
   /**
    * Fired when the upstream server responds to an intercepted HTTPS request.
    * Hook into this event to inspect or alter the secure response before it is
    * re-encrypted and sent back to the client.
    */
-  decrypted_response: [payload: { ctx: ProxyContext }];
+  decrypted_response: [payload: { scope: RequestScope }];
 
   //  error event
 

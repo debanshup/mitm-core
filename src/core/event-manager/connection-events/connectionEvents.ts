@@ -1,32 +1,73 @@
 import type { Socket } from "net";
-import { TypedEventEmitter } from "../EventBus";
-import type { IncomingMessage, ServerResponse } from "http";
 import type Stream from "stream";
-import type { ProxyContext } from "../../context-manager/ContextManager";
+import type { IncomingMessage, ServerResponse } from "http";
+
+import { TypedEventEmitter } from "../EventBus";
+
+import type { RequestScope } from "../../context-manager/types";
+
 export interface ConnectionEventMap {
-  TCP: [payload: { socket: Socket; ctx?: ProxyContext }];
+  /**
+   * Raw TCP connection accepted.
+   */
+  TCP: [
+    payload: {
+      socket: Socket;
+      scope: RequestScope;
+    },
+  ];
+
+  /**
+   * HTTPS CONNECT request received.
+   */
   CONNECT: [
     payload: {
       req: IncomingMessage;
       socket: Stream.Duplex;
-      head: any;
-      ctx?: ProxyContext;
+      head: Buffer;
+      scope: RequestScope;
     },
   ];
+
+  /**
+   * Before tunnel establishment.
+   */
   "CONNECT:PRE_ESTABLISH": [
-    payload: { socket: Stream.Duplex; ctx?: ProxyContext },
+    payload: {
+      socket: Stream.Duplex;
+      scope: RequestScope;
+    },
   ];
+
+  /**
+   * Tunnel established.
+   */
   "CONNECT:ESTABLISHED": [
-    payload: { socket: Stream.Duplex; ctx?: ProxyContext },
+    payload: {
+      socket: Stream.Duplex;
+      scope: RequestScope;
+    },
   ];
+
+  /**
+   * HTTP/1.1 request.
+   */
   "HTTP:PLAIN": [
     payload: {
       req: IncomingMessage;
       res: ServerResponse;
-      ctx?: ProxyContext;
+      scope: RequestScope;
     },
   ];
-  "HTTPS:DECRYPTED": [payload: { ctx: ProxyContext }];
+
+  /**
+   * Decrypted HTTPS request (H1 or H2).
+   */
+  "HTTPS:DECRYPTED": [
+    payload: {
+      scope: RequestScope;
+    },
+  ];
 }
 
 export const connectionEvents = new TypedEventEmitter<ConnectionEventMap>();

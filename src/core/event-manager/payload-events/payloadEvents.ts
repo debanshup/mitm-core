@@ -1,9 +1,11 @@
-import type { ProxyContext } from "../../context-manager/ContextManager";
+import type {
+  RequestScope,
+} from "../../context-manager/types";
 import { TypedEventEmitter } from "../EventBus";
 
 export interface PayloadEventMap {
-  "PAYLOAD:REQUEST": [payload: { ctx: ProxyContext }];
-  "PAYLOAD:RESPONSE": [payload: { ctx: ProxyContext }];
+  "PAYLOAD:REQUEST": [payload: { scope: RequestScope }];
+  "PAYLOAD:RESPONSE": [payload: { scope: RequestScope }];
 }
 
 export const payloadEvents = new TypedEventEmitter<PayloadEventMap>();
