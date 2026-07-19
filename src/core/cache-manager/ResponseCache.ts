@@ -2,7 +2,7 @@ import { LRUCache } from "lru-cache";
 
 import http, { type IncomingHttpHeaders } from "http";
 
-type CachedResponse = {
+export type CachedResponse = {
   status: number;
   etag?: string;
   headers: Record<string, string | string[] | undefined>;

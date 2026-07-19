@@ -3,7 +3,7 @@ import path from "path";
 import fs from "fs";
 import * as crypto from "crypto";
 import { pool } from "../workers/pool/Worker_pool";
-import { LEAF_PATH } from "../../constants/path";
+import { LEAF_PATH } from "../../../constants/path";
 export class CertificateCacheManager {
   // private static readonly caConfig = getConfig().rootCa
   protected constructor() {}
