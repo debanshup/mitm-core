@@ -5,16 +5,23 @@ import { TypedEventEmitter } from "../core/event-manager/EventBus";
 import type { ProxyEventMap } from "../core/event-manager/proxy-events/proxyEvents";
 import type { BasePlugin } from "../core/plugin-manager/BasePlugin";
 import { payloadEvents } from "../core/event-manager/payload-events/payloadEvents";
-import {
-  ContextManager,
-  type RequestScope,
-} from "../core/context-manager/ContextManager";
+import { type RequestScope } from "../core/context-manager/types";
 import { Middleware } from "../middleware/middleware";
 import { connectionManager } from "../core/connection-manager/ConnectionManager";
+import { ContextManager } from "../core/context-manager/ContextManager";
 
+/**
+ * Configuration options for the proxy server, controlling caching,
+ * SSL/TLS behavior, custom CA signing, and connection timeouts.
+ */
 export type ProxyConfig = {
+  /** Enables caching of generated/forged TLS leaf certificates. */
   useCertificateCache?: boolean;
+
+  /** Enables caching of proxy responses to improve performance. */
   useResponseCache?: boolean;
+
+  /** If true, applies the default request/response processing pipelines. */
   useDefaultPipelines?: boolean;
 
   /**
@@ -25,11 +32,11 @@ export type ProxyConfig = {
     cert: string | Buffer;
   };
 
-  /**
-   * If false, the proxy will allow upstream connections to servers with invalid/self-signed certs.
-   * @default true
-   */
-  rejectUnauthorized?: boolean;
+  // /**
+  //  * If false, the proxy will allow upstream connections to servers with invalid/self-signed certs.
+  //  * @default true
+  //  */
+  // rejectUnauthorized?: boolean;
 
   /**
    * Maximum time (in ms) to wait for a client to complete the TLS ClientHello.
@@ -113,7 +120,7 @@ export class Proxy extends TypedEventEmitter<ProxyEventMap> implements IProxy {
       useResponseCache: options.useResponseCache ?? false,
       useDefaultPipelines: options.useDefaultPipelines ?? true,
       rootCa: options.rootCa || { key: "", cert: "" },
-      rejectUnauthorized: options.rejectUnauthorized ?? true,
+      // rejectUnauthorized: options.rejectUnauthorized ?? true,
       handshakeTimeoutMs: options.handshakeTimeoutMs ?? 10000,
     };
 
@@ -242,10 +249,8 @@ export class Proxy extends TypedEventEmitter<ProxyEventMap> implements IProxy {
         req,
         res,
         scope,
-      });  
+      });
     });
-
-    
 
     this.httpServer.on("error", async (err) => {
       await this.executePluginsWithTimeout("error", err);
