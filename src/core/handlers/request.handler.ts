@@ -1,134 +1,100 @@
-import https from "https";
-import http from "http";
-import tls from "tls";
 import { BaseHandler } from "./base/base.handler";
-import { pipeline } from "stream";
-import { ProxyUtils } from "../utils/ProxyUtils";
-import { ResponseCache } from "../cache-manager/ResponseCache";
-import { readFileSync } from "fs";
-import { CA_PATH } from "../../constants/path";
-import path from "path";
-import type { ProxyContext } from "../context-manager/ContextManager";
-import { connectionManager } from "../connection-manager/ConnectionManager";
+import type { RequestScope } from "../context-manager/types";
+import { UpstremInitiator } from "./transport/UpstreamInitiator";
+import type { ProxyConfig } from "../../lib/Proxy";
+import { getConfig } from "../../config.registry";
 export class RequestHandler extends BaseHandler {
   readonly phase = "request";
-  private static httpsAgent = new https.Agent({
-    keepAlive: true,
-    keepAliveMsecs: 60000,
-    timeout: 30000,
-    maxSockets: Infinity,
-    maxFreeSockets: 64,
-    scheduling: "lifo",
-    ca: [
-      ...tls.rootCertificates,
-      readFileSync(path.join(CA_PATH.CA_DIR, "CA.crt")), // support for proxy chaining (eg. proxying a proxy ) and corporate proxy
-    ],
-  });
+  readonly config = getConfig();
+  async handle(scope: RequestScope) {
+    const { requestContext, sessionContext, lifecycle } = scope;
 
-  private static httpAgent = new http.Agent({
-    keepAlive: true,
-    keepAliveMsecs: 60000,
-    timeout: 30000,
-    maxSockets: Infinity,
-    maxFreeSockets: 64,
-    scheduling: "lifo",
-  });
-
-  async handle(ctx: ProxyContext) {
-    const { requestContext } = ctx;
-    if (!requestContext?.req) {
-      return;
-    }
     let targetUrl: URL;
 
-    try {
-      if (ctx.proxyToUpstreamUrl) {
-        targetUrl = new URL(ctx.proxyToUpstreamUrl);
-      } else {
-        // fail safe
-        if (requestContext.req.url?.startsWith("http")) {
-          targetUrl = new URL(requestContext!.req.url);
-        } else {
-          targetUrl = new URL(
-            requestContext!.req.url || "/",
-            `https://${requestContext.req.headers.host}`,
-          );
-        }
+    if (sessionContext.httpVersion === "h1") {
+      if (!requestContext?.req) {
+        console.info("REQ not found!");
+        return;
       }
-    } catch (error) {
-      console.error(error);
-      requestContext.res!.statusCode = 400;
-      requestContext.res!.end("Invalid URL");
-      return;
-    }
 
-    // console.info(targetUrl)
+      // console.info(sessionContext.proxyToUpstreamUrl)
 
-    const isHTTPS = ctx.connectionType === "https";
-    const requestModule = isHTTPS ? https : http;
-    const agent = isHTTPS
-      ? RequestHandler.httpsAgent
-      : RequestHandler.httpAgent;
-    const cache_key = ResponseCache.generateKey(requestContext.req);
-    const cached = ResponseCache.get(cache_key);
-
-    if (cached?.etag) {
-      requestContext.req!.headers.etag = cached.etag;
-    }
-
-    const upstream = requestModule.request({
-      host: targetUrl.hostname,
-      port: targetUrl.port || (isHTTPS ? 443 : 80),
-      method: requestContext.req?.method,
-      path: requestContext.req?.url,
-      headers: {
-        ...requestContext.req?.headers,
-        host: targetUrl.hostname,
-        connection: "keep-alive",
-      },
-      agent,
-      timeout: 20000,
-    });
-    // disable nagle's
-    upstream.setNoDelay(true);
-    requestContext.upstreamReq = upstream;
-
-    // track upstream socket
-    upstream.on("socket", (socket) => {
-      connectionManager.track(socket);
-    });
-
-    // Pipe Client Request -> Upstream Server
-
-    pipeline(requestContext.req, upstream, (err) => {
-      if (err) {
-        const isClientAbort =
-          err.code === "ECONNRESET" || err.message === "aborted";
-
-        if (isClientAbort) {
-          console.debug(`[Stream] Client aborted the request mid-upload.`);
+      try {
+        if (requestContext.proxyToUpstreamUrl) {
+          targetUrl = new URL(requestContext.proxyToUpstreamUrl);
         } else {
-          console.error(
-            `[Stream Error] Client to Upstream: ${err.message || err.code}:${ctx.clientToProxyHost}`,
-          );
+          // fail safe
+          if (requestContext.req.url?.startsWith("http")) {
+            targetUrl = new URL(requestContext!.req.url);
+          } else {
+            targetUrl = new URL(
+              requestContext!.req.url || "/",
+              `https://${requestContext.req.headers.host}`,
+            );
+          }
+        }
+      } catch (error) {
+        console.error(
+          "Invalid URL:",
+          requestContext.proxyToUpstreamUrl || requestContext.req.url,
+        );
+        requestContext.res!.statusCode = 400;
+        requestContext.res!.end("Invalid URL");
+        return;
+      }
+    
+    } else {
+      // if version is not defined
+      console.warn(
+        "[Proxy] Unhandled or missing HTTP version. Attempting fallback.",
+        {
+          version: sessionContext.httpVersion,
+          host: requestContext.proxyToUpstreamHost,
+          url: requestContext.proxyToUpstreamUrl,
+        },
+      );
 
-          if (requestContext.res && !requestContext.res.headersSent) {
-            try {
-              requestContext.res.setHeader("Connection", "close");
-              requestContext.res.statusCode = 502;
-              requestContext.res.end("Bad Gateway");
-            } catch (resErr) {
-              console.error(
-                `[STREAM_ERR] 502_SEND_FAIL | Host: ${ctx.clientToProxyHost}`,
+      if (requestContext?.req && requestContext?.res) {
+        console.info("[Proxy] Falling back to HTTP/1.1 processing path.");
+        try {
+          if (requestContext.proxyToUpstreamUrl) {
+            targetUrl = new URL(requestContext.proxyToUpstreamUrl);
+          } else {
+            if (requestContext.req.url?.startsWith("http")) {
+              targetUrl = new URL(requestContext.req.url);
+            } else {
+              targetUrl = new URL(
+                requestContext.req.url || "/",
+                `https://${requestContext.req.headers.host || "localhost"}`,
               );
             }
           }
+        } catch (error) {
+          console.error("[Proxy Fallback] Invalid URL calculation:", error);
+          requestContext.res.statusCode = 400;
+          requestContext.res.end("Bad Request: Invalid URL");
+          return;
         }
-        // eslint-disable-next-line @typescript-eslint/no-non-null-asserted-optional-chain
-        ProxyUtils.cleanUp([upstream, requestContext.req?.socket!]);
-        requestContext.state.set("error", true);
+      } else {
+        console.error(
+          "[Proxy] Critical: Unable to determine HTTP pipeline context.",
+        );
+
+        if (requestContext?.res && !requestContext.res.writableEnded) {
+          requestContext.res.statusCode = 505; // HTTP Version Not Supported
+          requestContext.res.end("HTTP Version Not Supported");
+        }
+        return;
       }
-    });
-    requestContext.nextPhase = "response";
+    }
+
+    /**
+     * @warning
+     * don't delete any comment!
+     */
+
+ 
+    await UpstremInitiator.init(targetUrl, scope);
+    lifecycle.nextPhase = "response";
   }
 }

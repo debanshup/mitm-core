@@ -1,22 +1,25 @@
 import type { Socket } from "node:net";
 import type { Phase } from "../../phase/Phase";
-import type { ProxyContext } from "../context-manager/ContextManager";
+import type { RequestScope } from "../context-manager/types";
 import { BaseHandler } from "./base/base.handler";
 import { ProxyUtils } from "../utils/ProxyUtils";
+import { getConfig } from "../../config.registry";
 
 export class TcpHandler extends BaseHandler {
+  readonly config = getConfig();
   readonly phase: Phase = "tcp";
-  async handle(ctx: ProxyContext): Promise<void> {
-    const socket = ctx.socket;
+  async handle(scope: RequestScope): Promise<void> {
+    const { sessionContext, requestContext , lifecycle} = scope;
+    const socket = sessionContext.socket;
 
     (socket as Socket).setNoDelay(true);
 
     socket.on("error", (err: any) => {
       ProxyUtils.cleanUp([socket]);
-      ctx.error = err;
+      sessionContext.error = err;
 
-      if (ctx.requestContext) {
-        ctx.requestContext.state.set("error", true);
+      if (requestContext) {
+        lifecycle.state.set("error", true);
       }
 
       const isExpectedDrop =
@@ -33,8 +36,8 @@ export class TcpHandler extends BaseHandler {
     });
     socket.on("close", () => {
       ProxyUtils.cleanUp([socket]);
-      if (ctx.requestContext) {
-        ctx.requestContext.state.set("isFinished", true);
+      if (requestContext) {
+        lifecycle.state.set("isFinished", true);
       }
     });
   }

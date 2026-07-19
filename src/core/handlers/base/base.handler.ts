@@ -1,5 +1,6 @@
+import type { ProxyConfig } from "../../../lib/Proxy";
 import type { Phase } from "../../../phase/Phase";
-import type { ProxyContext } from "../../context-manager/ContextManager";
+import type { RequestScope } from "../../context-manager/types";
 
 /**
  * An abstract base class for defining handler logic associated with a specific lifecycle {@link Phase}.
@@ -7,7 +8,8 @@ import type { ProxyContext } from "../../context-manager/ContextManager";
  */
 export abstract class BaseHandler {
   abstract readonly phase: Phase;
-  abstract handle(ctx: ProxyContext): Promise<void>;
+  abstract readonly config: ProxyConfig
+  abstract handle(scope: RequestScope): Promise<void>;
   get name(): string {
     return this.constructor.name;
   }
