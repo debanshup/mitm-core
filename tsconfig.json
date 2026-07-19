@@ -4,10 +4,7 @@
     // Switch to Bundler since tsup owns compilation — no more .js extension enforcement
     "module": "ESNext",
     "moduleResolution": "Bundler",
-    "types": [
-      "node",
-      "mocha"
-    ],
+    "types": ["node", "mocha"],
     "outDir": "./dist",
     "rootDir": ".",
     /* Emit */
@@ -24,13 +21,6 @@
     "verbatimModuleSyntax": true,
     "isolatedModules": true
   },
-  "include": [
-    "src/**/*",
-    "test/**/*",
-    "example/**/*"
-  ],
-  "exclude": [
-    "node_modules",
-    "dist",
-  ]
+  "include": ["src/**/*", "test/**/*", "example/**/*", "constants"],
+  "exclude": ["node_modules", "dist"]
 }
