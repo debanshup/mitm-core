@@ -19,13 +19,14 @@ describe("Proxy Core: Async Lifecycle Handlers", () => {
 
   it("should await an async [http:plain_request] plugin before continuing the pipeline", (done) => {
     let asyncWorkCompleted = false;
-    proxy.on("http:plain_request", async ({ req, res }) => {
+    proxy.on("http:request", async ({ scope }) => {
+      const {requestContext} = scope
       await new Promise((resolve) => setTimeout(resolve, 50));
 
       asyncWorkCompleted = true;
 
-      res.writeHead(200);
-      res.end("Async test complete");
+      requestContext.res?.writeHead(200);
+      requestContext.res?.end("Async test complete");
     });
 
     const req = http.request(
@@ -57,7 +58,7 @@ describe("Proxy Core: Async Lifecycle Handlers", () => {
   it("should await an async [tunnel:connect] plugin before continuing the pipeline", (done) => {
     let asyncWorkCompleted = false;
 
-    proxy.on("tunnel:connect", async ({ req, socket, head, payloadEvent  }) => {
+    proxy.on("connect:request", async ({  socket, head, payloadEvent  }) => {
       await new Promise((resolve) => setTimeout(resolve, 50));
       asyncWorkCompleted = true;
     });
