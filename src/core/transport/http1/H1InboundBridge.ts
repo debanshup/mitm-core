@@ -4,10 +4,11 @@
 
 import { createServer } from "http";
 import type { TLSSocket } from "tls";
-import type { RequestScope } from "../../../context-manager/types";
-import { connectionEvents } from "../../../event-manager/connection-events/connectionEvents";
-import { parseBody, readStream } from "../../utils/utils";
+ 
 import { Readable } from "stream";
+import type { RequestScope } from "../../context-manager/types";
+import { parseBody, readStream } from "../../handlers/utils/utils";
+import { connectionEvents } from "../../event-manager/connection-events/connectionEvents";
 
 // A Set provides O(1) lookups and avoids iterating an array during requests
 const HOP_HEADERS = new Set([

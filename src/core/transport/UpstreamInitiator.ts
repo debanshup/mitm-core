@@ -1,9 +1,9 @@
 import https from "https";
 import http from "http";
 import { pipeline } from "stream";
-import http2 from "http2";
-import { ProxyUtils } from "../../utils/ProxyUtils";
-import type { RequestScope } from "../../context-manager/types";
+import { ProxyUtils } from "../utils/ProxyUtils";
+import type { RequestScope } from "../context-manager/types";
+import { pluginEventManager } from "../event-manager/plugin-events/pluginEvents";
 
 export class UpstremInitiator {
   private static httpsAgent = new https.Agent({
@@ -28,14 +28,16 @@ export class UpstremInitiator {
     const { sessionContext } = scope;
     // Branch execution dynamically based on negotiated protocol version
     if (sessionContext.httpVersion === "h1") {
-      return this.initH1Upstream(targetUrl, scope);
-      // return this.initH2Upstream(targetUrl, scope);
+      const h1UpstreamReq = await this.initH1UpstreamReq(targetUrl, scope);
+      return h1UpstreamReq;
     } else {
       // implement for other h versions
     }
+
+    //
   }
 
-  public static async initH1Upstream(targetUrl: URL, scope: RequestScope) {
+  public static async initH1UpstreamReq(targetUrl: URL, scope: RequestScope) {
     const { requestContext } = scope;
     const isHTTPS = targetUrl.protocol === "https:";
     const requestModule = isHTTPS ? https : http;
@@ -48,6 +50,7 @@ export class UpstremInitiator {
       port: targetUrl.port || (isHTTPS ? 443 : 80),
       method: requestContext.req?.method,
       path: requestContext.req?.url,
+      // family: 4,
       headers: {
         ...requestContext.req?.headers,
         host: targetUrl.hostname,
@@ -55,90 +58,55 @@ export class UpstremInitiator {
       },
       agent,
       timeout: 20000,
-    });``
+    });
+
     // disable nagle's
     upstreamReq.setNoDelay(true);
-    requestContext.upstreamReq = upstreamReq;
+
+    upstreamReq.once("socket", (socket) => {
+      // If it's a fresh connection, wait for it to be fully established or TLS-handshaked.
+      // If it's an existing pooled socket from keep-alive, 'connecting' will be false, and it's ready.
+      if (socket.connecting) {
+        const connectEvent = isHTTPS ? "secureConnect" : "connect";
+        socket.once(connectEvent, async () => {
+          await pluginEventManager.emitAsync("proxy:upstream-connect", {
+            scope,
+          });
+        });
+      } else {
+        // Pooled/Reused connection is already open; fire instantly in a macro-task block
+        setImmediate(async () => {
+          await pluginEventManager.emitAsync("proxy:upstream-connect", {
+            scope,
+          });
+        });
+      }
+    });
+
+    upstreamReq.once("finish", async () => {
+      await pluginEventManager.emitAsync("proxy:upstream-request", { scope });
+    });
 
     // Pipe Client Request -> Upstream Server
     pipeline(requestContext.req!, upstreamReq, (err) => {
       if (err) {
+        console.info(err);
         this.handleUpstreamFailure(err, scope, targetUrl, upstreamReq);
       }
     });
+
+    // Pipe Client Request -> Upstream Server
+    pipeline(requestContext.req!, upstreamReq, (err) => {
+      if (err) {
+        console.info(err);
+        this.handleUpstreamFailure(err, scope, targetUrl, upstreamReq);
+      }
+    });
+
+    
+    return upstreamReq;
   }
 
-  /**
-   *
-   * @param targetUrl
-   * @param context
-   * @description
-   * Initiates h2 upstream
-   */
-
-  // static initH2Upstream(targetUrl: URL, scope: RequestScope) {
-  //   const { requestContext, sessionContext } = scope;
-
-  //   const downstreamStream = requestContext.h2Stream!;
-  //   const headers = sessionContext.sanitizedHeaders ?? {};
-
-  //   // Reuse upstream session
-  //   if (
-  //     !sessionContext.h2UpstreamSession ||
-  //     sessionContext.h2UpstreamSession.destroyed ||
-  //     sessionContext.h2UpstreamSession.closed
-  //   ) {
-  //     sessionContext.h2UpstreamSession = http2.connect(targetUrl.origin);
-
-  //     sessionContext.h2UpstreamSession.on("error", (err) => {
-  //       this.handleUpstreamFailure(
-  //         err,
-  //         scope,
-  //         targetUrl,
-  //         sessionContext.h2UpstreamSession,
-  //       );
-  //     });
-
-  //     sessionContext.h2UpstreamSession.on("goaway", () => {
-  //       sessionContext.h2UpstreamSession?.close();
-  //     });
-  //   }
-
-  //   const upstreamStream = sessionContext.h2UpstreamSession.request({
-  //     ...headers,
-
-  //     ":scheme": targetUrl.protocol.replace(":", ""),
-  //     ":authority": targetUrl.host,
-  //     ":path": headers[":path"] ?? targetUrl.pathname + targetUrl.search,
-  //   });
-
-  //   requestContext.h2UpstreamStream = upstreamStream;
-
-  //   upstreamStream.on("response", (upstreamHeaders) => {
-  //     downstreamStream.respond(upstreamHeaders);
-  //   });
-
-  //   upstreamStream.on("error", (err) => {
-  //     this.handleUpstreamFailure(
-  //       err as Error,
-  //       scope,
-  //       targetUrl,
-  //       upstreamStream,
-  //     );
-  //   });
-
-  //   pipeline(downstreamStream, upstreamStream, (err) => {
-  //     if (err) {
-  //       this.handleUpstreamFailure(err, scope, targetUrl, upstreamStream);
-  //     }
-  //   });
-
-  //   pipeline(upstreamStream, downstreamStream, (err) => {
-  //     if (err) {
-  //       this.handleUpstreamFailure(err, scope, targetUrl, upstreamStream);
-  //     }
-  //   });
-  // }
   /**
    * Unified Pipeline Failure/Error Reporting Logic
    */
@@ -149,7 +117,8 @@ export class UpstremInitiator {
     upstreamRef: any,
   ) {
     const { requestContext, sessionContext } = scope;
-    console.error(`[Stream Error] Upstream Pathway Fault: ${err.message}`);
+    console.error(`[Stream Error] Upstream Pathway Fault: ${err}`);
+    console.info(targetUrl.href);
 
     if (requestContext.res && !requestContext.res.headersSent) {
       // Treat H1 vs H2 response terminations safely
