@@ -1,10 +1,10 @@
 import * as http from "http";
-import http2 from "http2";
+// import http2 from "http2";
 import tls from "tls";
 import net from "net";
 // import { promisify } from "util";
 // import { IncomingMessage } from "http";
-import type { Readable } from "stream";
+// import type { Readable } from "stream";
 
 // const gunzip = promisify(zlib.gunzip);
 // const inflate = promisify(zlib.inflate);
@@ -33,40 +33,54 @@ export function parseHttpRequestData(
   socketOverride?: tls.TLSSocket | net.Socket,
   forceEncrypted?: boolean,
 ) {
-  // 1. Safely resolve the socket
   const socket = socketOverride || req.socket;
   const headers = req.headers;
 
-  // 2. Determine encryption state
   const isEncrypted =
     forceEncrypted ??
     (socket instanceof tls.TLSSocket || (socket as any)?.encrypted === true);
 
+  const isWebSocket = headers.upgrade?.toLowerCase() === "websocket";
+
   const rawProtocol = isEncrypted ? "https:" : "http:";
+
+  const protocol = isWebSocket ? (isEncrypted ? "wss:" : "ws:") : rawProtocol;
+
   const rawHost = headers.host || "";
   const rawPath = req.url || "/";
-  const defaultPort = rawProtocol === "https:" ? 443 : 80;
 
-  // 3. Construct the full URL for parsing
-  // Handle edge cases where an explicit H1 proxy request includes the full URL in the path
-  const rawUrl = rawPath.startsWith("http")
-    ? rawPath
-    : `${rawProtocol}//${rawHost}${rawPath}`;
+  const defaultPort = protocol === "https:" || protocol === "wss:" ? 443 : 80;
 
   let parsedUrl: URL;
-  try {
+
+  if (isWebSocket) {
+    const wsUrl = rawPath
+      .replace(/^http:\/\//, "ws://")
+      .replace(/^https:\/\//, "wss://");
+
+    parsedUrl = new URL(
+      wsUrl.startsWith("ws://") || wsUrl.startsWith("wss://")
+        ? wsUrl
+        : `${protocol}//${rawHost}${rawPath}`,
+    );
+  } else {
+    const rawUrl =
+      rawPath.startsWith("http://") || rawPath.startsWith("https://")
+        ? rawPath
+        : `${rawProtocol}//${rawHost}${rawPath}`;
+
     parsedUrl = new URL(rawUrl);
-  } catch (err) {
-    // Failsafe for completely malformed requests missing a host
-    parsedUrl = new URL(`http://localhost${rawPath}`);
   }
+
+  const port = parsedUrl.port ? Number(parsedUrl.port) : defaultPort;
 
   return {
     protocol: parsedUrl.protocol,
     host: parsedUrl.hostname,
-    port: parsedUrl.port ? Number(parsedUrl.port) : defaultPort,
+    port,
     path: parsedUrl.pathname + parsedUrl.search,
     fullUrl: parsedUrl.href,
     isEncrypted,
+    isWebSocket,
   };
 }
