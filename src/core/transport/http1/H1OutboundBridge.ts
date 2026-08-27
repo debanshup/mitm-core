@@ -1,15 +1,11 @@
-// outbound bridge (upstream to server session manage)
-
-import type { RequestScope } from "../../context-manager/types";
-import { payloadEvents } from "../../event-manager/payload-events/payloadEvents";
-import { ProxyUtils } from "../../utils/ProxyUtils";
+import type { RequestScope } from "../../scope/types";
 import type { ProxyConfig } from "../../../lib/Proxy";
-import { ResponseCacheProcessor } from "../../handlers/bridge/ResponseCacheProcessor";
-import { parseBody } from "../../handlers/utils/utils";
-import { ScopeMutator } from "../../context-manager/ScopeMutator";
-import { connectionEvents } from "../../event-manager/connection-events/connectionEvents";
-import { proxyEventManager } from "../../event-manager/proxy-events/proxyEvents";
-import { pluginEventManager } from "../../event-manager/plugin-events/pluginEvents";
+
+import { ResponseCacheProcessor } from "../../handlers/utils/ResponseCacheProcessor";
+import { ScopeMutator } from "../../scope/ScopeMutator";
+import { connectionEvents } from "../../event/connection-events/connectionEvents";
+import { pluginEventManager } from "../../event/plugin-events/pluginEvents";
+import { ResponseDispatcher } from "./responseDispatcher";
 
 export class H1OutboundBridge {
   public static execute(
@@ -18,10 +14,12 @@ export class H1OutboundBridge {
     resolve: (value: void | PromiseLike<void>) => void,
     reject: (value: void | PromiseLike<void>) => void,
   ) {
-    const { requestContext, lifecycle } = scope;
-    const upstream = requestContext.upstreamReq;
+    const { request, lifecycle } = scope;
+    const upstreamReq = request.upstream.req;
+    const inboundReq = request.client.req;
+    const inboundRes = request.client.res;
 
-    if (!upstream) {
+    if (!upstreamReq || !inboundReq || !inboundRes) {
       lifecycle.state.set("error", true);
       return resolve();
     }
@@ -29,36 +27,24 @@ export class H1OutboundBridge {
     let isSettled = false;
 
     const safeResolve = () => {
-      if (!isSettled) {
-        isSettled = true;
-        resolve();
-      }
+      if (isSettled) return;
+      isSettled = true;
+      resolve();
     };
 
     const safeReject = (err?: any) => {
-      if (!isSettled) {
-        isSettled = true;
-        reject(err);
-      }
+      if (isSettled) return;
+      isSettled = true;
+      reject(err);
     };
 
-    if (requestContext.req && requestContext.req.socket) {
-      requestContext.req.socket.once("close", async () => {
-        if (!isSettled) {
-          await pluginEventManager.emitAsync("proxy:client-disconnect", {
-            scope,
-          });
-          safeReject(new Error("CLIENT_DISCONNECTED"));
-        }
-      });
-    }
-
     const cacheProcessor = new ResponseCacheProcessor(scope, config);
+
     if (cacheProcessor.tryServeHit()) {
       return safeResolve();
     }
 
-    upstream.on("response", async (upstreamRes) => {
+    upstreamReq.on("response", async (upstreamRes) => {
       await connectionEvents.emitAsync("UPSTREAM:RESPONSE", {
         scope,
         upstreamRes,
@@ -67,149 +53,80 @@ export class H1OutboundBridge {
       if (cacheProcessor.tryServeRevalidation(upstreamRes)) {
         return safeResolve();
       }
+
       cacheProcessor.initializeUpstreamIntercept(upstreamRes);
 
-      const contentType = upstreamRes.headers["content-type"] || "";
-      const shouldBuffer =
-        contentType.includes("text/") ||
-        contentType.includes("application/json");
-
-      if (!shouldBuffer) {
-        try {
-          await proxyEventManager.emitAsync("response", { scope });
-        } catch (error) {
-          console.error("[Event Error] PAYLOAD:RESPONSE failed:", error);
-        }
-
-        if (
-          lifecycle.isHijacked ||
-          requestContext.res!.writableEnded ||
-          requestContext.res!.destroyed
-        ) {
-          upstreamRes.destroy();
-          return safeResolve();
-        }
-
-        try {
-          requestContext.res!.writeHead(
-            upstreamRes.statusCode || 500,
-            upstreamRes.headers,
-          );
-
-          upstreamRes.pipe(requestContext.res!);
-
-          upstreamRes.on("end", () => {
-            ScopeMutator.finishPipeline(scope);
-            safeResolve();
-          });
-
-          upstreamRes.on("error", async (err) => {
-            if (!["ECONNRESET", "EPIPE"].includes((err as any).code)) {
-              console.error("UpstreamRes stream error:", err);
-            }
-            await pluginEventManager.emitAsync("proxy:target-error", { scope });
-            ScopeMutator.failPipeline(scope, err);
-
-            if (
-              !requestContext.res!.writableEnded &&
-              !requestContext.res!.destroyed
-            ) {
-              requestContext.res!.destroy(err);
-            }
-            safeReject(err);
-          });
-        } catch (error) {
-          upstreamRes.destroy();
-          safeReject(error);
-        }
-        return;
-      }
-
-      const responseChunks: Buffer[] = [];
-
-      upstreamRes.on("data", (chunk) => {
-        cacheProcessor.trackChunk(chunk);
-        responseChunks.push(
-          typeof chunk === "string" ? Buffer.from(chunk) : chunk,
+      try {
+        await ResponseDispatcher.handle(
+          scope,
+          upstreamRes,
+          cacheProcessor,
+          upstreamReq,
         );
-      });
-
-      upstreamRes.on("end", async () => {
-        try {
-          cacheProcessor.commit(upstreamRes);
-
-          if (responseChunks.length > 0) {
-            const rawBuffer = Buffer.concat(responseChunks);
-            const contentEncoding =
-              upstreamRes.headers["content-encoding"] || "";
-            const parsedBody = parseBody(rawBuffer, contentEncoding);
-            ScopeMutator.applyResponseBody(scope, parsedBody);
-          }
-
-          ProxyUtils.cleanUp([upstreamRes, upstream]);
-          ScopeMutator.finishPipeline(scope);
-
-          try {
-            await proxyEventManager.emitAsync("response", { scope });
-          } catch (error) {
-            console.error(
-              "[Event Error] Buffered PAYLOAD:RESPONSE failed:",
-              error,
-            );
-          }
-
-          if (
-            requestContext.res!.writableEnded ||
-            requestContext.res!.headersSent ||
-            requestContext.res!.destroyed
-          ) {
-            return safeResolve();
-          }
-
-          requestContext.res!.writeHead(
-            upstreamRes.statusCode || 500,
-            upstreamRes.headers,
-          );
-
-          if (responseChunks.length > 0) {
-            const finalBuffer = Buffer.concat(responseChunks);
-            requestContext.res!.write(finalBuffer, () => {
-              requestContext.res!.end();
-              safeResolve();
-            });
-          } else {
-            requestContext.res!.end();
-            safeResolve();
-          }
-        } catch (error) {
-          console.error("[Buffered Path End Error]:", error);
-          safeReject(error);
-        }
-      });
-
-      upstreamRes.on("error", async (err) => {
-        if (!["ECONNRESET", "EPIPE"].includes((err as any).code)) {
-          console.error("UpstreamRes buffer error:", err);
-        }
-        await pluginEventManager.emitAsync("proxy:target-error", { scope });
-        ScopeMutator.failPipeline(scope, err);
-        upstreamRes.destroy(); // Prevent memory leaks on open sockets
-
-        if (
-          !requestContext.res!.writableEnded &&
-          !requestContext.res!.destroyed
-        ) {
-          requestContext.res!.destroy(err);
-        }
-        safeReject(err);
-      });
+        safeResolve();
+      } catch (error) {
+        safeReject(error);
+      }
     });
 
-    upstream.on("error", async (err) => {
-      if (!isSettled) {
+    upstreamReq.on("error", async (err) => {
+      if (isSettled) return;
+      isSettled = true;
+      try {
         ScopeMutator.failPipeline(scope, err);
-        await pluginEventManager.emitAsync("proxy:target-error", { scope });
-        safeReject(err);
+
+        if (!upstreamReq.destroyed) upstreamReq.destroy();
+
+        if (typeof inboundReq.destroy === "function" && !inboundReq.destroyed) {
+          inboundReq.destroy();
+        }
+
+        if (!inboundRes.destroyed) {
+          if (!inboundRes.headersSent && !inboundRes.writableEnded) {
+            if (err.message === "ERR_UPSTREAM_TIMEOUT") {
+              inboundRes.writeHead(504, { "Content-Type": "application/json" });
+              inboundRes.end(
+                JSON.stringify({
+                  error: "Gateway Timeout: Upstream failed to respond.",
+                }),
+              );
+            } else if (err.message === "ERR_CLIENT_DISCONNECTED") {
+              inboundRes.destroy();
+            } else {
+              inboundRes.writeHead(502, { "Content-Type": "text/plain" });
+              inboundRes.end("Bad Gateway: Remote target connection dropped.");
+            }
+          } else {
+            inboundRes.destroy(err);
+          }
+        }
+      } catch (criticalCleanupErr) {
+        console.error(
+          "[Proxy Core] Critical sync error cleanup failed:",
+          criticalCleanupErr,
+        );
+      }
+
+      try {
+        await pluginEventManager.emitAsync("proxy:target-error", {
+          scope,
+          // error: err,
+        });
+      } catch (pluginErr) {
+        console.error(
+          "[Proxy Core] Plugin error notification failed:",
+          pluginErr,
+        );
+      }
+
+      reject(err as any); // Bypass safeReject to avoid double-call since isSettled is true
+    });
+    upstreamReq.on("timeout", () => {
+      console.warn(
+        `[Proxy Timeout]: Upstream server ${request.target.host} timed out.`,
+      );
+      if (!upstreamReq.destroyed) {
+        upstreamReq.destroy(new Error("ERR_UPSTREAM_TIMEOUT")); // add a config for upstream timeout
       }
     });
   }

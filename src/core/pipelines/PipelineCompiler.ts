@@ -1,10 +1,9 @@
 import type { Phase } from "../../phase/Phase.ts";
-import type {
-  RequestScope,
-} from "../context-manager/types.js";
+import type { RequestScope } from "../scope/types.js";
 import type { BaseHandler } from "../handlers/base/base.handler.ts";
 import { HANDLERS } from "../handlers/registry/registry";
 import { PipelineAbortSignal } from "../signals/pipelineAbortSignal";
+import { WSOutboundBridge } from "../transport/ws/WSOutboundBridge.js";
 
 /**
  * Orchestrates the proxy request lifecycle by managing and executing handler pipelines.
@@ -40,49 +39,117 @@ export default class Pipeline {
    * Handles phase sequencing, pipeline abortion, and error recovery (502 response).
    */
   static async run(scope: RequestScope) {
-    const { sessionContext, requestContext, lifecycle } = scope;
+    const { request, lifecycle } = scope;
 
     if (!lifecycle.nextPhase) {
-      // console.info("Next phase is undefined. Halting pipeline");
       return;
     }
     if (lifecycle.isHijacked) {
-      // console.info("handled for", sessionContext.clientToProxyHost);
       lifecycle.nextPhase = undefined;
       return;
     }
 
+    if (request.webSocket && !request.webSocket.isUpgraded) {
+      console.info(
+        `[Pipeline] Routing WS upgrade to Outbound Bridge: ${request.target.url}`,
+      );
+
+      lifecycle.nextPhase = undefined;
+      await WSOutboundBridge.execute(scope);
+      return;
+    }
+
+    /**
+     * @phase loop
+     * Potential architectural issue: phase loop
+     */
+
+    let executionJumps = 0;
+    const MAX_JUMPS = 10;
+
     while (lifecycle.nextPhase) {
+      if (++executionJumps > MAX_JUMPS) {
+        const originalHost =
+          scope.request.target.originalHost ?? "unknown-host";
+        console.error(
+          `[Fatal] Infinite phase loop detected for: ${originalHost}. Terminating transaction.`,
+        );
+        scope.lifecycle.nextPhase = undefined;
+        scope.lifecycle.isHijacked = true;
+        const res = scope.request.client.res;
+        if (res) {
+          try {
+            if (!res.headersSent) {
+              res.writeHead(508, {
+                "Content-Type": "application/json",
+                Connection: "close",
+              });
+
+              res.end(
+                JSON.stringify({
+                  error: "Loop Detected",
+                  message: `The proxy engine encountered an infinite routing loop processing: ${originalHost}`,
+                  requestId: scope.request.requestId,
+                }),
+              );
+            } else {
+              console.warn(
+                `[Warning] Loop detected but headers already sent for request ${scope.request.requestId}. Forcing socket termination.`,
+              );
+              res.destroy();
+            }
+          } catch (responseError) {
+            console.error(
+              `[Error] Failed to cleanly write 508 response:`,
+              responseError,
+            );
+            scope.session.socket.destroy();
+          }
+        } else {
+          scope.session.socket.destroy();
+        }
+        break;
+      }
       const currentPhase = lifecycle.nextPhase;
       lifecycle.nextPhase = undefined;
 
       const steps = Pipeline.pipelines[currentPhase];
       if (!steps || steps.length === 0) {
-        console.warn(`No handlers found for phase: ${currentPhase}`);
+        console.warn(`[Pipeline] No handlers found for phase: ${currentPhase}`);
         break;
       }
 
       for (const step of steps) {
         try {
-          // console.info("scope socket", scope.sessionContext.socket)
           await step.handle(scope);
         } catch (error: any) {
-          console.info({message: error.message, url: scope.requestContext.clientToProxyUrl})
           if (error instanceof PipelineAbortSignal) {
             lifecycle.nextPhase = undefined;
             return;
           }
 
-          // console.error(error)
+          const EXPECTED_ERROR_CODES = new Set([
+            "ECONNRESET", // Connection reset by peer
+            "ETIMEDOUT", // Operation timed out
+            "ECONNREFUSED", // Connection refused
+            "EPIPE", // Broken pipe (client disconnected early)
+          ]);
 
-          console.error(
-            `[Handler Error] ${step.name} failed during ${currentPhase}:`,
-            // (error as Error).message,
-            requestContext.clientToProxyHost,
-          );
+          // Check against codes or known library-specific timeout strings
+          const isExpectedDrop =
+            EXPECTED_ERROR_CODES.has(error.code) ||
+            error.code === "ERR_TLS_HANDSHAKE_TIMEOUT" ||
+            error.message?.includes("TLS Handshake Timeout");
 
-          const res = requestContext.res;
+          if (!isExpectedDrop) {
+            console.error(
+              `[Handler Error] ${step.name} failed during ${currentPhase}:`,
+              scope.request.target.originalHost,
+              error,
+            );
+          }
 
+          const res = scope.request.client.res;
           if (res) {
             if (!res.headersSent && !res.writableEnded) {
               res.statusCode = 502;

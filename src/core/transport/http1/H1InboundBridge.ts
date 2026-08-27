@@ -1,16 +1,10 @@
-/**
- * @todo check Socket Cleanup
- */
-
 import { createServer } from "http";
 import type { TLSSocket } from "tls";
- 
-import { Readable } from "stream";
-import type { RequestScope } from "../../context-manager/types";
-import { parseBody, readStream } from "../../handlers/utils/utils";
-import { connectionEvents } from "../../event-manager/connection-events/connectionEvents";
+import { randomUUID } from "crypto";
 
-// A Set provides O(1) lookups and avoids iterating an array during requests
+import type { RequestScope } from "../../scope/types";
+import { connectionEvents } from "../../event/connection-events/connectionEvents";
+
 const HOP_HEADERS = new Set([
   "connection",
   "keep-alive",
@@ -25,96 +19,79 @@ const HOP_HEADERS = new Set([
   "x-forwarded-host",
   "x-forwarded-proto",
   "forwarded",
+  "proxy-connection",
 ]);
 
-const METHOD_WITH_BODY = new Set(["POST", "PUT", "PATCH", "DELETE"]);
-
 export class H1InboundBridge {
-  private static h1Server = createServer(
-    {
-      maxHeaderSize: 10 * 16384,
-      keepAlive: true,
-    },
-    async (req, res) => {
-      // Safely fetch attached context from socket metadata hook
-      const requestScope = (req.socket as any).__scope as RequestScope;
+  private static h1Server = createServer({
+    maxHeaderSize: 10 * 16384,
+    keepAlive: true,
+  });
 
-      // console.info(req.socket)
+  static {
+    this.h1Server.on("clientError", (err, socket) => {
+      console.error("[H1InboundBridge] Client HTTP Parser Fault:", err.message);
+      if (socket.writable) {
+        socket.end("HTTP/1.1 400 Bad Request\r\n\r\n");
+      }
+      socket.destroy();
+    });
 
-      const { requestContext } = requestScope;
+    this.h1Server.on("request", async (req, res) => {
+      const connectionScope = (req.socket as any)
+        .__connectionScope as RequestScope;
+
+      if (!connectionScope) {
+        req.destroy();
+        return;
+      }
+ 
+      const requestScope: RequestScope = {
+        session: connectionScope.session,
+        request: {
+          requestId: randomUUID(),
+          client: {
+            req,
+            res,
+            method: req.method,
+            url: req.url,
+          },
+          upstream: {},
+          target: { ...connectionScope.request?.target },
+        },
+        lifecycle: {
+          state: connectionScope.lifecycle.state,
+          isHijacked: false,
+          timestamps: {
+            receivedAt: Date.now(),
+          },
+        },
+      };
 
       try {
-        const cleanedHeaders = { ...req.headers };
+ 
+        const cleanedHeaders: Record<string, any> = {};
 
-        // STRIP HOP-BY-HOP HEADERS
-        for (const key of Object.keys(cleanedHeaders)) {
-          if (HOP_HEADERS.has(key.toLowerCase())) {
-            delete cleanedHeaders[key];
+        for (const [key, value] of Object.entries(req.headers)) {
+          const lowerKey = key.toLowerCase();
+
+          if (!HOP_HEADERS.has(lowerKey)) {
+            cleanedHeaders[key] = value;
           }
-        }
-
-        // NORMALIZE PROXY-CONNECTION
-        if (cleanedHeaders["proxy-connection"]) {
-          cleanedHeaders["connection"] = cleanedHeaders[
-            "proxy-connection"
-          ] as string;
-          delete cleanedHeaders["proxy-connection"];
         }
 
         req.headers = cleanedHeaders;
-        requestContext!.req = req;
-        requestContext!.res = res;
+        requestScope.request.client.headers = cleanedHeaders;
 
-        const method = req?.method?.toUpperCase()!;
-        const headers = req.headers;
-        requestContext.requestHeaders = headers;
-        requestContext.requestMethod = method;
-
-        if (METHOD_WITH_BODY.has(method)) {
-          const originalReq = requestContext.req;
-          if (!originalReq) return;
-
-          try {
-            const rawBuffer = await readStream(originalReq);
-
-            const body = parseBody(
-              rawBuffer,
-              originalReq.headers["content-encoding"],
-            );
-
-            requestContext.requestBody = body;
-
-            // Create a fresh stream out of the buffer
-            const freshStream = Readable.from(rawBuffer);
-
-            //  Wrap it in a Proxy to transparently preserve headers, socket, and methods
-            const proxiedReq = new Proxy(freshStream, {
-              get(target, prop, receiver) {
-                if (prop in target) {
-                  return Reflect.get(target, prop, receiver);
-                }
-                return Reflect.get(originalReq, prop);
-              },
-              set(target, prop, value, receiver) {
-                return Reflect.set(originalReq, prop, value);
-              },
-            });
-
-            //  Replace context request with proxy
-            requestContext.req = proxiedReq as any;
-          } catch (error) {
-            console.error("Error capturing request body:", error);
-          }
-        }
-
-        //  get global config from registry
-        connectionEvents.emit("HTTPS:DECRYPTED", { scope: requestScope });
+        await connectionEvents.emitAsync("HTTPS:DECRYPTED", {
+          scope: requestScope,
+        });
       } catch (err) {
         console.error("[Internal H1 Bridge Parser Error]", err);
 
         if (!res.headersSent) {
           res.statusCode = 502;
-          res.end("Bad Gateway");
+          res.end("Bad Gateway (Proxy Core Fault)");
         } else {
           res.destroy();
         }
@@ -123,20 +100,18 @@ export class H1InboundBridge {
           req.socket.destroy();
         }
       }
-    },
-  );
+    });
+  }
 
   /**
    * Routes an established, cleartext TLSSocket into the HTTP/1.1 parsing machine
    */
   public static async execute(
-    scope: RequestScope,
+    scopeTemplate: RequestScope,
     tlsSocket: TLSSocket,
   ): Promise<void> {
-    // Attach context as a non-enumerable reference tag on the socket structure
-    (tlsSocket as any).__scope = scope;
-
-    // Trigger internal HTTP engine request cycles manually
+ 
+    (tlsSocket as any).__connectionScope = scopeTemplate;
     this.h1Server.emit("connection", tlsSocket);
   }
 }

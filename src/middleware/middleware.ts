@@ -1,21 +1,15 @@
-import {
-  ContextManager,
-} from "../core/context-manager/ContextManager";
 import Pipeline from "../core/pipelines/PipelineCompiler";
-import { connectionEvents } from "../core/event-manager/connection-events/connectionEvents";
-import { payloadEvents } from "../core/event-manager/payload-events/payloadEvents";
-import {
-  parseConnectData,
-  parseHttpRequestData,
-} from "../utils/parser/parseReqData";
-import { normalizeHttpVersion } from "../core/handlers/utils/utils";
-import type { RequestScope } from "../core/context-manager/types";
+import { connectionEvents } from "../core/event/connection-events/connectionEvents";
+import { ScopeMutator } from "../core/scope/ScopeMutator";
+import { proxyEventManager } from "../core/event/proxy-events/proxyEvents";
+import { pluginEventManager } from "../core/event/plugin-events/pluginEvents";
 
 /**
  * Manages middleware registration and orchestrates the proxy connection lifecycle.
  * Configures event listeners to intercept network traffic, initializes request contexts,
  * and triggers the processing pipeline.
  */
+
 export class Middleware {
   /**
    * Registers event listeners for various connection types (TCP, HTTP, CONNECT, HTTPS)
@@ -33,79 +27,125 @@ export class Middleware {
     } else {
       return;
     }
+
+    // ------------------- proxy emitted events ------------------
+
     connectionEvents.on("TCP", async ({ socket }) => {
-      socket.on("error", () => {
-        // fail-safe: do nothing
-      });
-      const sessionContext = ContextManager.getOrCreateSessionContext(socket);
-      const requestContext =
-        ContextManager.getOrCreateRequestContext(sessionContext);
-      const lifecycle = ContextManager.getOrCreateRequestLifeCycle(
-        requestContext.requestId,
-      );
-      const scope: RequestScope = {
-        sessionContext,
-        requestContext,
-        lifecycle,
-      };
-      await Pipeline.run(scope);
+      try {
+        const scope = ScopeMutator.initializeSessionScope(socket);
+        await proxyEventManager.emitAsync("connection:open", { socket });
+
+        await Pipeline.run(scope);
+      } catch (err) {
+        throw err;
+      }
     });
 
     connectionEvents.on("HTTP:PLAIN", async ({ req, res, scope }) => {
-      const { sessionContext, requestContext, lifecycle } = scope;
-      sessionContext.connectionType = "http";
-      lifecycle.nextPhase = "request";
-      requestContext!.req = req;
-      requestContext!.res = res;
-      const { host, fullUrl } = parseHttpRequestData(req);
-      // client to proxy
-      requestContext.clientToProxyHost = host;
-      requestContext.clientToProxyUrl = fullUrl;
-      sessionContext.httpVersion = normalizeHttpVersion(req.httpVersion);
-      // proxy to upstream
-      requestContext.proxyToUpstreamHost = host;
-      requestContext.proxyToUpstreamUrl = fullUrl;
+      try {
+        const success = ScopeMutator.applyHttpPlainState(scope, req, res);
+        if (!success) return;
 
-      // run pipeline
-      await Pipeline.run(scope);
+        await pluginEventManager.emitAsync("proxy:client-http-request", {
+          scope,
+        });
+        await proxyEventManager.emitAsync("http:request", { scope });
+
+        await Pipeline.run(scope);
+      } catch (err) {
+        console.error(`[Middleware Fatal] Pipeline crash on HTTP:PLAIN:`, err);
+        ScopeMutator.failPipeline(scope, err);
+        if (!res.destroyed) res.destroy();
+      }
     });
 
     connectionEvents.on("CONNECT", async ({ req, socket, head, scope }) => {
-      const { sessionContext, requestContext, lifecycle } = scope;
-      sessionContext.socket = socket;
-      sessionContext.connectionType = "https";
-      lifecycle.nextPhase = "handshake";
-      head = head;
-      requestContext!.req = req;
+      try {
+        const success = ScopeMutator.applyConnectState(
+          scope,
+          req,
+          socket,
+          head,
+        );
+        if (!success) return;
 
-      const { host, url } = parseConnectData(req);
-      requestContext.clientToProxyHost = host;
-      requestContext.clientToProxyUrl = url;
+        await pluginEventManager.emitAsync("proxy:client-connect", { scope });
+        await proxyEventManager.emitAsync("connect:request", {
+          head,
+          scope,
+          socket,
+        });
 
-      // run pipeline
-      await Pipeline.run(scope);
+        await Pipeline.run(scope);
+      } catch (err) {
+        console.error(`[Middleware Fatal] Pipeline crash on CONNECT:`, err);
+        ScopeMutator.failPipeline(scope, err);
+        if (!socket.destroyed) socket.destroy();
+      }
     });
 
-    connectionEvents.on("HTTPS:DECRYPTED", async ({ scope }) => {
-      const { sessionContext, requestContext, lifecycle } = scope;
+    // ------------------- h1Inbound emitted events ------------------
 
-      const req = requestContext.req;
-      if (!req) {
+    connectionEvents.on("HTTPS:DECRYPTED", async ({ scope }) => {
+      try {
+        const success = ScopeMutator.applyHttpsDecryptedState(scope);
+        if (!success) return;
+
+        await pluginEventManager.emitAsync("proxy:client-https-request", {
+          scope,
+        });
+        await proxyEventManager.emitAsync("https:request", { scope });
+
+        await Pipeline.run(scope);
+      } catch (err) {
+        console.error(
+          `[Middleware Fatal] Pipeline crash on HTTPS:DECRYPTED:`,
+          err,
+        );
+        ScopeMutator.failPipeline(scope, err);
+        if (!scope.request.client.res?.destroyed)
+          scope.request.client.res?.destroy();
+      }
+    });
+
+    connectionEvents.on("WS:UPGRADE", async ({ head, req, scope, socket }) => {
+      try {
+        const wsScope = scope || ScopeMutator.initializeSessionScope(socket);
+        
+        const success = ScopeMutator.applyUpgradeState(
+          wsScope,
+          req,
+          socket,
+          head,
+        );
+        if (!success) return;
+        await Pipeline.run(wsScope);
+      } catch (error) {
+        console.error(
+          `[Middleware Fatal] Pipeline crash on WS:UPGRADE:`,
+          error,
+        );
+        if (!socket.destroyed) socket.destroy();
+      }
+      console.info("caught upgrade")
+    });
+
+    // -- upstream emitted events ------------------
+
+    connectionEvents.on("UPSTREAM:INIT", async ({ scope, upstreamReq }) => {
+      const success = ScopeMutator.applyUpstreamInitState(scope, upstreamReq);
+      if (!success) {
         return;
       }
+      await pluginEventManager.emitAsync("proxy:upstream-dispatch", { scope });
+    });
 
-      const { host, fullUrl } = parseHttpRequestData(requestContext.req!);
-
-      requestContext.proxyToUpstreamHost = host;
-      requestContext.proxyToUpstreamUrl = fullUrl;
-      lifecycle.nextPhase = "request";
-
-      await Promise.allSettled(
-        payloadEvents
-          .listeners("PAYLOAD:REQUEST")
-          .map((listener) => listener({ scope })),
-      );
-      await Pipeline.run(scope);
+    connectionEvents.on("UPSTREAM:RESPONSE", async ({ scope, upstreamRes }) => {
+      const success = ScopeMutator.applyResponseState(scope, upstreamRes);
+      if (!success) {
+        return;
+      }
+      await pluginEventManager.emitAsync("proxy:target-response", { scope });
     });
   }
 }

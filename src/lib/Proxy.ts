@@ -1,14 +1,20 @@
 import { registerGlobalConfig } from "../config.registry";
 import * as http from "http";
-import { connectionEvents } from "../core/event-manager/connection-events/connectionEvents";
-import { TypedEventEmitter } from "../core/event-manager/EventBus";
-import type { ProxyEventMap } from "../core/event-manager/proxy-events/proxyEvents";
-import type { BasePlugin } from "../core/plugin-manager/BasePlugin";
-import { payloadEvents } from "../core/event-manager/payload-events/payloadEvents";
-import { type RequestScope } from "../core/context-manager/types";
+import { connectionEvents } from "../core/event/connection-events/connectionEvents";
+import {
+  proxyEventManager,
+  type ProxyEventMap,
+} from "../core/event/proxy-events/proxyEvents";
+import type { BasePlugin } from "../core/plugin/BasePlugin";
+import { type RequestScope } from "../core/scope/types";
 import { Middleware } from "../middleware/middleware";
-import { connectionManager } from "../core/connection-manager/ConnectionManager";
-import { ContextManager } from "../core/context-manager/ContextManager";
+import { connectionManager } from "../core/connection/ConnectionManager";
+import { ContextManager } from "../core/scope/ContextManager";
+import {
+  pluginEventManager,
+  type PluginEventMap,
+} from "../core/event/plugin-events/pluginEvents";
+import { TypedEventEmitter } from "../core/event/EventBus";
 
 /**
  * Configuration options for the proxy server, controlling caching,
@@ -53,12 +59,12 @@ export interface IProxy {
   /**
    * Registers a plugin to its explicitly defined proxy event.
    */
-  use<K extends keyof ProxyEventMap>(plugin: BasePlugin<K>): this;
+  use<K extends keyof PluginEventMap>(plugin: BasePlugin<K>): this;
 
   /**
    * Unregisters a plugin.
    */
-  unuse(plugin: BasePlugin): this;
+  unuse(plugin: BasePlugin<any>): this;
 
   /**
    * Starts the HTTP server on the specified port.
@@ -94,17 +100,75 @@ type ProxyOptions = {
  * The main proxy server implementation.
  */
 export class Proxy extends TypedEventEmitter<ProxyEventMap> implements IProxy {
-  /**
-   * @private
-   */
-  // timeout for plugn execution
-  private pluginTimeoutMs: number;
   private httpServer: http.Server;
 
   // plugins
-  private activePlugins = new Set<BasePlugin>();
+  private activePlugins = new Set<BasePlugin<any>>();
 
   private config: Required<ProxyConfig>;
+
+  //------------------- overrides ----------------------
+
+  override on<K extends keyof ProxyEventMap>(
+    event: K,
+    listener: ProxyEventMap[K] extends any[]
+      ? (...args: ProxyEventMap[K]) => void | Promise<void>
+      : never,
+  ): this {
+    proxyEventManager.on(event, listener as any);
+    return this;
+  }
+
+  override once<K extends keyof ProxyEventMap>(
+    event: K,
+    listener: ProxyEventMap[K] extends any[]
+      ? (...args: ProxyEventMap[K]) => void | Promise<void>
+      : never,
+  ): this {
+    proxyEventManager.once(event, listener as any);
+    return this;
+  }
+
+  override off<K extends keyof ProxyEventMap>(
+    event: K,
+    listener: ProxyEventMap[K] extends any[]
+      ? (...args: ProxyEventMap[K]) => void | Promise<void>
+      : never,
+  ): this {
+    proxyEventManager.off(event, listener as any);
+    return this;
+  }
+
+  override addListener<K extends keyof ProxyEventMap>(
+    event: K,
+    listener: ProxyEventMap[K] extends any[]
+      ? (...args: ProxyEventMap[K]) => void | Promise<void>
+      : never,
+  ): this {
+    return this.on(event, listener);
+  }
+
+  override removeListener<K extends keyof ProxyEventMap>(
+    event: K,
+    listener: ProxyEventMap[K] extends any[]
+      ? (...args: ProxyEventMap[K]) => void | Promise<void>
+      : never,
+  ): this {
+    return this.off(event, listener);
+  }
+
+  override removeAllListeners(
+    event?: keyof ProxyEventMap & (string | symbol),
+  ): this {
+    proxyEventManager.removeAllListeners(event);
+    return this;
+  }
+
+  override listeners = proxyEventManager.listeners.bind(
+    proxyEventManager,
+  ) as any;
+
+  // ------------------------------------------------------------
 
   /**
    * Accepts an existing HTTP server (e.g., from Express),
@@ -112,7 +176,7 @@ export class Proxy extends TypedEventEmitter<ProxyEventMap> implements IProxy {
    */
   constructor(options: ProxyOptions & ProxyConfig = {}) {
     super();
-    this.pluginTimeoutMs = options.pluginTimeoutMs ?? 5000;
+
     this.httpServer = options.server || http.createServer({ keepAlive: true });
 
     this.config = {
@@ -132,85 +196,23 @@ export class Proxy extends TypedEventEmitter<ProxyEventMap> implements IProxy {
     });
     registerGlobalConfig(this.config);
   }
-  /**
-   * @critical
-   * Safely executes plugins with an enforced timeout.
-   */
-  private async executePluginsWithTimeout<K extends keyof ProxyEventMap>(
-    eventName: K,
-    ...args: ProxyEventMap[K] // caller is strictly typed here!
-  ): Promise<void> {
-    const pluginExecution = this.emitAsync(eventName, ...(args as any)); // used `as any` strictly on the spread to bypass TS's generic tuple limitation
-
-    if (this.pluginTimeoutMs <= 0) {
-      await pluginExecution;
-      return;
-    }
-
-    let timerId: NodeJS.Timeout;
-    const timeoutTimer = new Promise<never>((_, reject) => {
-      timerId = setTimeout(
-        () => reject(new Error("PLUGIN_TIMEOUT")),
-        this.pluginTimeoutMs,
-      );
-    });
-
-    try {
-      await Promise.race([pluginExecution, timeoutTimer]);
-    } finally {
-      clearTimeout(timerId!);
-    }
-  }
 
   private bindAllEvents() {
     this.httpServer.on("connection", async (socket) => {
       connectionManager.track(socket);
 
-      await this.executePluginsWithTimeout("tcp:connection", { socket });
+      const scope: RequestScope = ContextManager.getOrCreateScope(socket);
 
-      const sessionContext = ContextManager.getOrCreateSessionContext(socket);
-      const requestContext =
-        ContextManager.getOrCreateRequestContext(sessionContext);
-      const lifecycle = ContextManager.getOrCreateRequestLifeCycle(
-        requestContext.requestId,
-      );
-
-      const scope: RequestScope = { sessionContext, requestContext, lifecycle };
-
-      connectionEvents.emit("TCP", {
+      await connectionEvents.emitAsync("TCP", {
         socket,
         scope,
       });
     });
 
     this.httpServer.on("connect", async (req, socket, head) => {
-      const sessionContext = ContextManager.getOrCreateSessionContext(socket);
+      const scope: RequestScope = ContextManager.getOrCreateScope(socket);
 
-      // proxyContext.socket = socket
-
-      const requestContext = ContextManager.getOrCreateRequestContext(
-        sessionContext,
-        req,
-      );
-      const lifecycle = ContextManager.getOrCreateRequestLifeCycle(
-        requestContext.requestId,
-      );
-
-      requestContext.req = req;
-
-      const scope: RequestScope = {
-        sessionContext,
-        requestContext,
-        lifecycle,
-      };
-
-      await this.executePluginsWithTimeout("tunnel:connect", {
-        scope,
-        req,
-        socket,
-        head: head as Buffer,
-        payloadEvent: payloadEvents,
-      });
+      scope.request.client.req = req;
 
       connectionEvents.emit("CONNECT", {
         req,
@@ -221,90 +223,63 @@ export class Proxy extends TypedEventEmitter<ProxyEventMap> implements IProxy {
     });
 
     this.httpServer.on("request", async (req, res) => {
-      await this.executePluginsWithTimeout("http:plain_request", {
-        req,
-        res,
-      });
+      const scope: RequestScope = ContextManager.getOrCreateScope(req.socket);
+      scope.request.client.req = req;
+      scope.request.client.res = res;
 
-      const sessionContext = ContextManager.getOrCreateSessionContext(
-        req.socket,
-      );
-      // const oldRequestContext = ContextManager
-      const requestContext =
-        ContextManager.getOrCreateRequestContext(sessionContext);
-      const lifecycle = ContextManager.getOrCreateRequestLifeCycle(
-        requestContext.requestId,
-      );
-
-      requestContext.req = req;
-      requestContext.res = res;
-
-      const scope: RequestScope = {
-        sessionContext,
-        requestContext,
-        lifecycle,
-      };
-
-      connectionEvents.emit("HTTP:PLAIN", {
+      await connectionEvents.emitAsync("HTTP:PLAIN", {
         req,
         res,
         scope,
       });
     });
 
-    this.httpServer.on("error", async (err) => {
-      await this.executePluginsWithTimeout("error", err);
-    });
-
-    // internal events
-
-    connectionEvents.on("CONNECT:PRE_ESTABLISH", async ({ scope, socket }) => {
-      await this.executePluginsWithTimeout("tunnel:pre_establish", {
+    this.httpServer.on("upgrade", async (req, socket, head) => {
+      const scope = ContextManager.getOrCreateScope(socket);
+      await connectionEvents.emitAsync("WS:UPGRADE", {
+        req,
         socket,
         scope,
+        head,
       });
+      console.info("Emitted upgrade");
     });
 
-    connectionEvents.on("CONNECT:ESTABLISHED", async ({ scope, socket }) => {
-      await this.executePluginsWithTimeout("tunnel:established", {
-        socket,
-        scope,
-      });
-    });
+    this.httpServer.on("error", async (err: any) => {
+      proxyEventManager.emit("error", err);
 
-    payloadEvents.on("PAYLOAD:REQUEST", async ({ scope }) => {
-      await this.executePluginsWithTimeout("http:decrypted_request", { scope });
-    });
+      if (err.code === "EADDRINUSE") {
+        console.error(
+          `[FATAL] Proxy server failed to bind: Port is already in use.`,
+        );
+        process.exit(1);
+      }
 
-    payloadEvents.on("PAYLOAD:RESPONSE", async ({ scope }) => {
-      await this.executePluginsWithTimeout("decrypted_response", { scope });
+      if (err.code === "EACCES") {
+        console.error(
+          `[FATAL] Permission Denied: Cannot bind proxy to this network port.`,
+        );
+        process.exit(1);
+      }
+
+      if (err.code === "EMFILE") {
+        console.warn(
+          `[SERVER_OS_WARN] Operating system file descriptor limit reached! Incoming connections are being throttled.`,
+        );
+      } else {
+        console.error(
+          `[Root HTTPServer Error Hook Captured]:`,
+          err.message || err,
+        );
+      }
     });
   }
 
-  public use<K extends keyof ProxyEventMap>(plugin: BasePlugin<K>): this {
+  public use<K extends keyof PluginEventMap>(plugin: BasePlugin<K>): this {
     this.activePlugins.add(plugin);
 
-    this.on(plugin.event, (async (...args: any[]) => {
-      // first argument is always the payload object
-
-      // 1. Extract the exact type of args[0] from the plugin.run method
-      type ArgsZero<T> = T extends {
-        run: (arg: infer P, ...args: any[]) => any;
-      }
-        ? P
-        : never;
-
-      type TargetPayload = ArgsZero<typeof plugin>;
-
-      // 2. Map and display all its keys and their respective types
-      type InspectPayload<T> = {
-        [K in keyof T]: T[K];
-      };
-
-      type Result = InspectPayload<TargetPayload>;
-
-      // console.info(args[0])
-
+    pluginEventManager.on(plugin.event, (async (...args: any[]) => {
+      // console.info(":args:", JSON.stringify(args[0]));
       await plugin.run(args[0]);
     }) as any);
 
@@ -320,7 +295,7 @@ export class Proxy extends TypedEventEmitter<ProxyEventMap> implements IProxy {
    * @limitations This does **not** automatically detach event listeners.
    * Manual cleanup via `this.off()` is required to prevent ghost executions.
    */
-  public unuse(plugin: BasePlugin): this {
+  public unuse(plugin: BasePlugin<any>): this {
     this.activePlugins.delete(plugin);
     return this;
   }

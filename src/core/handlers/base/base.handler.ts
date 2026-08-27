@@ -1,6 +1,6 @@
 import type { ProxyConfig } from "../../../lib/Proxy";
 import type { Phase } from "../../../phase/Phase";
-import type { RequestScope } from "../../context-manager/types";
+import type { RequestScope } from "../../scope/types";
 
 /**
  * An abstract base class for defining handler logic associated with a specific lifecycle {@link Phase}.

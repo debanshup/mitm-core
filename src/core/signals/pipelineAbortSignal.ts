@@ -18,6 +18,8 @@ export class PipelineAbortSignal extends Error {
       this.data = payload;
     }
     this.name = "PipelineAbortSignal";
+
+    Error.captureStackTrace(this, this.constructor)
     
     // maintain proper stack trace
     Object.setPrototypeOf(this, PipelineAbortSignal.prototype);

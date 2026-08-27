@@ -1,8 +1,8 @@
-import type { ProxyEventMap } from "../event-manager/proxy-events/proxyEvents";
-import type { BasePlugin } from "../plugin-manager/BasePlugin";
+import type { ProxyEventMap } from "../event/proxy-events/proxyEvents";
+import type { BasePlugin } from "../plugin/BasePlugin";
 
 export type AbortMessage = {
   message: string;
-  plugin: BasePlugin;
+  plugin: BasePlugin<any>;
   event: keyof ProxyEventMap | string;
 };

@@ -1,15 +1,7 @@
 import * as http from "http";
-// import http2 from "http2";
 import tls from "tls";
 import net from "net";
-// import { promisify } from "util";
-// import { IncomingMessage } from "http";
-// import type { Readable } from "stream";
-
-// const gunzip = promisify(zlib.gunzip);
-// const inflate = promisify(zlib.inflate);
-// const brotliDecompress = promisify(zlib.brotliDecompress);
-
+ 
 export function parseConnectData(req: http.IncomingMessage) {
   if (!req || !req.url) {
     return {
@@ -26,7 +18,6 @@ export function parseConnectData(req: http.IncomingMessage) {
   };
 }
 
-// h2 related logic will be implemented seperartely
 
 export function parseHttpRequestData(
   req: http.IncomingMessage,
@@ -40,39 +31,21 @@ export function parseHttpRequestData(
     forceEncrypted ??
     (socket instanceof tls.TLSSocket || (socket as any)?.encrypted === true);
 
+  const transportProtocol = isEncrypted ? "https:" : "http:";
+
   const isWebSocket = headers.upgrade?.toLowerCase() === "websocket";
-
-  const rawProtocol = isEncrypted ? "https:" : "http:";
-
-  const protocol = isWebSocket ? (isEncrypted ? "wss:" : "ws:") : rawProtocol;
 
   const rawHost = headers.host || "";
   const rawPath = req.url || "/";
 
-  const defaultPort = protocol === "https:" || protocol === "wss:" ? 443 : 80;
+  const rawUrl =
+    rawPath.startsWith("http://") || rawPath.startsWith("https://")
+      ? rawPath
+      : `${transportProtocol}//${rawHost}${rawPath}`;
 
-  let parsedUrl: URL;
+  const parsedUrl = new URL(rawUrl);
 
-  if (isWebSocket) {
-    const wsUrl = rawPath
-      .replace(/^http:\/\//, "ws://")
-      .replace(/^https:\/\//, "wss://");
-
-    parsedUrl = new URL(
-      wsUrl.startsWith("ws://") || wsUrl.startsWith("wss://")
-        ? wsUrl
-        : `${protocol}//${rawHost}${rawPath}`,
-    );
-  } else {
-    const rawUrl =
-      rawPath.startsWith("http://") || rawPath.startsWith("https://")
-        ? rawPath
-        : `${rawProtocol}//${rawHost}${rawPath}`;
-
-    parsedUrl = new URL(rawUrl);
-  }
-
-  const port = parsedUrl.port ? Number(parsedUrl.port) : defaultPort;
+  const port = parsedUrl.port ? Number(parsedUrl.port) : isEncrypted ? 443 : 80;
 
   return {
     protocol: parsedUrl.protocol,
@@ -80,7 +53,10 @@ export function parseHttpRequestData(
     port,
     path: parsedUrl.pathname + parsedUrl.search,
     fullUrl: parsedUrl.href,
+
     isEncrypted,
-    isWebSocket,
+
+    // Application/protocol semantics
+    applicationProtocol: isWebSocket ? "websocket" : "http",
   };
 }
