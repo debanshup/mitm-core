@@ -76,3 +76,6 @@
 ^(?:[a-z0-9-]+\.)*bing\.com$
 ^(?:[a-z0-9-]+\.)*api\.onedrive\.com$
 ^(?:[a-z0-9-]+\.)*my\.microsoftpersonalcontent\.com$
+
+
+^(?:[a-z0-9-]+\.)*pixabay\.com$
