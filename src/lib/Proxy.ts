@@ -242,7 +242,6 @@ export class Proxy extends TypedEventEmitter<ProxyEventMap> implements IProxy {
         scope,
         head,
       });
-      console.info("Emitted upgrade");
     });
 
     this.httpServer.on("error", async (err: any) => {
