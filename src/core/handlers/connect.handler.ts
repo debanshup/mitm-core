@@ -4,7 +4,6 @@ import { BaseHandler } from "./base/base.handler";
 import { ProxyUtils } from "../utils/ProxyUtils";
 import type { RequestScope } from "../scope/types";
 import { H1InboundBridge } from "../transport/http1/H1InboundBridge";
-import { normalizeHttpVersion } from "./utils/hNormalizer";
 import { getConfig } from "../../config.registry";
 import { proxyEventManager } from "../event/proxy-events/proxyEvents";
 import { pluginEventManager } from "../event/plugin-events/pluginEvents";
@@ -102,6 +101,7 @@ export class HandshakeHandler extends BaseHandler {
 
       const tlsSocket = new tls.TLSSocket(socket, {
         isServer: true,
+        rejectUnauthorized: false,
         secureContext,
         ALPNProtocols: [
           // "h2",
@@ -155,14 +155,12 @@ export class HandshakeHandler extends BaseHandler {
         if (isSettled) return;
         isSettled = true;
         clearTimeout(handshakeTimeout);
-
-        // const normalizedVersion = normalizeHttpVersion(tlsSocket.alpnProtocol);
-        const normalizedVersion = session.protocol.httpVersion
+        const httpVersion = session.protocol.httpVersion;
         try {
-          if (normalizedVersion === "h2") {
+          if (httpVersion === "h2") {
             // to be executed
             resolve();
-          } else if (normalizedVersion === "h1") {
+          } else if (httpVersion === "h1") {
             await H1InboundBridge.execute(scope, tlsSocket);
             resolve();
           } else {
