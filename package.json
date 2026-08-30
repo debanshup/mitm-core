@@ -43,9 +43,6 @@
   "scripts": {
     "dev": "tsx watch --inspect ./example/with-plugin/proxy.ts",
     "dev:I": "NODE_OPTIONS='--trace-warnings' tsx watch --inspect ./example/proxy.ts",
-    "profile:bubble": "npm run build && clinic bubbleprof -- node ./dist/example/proxy.js",
-    "profile:flame": "npm run clean && npm run build && clinic flame -- node ./dist/example/proxy.js",
-    "load-test": "autocannon --proxy http://localhost:8001 -c 5 -d 15 http://localhost:5000/test",
     "clean": "node -e \"fs.rmSync('dist', { recursive: true, force: true })\"",
     "typecheck": "tsc --noEmit",
     "lint": "prettier --check src",
@@ -68,9 +65,8 @@
     "commit-and-tag-version": "^12.7.1",
     "cross-env": "^10.1.0",
     "http-proxy-agent": "^9.1.0",
+    "https-proxy-agent": "^9.1.0",
     "mocha": "^11.3.0",
-    "node-forge": "^1.4.0",
-    "nodemon": "^3.1.11",
     "prettier": "^3.8.2",
     "tsup": "^8.5.1",
     "tsx": "^4.21.0",
@@ -85,6 +81,7 @@
   },
   "dependencies": {
     "lru-cache": "^11.2.4",
+    "node-forge": "^1.4.0",
     "piscina": "^5.1.4",
     "ws": "8.21.3"
   },
