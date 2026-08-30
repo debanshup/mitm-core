@@ -13,6 +13,8 @@ export class UpstreamInitiator {
     maxFreeSockets: 256,
     scheduling: "fifo",
     timeout: 60000,
+    rejectUnauthorized: false,
+    checkServerIdentity: () => undefined,
   });
 
   private static httpAgent = new http.Agent({
@@ -67,7 +69,7 @@ export class UpstreamInitiator {
         agent,
 
         timeout: 30000,
-        
+
         maxHeaderSize: 128 * 1024,
       });
     } catch (syncError) {
