@@ -127,7 +127,6 @@ export class Middleware {
         );
         if (!socket.destroyed) socket.destroy();
       }
-      console.info("caught upgrade")
     });
 
     // -- upstream emitted events ------------------
