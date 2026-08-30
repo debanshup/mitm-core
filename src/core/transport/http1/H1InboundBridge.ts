@@ -37,6 +37,24 @@ export class H1InboundBridge {
       socket.destroy();
     });
 
+    this.h1Server.on("upgrade", async (req, clientSocket, head) => {
+      const connectionScope = (clientSocket as any)
+        .__connectionScope as RequestScope;
+
+      if (!connectionScope) {
+        clientSocket.destroy();
+        return;
+      }
+
+      await connectionEvents.emitAsync("WS:UPGRADE", {
+        req,
+        socket: clientSocket,
+        scope: connectionScope,
+        head,
+      });
+
+    });
+
     this.h1Server.on("request", async (req, res) => {
       const connectionScope = (req.socket as any)
         .__connectionScope as RequestScope;
@@ -45,7 +63,7 @@ export class H1InboundBridge {
         req.destroy();
         return;
       }
- 
+
       const requestScope: RequestScope = {
         session: connectionScope.session,
         request: {
@@ -69,7 +87,6 @@ export class H1InboundBridge {
       };
 
       try {
- 
         const cleanedHeaders: Record<string, any> = {};
 
         for (const [key, value] of Object.entries(req.headers)) {
@@ -110,7 +127,6 @@ export class H1InboundBridge {
     scopeTemplate: RequestScope,
     tlsSocket: TLSSocket,
   ): Promise<void> {
- 
     (tlsSocket as any).__connectionScope = scopeTemplate;
     this.h1Server.emit("connection", tlsSocket);
   }
