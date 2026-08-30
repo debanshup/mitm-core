@@ -44,6 +44,7 @@ export class WSUpstreamInitiator {
       headers: requestHeaders,
       timeout: 60_000,
       maxHeaderSize: 128 * 1024,
+      rejectUnauthorized: false,
     });
 
     upstreamReq.setNoDelay?.(true);
