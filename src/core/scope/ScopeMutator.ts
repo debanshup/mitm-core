@@ -144,10 +144,24 @@ export class ScopeMutator {
     request.client.headers = req.headers;
 
     const { host, fullUrl } = parseHttpRequestData(req);
+    let targetUrl: URL;
+    try {
+      targetUrl = new URL(fullUrl);
+    } catch {
+      targetUrl = new URL(req.url || "/", `http://${host}`);
+    }
+
+    const isSecure =
+      (socket as any).encrypted === true ||
+      (req.socket as any).encrypted === true;
+
+    const protocol = isSecure ? "wss" : "ws";
+
+    targetUrl.protocol = protocol;
     request.target.originalHost = host;
     request.target.originalUrl = fullUrl;
     request.target.host = host;
-    request.target.url = fullUrl;
+    request.target.url = targetUrl.toString();
 
     request.webSocket = {
       isUpgraded: false,
