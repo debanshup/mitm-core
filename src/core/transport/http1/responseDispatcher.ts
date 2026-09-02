@@ -1,6 +1,6 @@
 import type { ClientRequest, IncomingMessage } from "http";
 import type { RequestScope } from "../../scope/types";
-import type { ResponseCacheProcessor } from "../../handlers/utils/ResponseCacheProcessor";
+import type { ResponseCacheProcessor } from "../../cache/ResponseCacheProcessor";
 import { StreamingResponseHandler } from "./streamingResponseHandler";
 import { ScopeMutator } from "../../scope/ScopeMutator";
 const RES_HOP_HEADERS = new Set([
@@ -26,16 +26,13 @@ export class ResponseDispatcher {
       statusCode === 101 &&
       upstreamRes.headers["upgrade"]?.toLowerCase() === "websocket";
 
+      // console.info(isWebSocketUpgrade, upstreamRes.statusCode, scope.request.target.url)
+
     const isNoContent =
       !isWebSocketUpgrade &&
       (statusCode === 204 ||
         statusCode === 304 ||
         (statusCode >= 100 && statusCode < 200));
-
-    if (isWebSocketUpgrade) {
-      // WS handler later
-      return;
-    }
 
     if (isNoContent) {
       const res = scope.request.client.res;
