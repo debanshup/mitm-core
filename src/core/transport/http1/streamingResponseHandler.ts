@@ -1,6 +1,6 @@
 import type { IncomingMessage, ClientRequest } from "http";
 import type { RequestScope } from "../../scope/types";
-import type { ResponseCacheProcessor } from "../../handlers/utils/ResponseCacheProcessor";
+import type { ResponseCacheProcessor } from "../../cache/ResponseCacheProcessor";
 import { ProxyUtils } from "../../utils/ProxyUtils";
 import { ScopeMutator } from "../../scope/ScopeMutator";
 import { PassThrough } from "stream";
