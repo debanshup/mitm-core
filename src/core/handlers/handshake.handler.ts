@@ -30,14 +30,12 @@ export class HandshakeHandler extends BaseHandler {
       }
       return;
     }
-    // Inside PipelineCompiler.ts or wherever the phase loop runs
     try {
       await pluginEventManager.emitAsync("proxy:client-before-handshake", {
         scope,
       });
     } catch (err) {
       if (err instanceof PipelineAbortSignal) {
-        // Graceful halt! Stop processing this request.
         return;
       }
     }
@@ -64,7 +62,6 @@ export class HandshakeHandler extends BaseHandler {
     });
 
     if (session.head && session.head.length > 0) {
-      // console.info("unshifting head")
       socket.unshift(session.head);
       session.head = null;
     }
@@ -104,8 +101,8 @@ export class HandshakeHandler extends BaseHandler {
         rejectUnauthorized: false,
         secureContext,
         ALPNProtocols: [
-          // "h2",
           "http/1.1",
+          // "h2",
         ],
         SNICallback: (servername, cb) => {
           (async () => {
@@ -177,12 +174,12 @@ export class HandshakeHandler extends BaseHandler {
         isSettled = true;
         clearTimeout(handshakeTimeout);
 
-        // if (err.code === "HPE_HEADER_OVERFLOW" && err.rawPacket) {
-        //   console.error(
-        //     "Header Overflow Packet Length:",
-        //     Buffer.from(err.rawPacket).length,
-        //   );
-        // }
+        if (err.code === "HPE_HEADER_OVERFLOW" && err.rawPacket) {
+          console.warn(
+            "Header Overflow Packet Length:",
+            Buffer.from(err.rawPacket).length,
+          );
+        }
 
         // Suppress normal client aborts, log real errors
         if (err.code !== "ECONNRESET") {
