@@ -1,10 +1,10 @@
 import type { IncomingMessage } from "http";
-import type { ProxyConfig } from "../../../lib/Proxy";
+import type { ProxyConfig } from "../../lib/Proxy";
 import {
   ResponseCache,
   type CachedResponse,
-} from "../../cache/ResponseCache";
-import type { RequestScope } from "../../scope/types";
+} from "./ResponseCache";
+import type { RequestScope } from "../scope/types";
 
 // Prevent V8 OOM crashes if a stream is infinitely large
 const MAX_CACHE_MEMORY_LIMIT = 5 * 1024 * 1024; // 5MB limit per response
@@ -21,7 +21,7 @@ export class ResponseCacheProcessor {
     private config: ProxyConfig,
   ) {
     if (this.config.useResponseCache) {
-      this.cacheKey = ResponseCache.generateKey(this.scope.request.client.req);
+      this.cacheKey = ResponseCache.generateKey(this.scope.request.client.req!);
       this.cachedRes = ResponseCache.get(this.cacheKey)!;
     }
   }
