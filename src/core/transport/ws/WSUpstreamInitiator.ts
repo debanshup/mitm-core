@@ -1,5 +1,6 @@
 import type { ClientRequest } from "http";
 import type { RequestScope } from "../../scope/types";
+import crypto from "crypto";
 import http from "http";
 import https from "https";
 export class WSUpstreamInitiator {
@@ -19,24 +20,29 @@ export class WSUpstreamInitiator {
 
     const requestModule = isSecure ? https : http;
 
-    const requestHeaders: Record<string, string | string[]> = {};
+    const clientReq = scope.request.client.req!;
 
-    for (const [key, value] of Object.entries(
-      request.client.req?.headers ?? {},
-    )) {
-      if (value !== undefined) {
-        requestHeaders[key] = value;
-      }
+    const requestHeaders: Record<string, string> = {
+      host: targetUrl.host,
+      connection: "Upgrade",
+      upgrade: "websocket",
+      "sec-websocket-version": "13",
+      "sec-websocket-key": crypto.randomBytes(16).toString("base64"),
+    };
+
+    if (clientReq.headers.origin) {
+      requestHeaders.origin = clientReq.headers.origin;
     }
 
-    // The Host header must represent the upstream server.
-    requestHeaders.host = targetUrl.host;
+    if (clientReq.headers["user-agent"]) {
+      requestHeaders["user-agent"] = clientReq.headers["user-agent"];
+    }
 
-    // Explicitly establish the WebSocket handshake.
-    requestHeaders.connection = "Upgrade";
-    requestHeaders.upgrade = "websocket";
+    if (clientReq.headers.cookie) {
+      requestHeaders.cookie = clientReq.headers.cookie;
+    }
 
-    const upstreamReq = requestModule.request({
+    const requestOptions: http.RequestOptions | https.RequestOptions = {
       hostname: targetUrl.hostname,
       port: targetUrl.port || (isSecure ? 443 : 80),
       method: request.client.req?.method || "GET",
@@ -44,12 +50,17 @@ export class WSUpstreamInitiator {
       headers: requestHeaders,
       timeout: 60_000,
       maxHeaderSize: 128 * 1024,
-      rejectUnauthorized: false,
-    });
+    };
 
-    upstreamReq.setNoDelay?.(true);
+    if (isSecure) {
+      Object.assign(requestOptions, {
+        rejectUnauthorized: false, // TODO: add this in proxy config
+        servername: targetUrl.hostname,
+        ALPNProtocols: ["http/1.1"],
+      });
+    }
 
-    upstreamReq.end();
+    const upstreamReq = requestModule.request(requestOptions);
 
     return upstreamReq;
   }
