@@ -1,5 +1,3 @@
-// src/core/transport/ws/WSOutboundBridge.ts
-
 import WebSocket, { WebSocketServer } from "ws";
 import type { RequestScope } from "../../scope/types";
 import { pluginEventManager } from "../../event/plugin-events/pluginEvents";
@@ -24,14 +22,14 @@ export class WSOutboundBridge {
     const targetUrl = new URL(upstreamUrl);
     const upstreamReq = WSUpstreamInitiator.init(targetUrl, scope);
 
-    await pluginEventManager.emitAsync("proxy:upstream-dispatch", { scope });
-
     // CATCH HANDSHAKE FAILURE
     upstreamReq.on("error", (err) => {
-      console.error(
-        `[WS_UPSTREAM_FAILED] Target: ${targetUrl.host} |`,
-        err.message,
-      );
+      console.error("[WS_UPSTREAM_FAILED]", {
+        target: targetUrl.href,
+        code: (err as NodeJS.ErrnoException).code,
+        message: err.message,
+        stack: err.stack,
+      });
       if (clientSocket.writable && !clientSocket.destroyed) {
         clientSocket.write(
           "HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\n\r\n",
@@ -45,10 +43,6 @@ export class WSOutboundBridge {
     upstreamReq.on(
       "upgrade",
       async (upstreamRes, upstreamSocket, upstreamHead) => {
-        console.info(
-          `[WS_TUNNEL_ESTABLISHED] Active Upgrade Route: ${targetUrl.host}`,
-        );
-
         if ((upstreamSocket as any).setNoDelay)
           (upstreamSocket as any).setNoDelay(true);
         if ((clientSocket as any).setNoDelay)
@@ -77,7 +71,10 @@ export class WSOutboundBridge {
         };
 
         try {
-          const proxyWSS = new WebSocketServer({ noServer: true });
+          const proxyWSS = new WebSocketServer({
+            noServer: true,
+            perMessageDeflate: true,
+          });
           const subprotocol = upstreamRes.headers["sec-websocket-protocol"];
           const protocolString = Array.isArray(subprotocol)
             ? subprotocol[0]
@@ -91,6 +88,7 @@ export class WSOutboundBridge {
 
           const upstreamWS = new WebSocket(null as any, protocolString, {
             autoPong: true,
+            perMessageDeflate: true,
           });
           (upstreamWS as any)._isServer = false;
 
@@ -169,6 +167,10 @@ export class WSOutboundBridge {
         }
       },
     );
+
+    await pluginEventManager.emitAsync("proxy:upstream-dispatch", { scope });
+
+    upstreamReq.end();
   }
 
   private static async handleClientMessage(
