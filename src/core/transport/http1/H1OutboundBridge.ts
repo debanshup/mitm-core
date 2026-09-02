@@ -1,7 +1,7 @@
 import type { RequestScope } from "../../scope/types";
 import type { ProxyConfig } from "../../../lib/Proxy";
 
-import { ResponseCacheProcessor } from "../../handlers/utils/ResponseCacheProcessor";
+import { ResponseCacheProcessor } from "../../cache/ResponseCacheProcessor";
 import { ScopeMutator } from "../../scope/ScopeMutator";
 import { connectionEvents } from "../../event/connection-events/connectionEvents";
 import { pluginEventManager } from "../../event/plugin-events/pluginEvents";
