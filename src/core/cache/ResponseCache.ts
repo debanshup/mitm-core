@@ -1,6 +1,6 @@
 import { LRUCache } from "lru-cache";
 
-import http, { type IncomingHttpHeaders } from "http";
+import http, { IncomingMessage, type IncomingHttpHeaders } from "http";
 
 export type CachedResponse = {
   status: number;
@@ -31,7 +31,7 @@ export class ResponseCache {
     // console.info(key);
     this.cache.set(key, value);
   }
-  static generateKey(req: any) {
+  static generateKey(req: IncomingMessage) {
     const host = req.headers?.host;
     const encoding = req.headers["accept-encoding"] || "identity";
     return `${req.method}:${host}${req.url}:${encoding}`;
