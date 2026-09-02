@@ -16,7 +16,6 @@ export class ResponseHandler extends BaseHandler {
   async handle(scope: RequestScope) {
     return new Promise<void>((resolve, reject) => {
       const { session } = scope;
-
       if (session.protocol.httpVersion === "h1") {
         H1OutboundBridge.execute(scope, this.config, resolve, reject);
       } else if (session.protocol.httpVersion === "h2") {

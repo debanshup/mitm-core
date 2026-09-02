@@ -2,7 +2,8 @@ import { BaseHandler } from "./base/base.handler";
 import type { RequestScope } from "../scope/types";
 import { UpstreamInitiator} from "../transport/http1/UpstreamInitiator";
 import { getConfig } from "../../config.registry";
-import { connectionEvents } from "../event/connection-events/connectionEvents";
+import { pluginEventManager } from "../event/plugin-events/pluginEvents";
+import { ScopeMutator } from "../scope/ScopeMutator";
 export class RequestHandler extends BaseHandler {
   readonly phase = "request";
   readonly config = getConfig();
@@ -91,11 +92,14 @@ export class RequestHandler extends BaseHandler {
       }
     }
 
- 
-    const h1UpstreamReq = await UpstreamInitiator.init(targetUrl, scope);
-    await connectionEvents.emitAsync("UPSTREAM:INIT", {
+    const h1UpstreamReq = await UpstreamInitiator.initH1UpstreamReq(
+      targetUrl,
       scope,
-      upstreamReq: h1UpstreamReq!,
-    });
+    );
+    const success = ScopeMutator.applyUpstreamInitState(scope, h1UpstreamReq);
+      if (!success) {
+        return;
+      }
+      await pluginEventManager.emitAsync("proxy:upstream-dispatch", { scope });
   }
 }
