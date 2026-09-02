@@ -26,15 +26,6 @@ export class UpstreamInitiator {
     timeout: 60000,
   });
 
-  public static async init(targetUrl: URL, scope: RequestScope) {
-    const { session } = scope;
-    if (session.protocol.httpVersion === "h1") {
-      return this.initH1UpstreamReq(targetUrl, scope);
-    }
-    // implement h2/ h3 later
-    return undefined;
-  }
-
   public static async initH1UpstreamReq(targetUrl: URL, scope: RequestScope) {
     const { request } = scope;
     const clientReq = request.client.req;
@@ -147,7 +138,7 @@ export class UpstreamInitiator {
     const { request } = scope;
 
     console.error(
-      `[Stream Error] Upstream Pathway Fault: ${err.message} -> ${targetUrl.href}`,
+      `[Stream Error] Upstream Pathway Fault: ${err.message} | host: ${targetUrl.host}`,
     );
 
     const res = request.client.res;
