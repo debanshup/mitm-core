@@ -90,7 +90,6 @@ export class Middleware {
       try {
         const success = ScopeMutator.applyHttpsDecryptedState(scope);
         if (!success) return;
-
         await pluginEventManager.emitAsync("proxy:client-https-request", {
           scope,
         });
@@ -111,7 +110,7 @@ export class Middleware {
     connectionEvents.on("WS:UPGRADE", async ({ head, req, scope, socket }) => {
       try {
         const wsScope = scope || ScopeMutator.initializeSessionScope(socket);
-        
+
         const success = ScopeMutator.applyUpgradeState(
           wsScope,
           req,
@@ -129,17 +128,8 @@ export class Middleware {
       }
     });
 
-    // -- upstream emitted events ------------------
-
-    connectionEvents.on("UPSTREAM:INIT", async ({ scope, upstreamReq }) => {
-      const success = ScopeMutator.applyUpstreamInitState(scope, upstreamReq);
-      if (!success) {
-        return;
-      }
-      await pluginEventManager.emitAsync("proxy:upstream-dispatch", { scope });
-    });
-
     connectionEvents.on("UPSTREAM:RESPONSE", async ({ scope, upstreamRes }) => {
+      
       const success = ScopeMutator.applyResponseState(scope, upstreamRes);
       if (!success) {
         return;
