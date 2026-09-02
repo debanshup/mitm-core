@@ -182,7 +182,6 @@ export class ScopeMutator {
     }
     scope.request.upstream.req = upstreamReq;
     scope.lifecycle.nextPhase = "response";
-
     return true;
   }
 
