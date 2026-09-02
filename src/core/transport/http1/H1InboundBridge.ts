@@ -30,10 +30,16 @@ export class H1InboundBridge {
 
   static {
     this.h1Server.on("clientError", (err, socket) => {
-      console.error("[H1InboundBridge] Client HTTP Parser Fault:", err.message);
-      if (socket.writable) {
-        socket.end("HTTP/1.1 400 Bad Request\r\n\r\n");
+      if ((err as any).code === "ECONNRESET" || !socket.writable) {
+        socket.destroy();
+        return;
       }
+      console.error(
+        "[H1InboundBridge] Client HTTP Parser Fault:",
+        err.message,
+        (err as any).code,
+      );
+      socket.end("HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n");
       socket.destroy();
     });
 
@@ -52,7 +58,6 @@ export class H1InboundBridge {
         scope: connectionScope,
         head,
       });
-
     });
 
     this.h1Server.on("request", async (req, res) => {
@@ -128,6 +133,9 @@ export class H1InboundBridge {
     tlsSocket: TLSSocket,
   ): Promise<void> {
     (tlsSocket as any).__connectionScope = scopeTemplate;
+    tlsSocket.once("close", () => {
+      delete (tlsSocket as any).__connectionScope;
+    });
     this.h1Server.emit("connection", tlsSocket);
   }
 }
