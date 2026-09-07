@@ -73,7 +73,7 @@ export class H1OutboundBridge {
       if (isSettled) return;
       isSettled = true;
       try {
-        ScopeMutator.failPipeline(scope, err);
+        ScopeMutator.failPipeline(scope);
 
         if (!upstreamReq.destroyed) upstreamReq.destroy();
 

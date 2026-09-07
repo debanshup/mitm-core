@@ -54,7 +54,7 @@ export class Middleware {
         await Pipeline.run(scope);
       } catch (err) {
         console.error(`[Middleware Fatal] Pipeline crash on HTTP:PLAIN:`, err);
-        ScopeMutator.failPipeline(scope, err);
+        ScopeMutator.failPipeline(scope);
         if (!res.destroyed) res.destroy();
       }
     });
@@ -79,7 +79,7 @@ export class Middleware {
         await Pipeline.run(scope);
       } catch (err) {
         console.error(`[Middleware Fatal] Pipeline crash on CONNECT:`, err);
-        ScopeMutator.failPipeline(scope, err);
+        ScopeMutator.failPipeline(scope);
         if (!socket.destroyed) socket.destroy();
       }
     });
@@ -101,7 +101,7 @@ export class Middleware {
           `[Middleware Fatal] Pipeline crash on HTTPS:DECRYPTED:`,
           err,
         );
-        ScopeMutator.failPipeline(scope, err);
+        ScopeMutator.failPipeline(scope);
         if (!scope.request.client.res?.destroyed)
           scope.request.client.res?.destroy();
       }
@@ -129,7 +129,6 @@ export class Middleware {
     });
 
     connectionEvents.on("UPSTREAM:RESPONSE", async ({ scope, upstreamRes }) => {
-      
       const success = ScopeMutator.applyResponseState(scope, upstreamRes);
       if (!success) {
         return;

@@ -96,7 +96,7 @@ export class RequestHandler extends BaseHandler {
       targetUrl,
       scope,
     );
-    const success = ScopeMutator.applyUpstreamInitState(scope, h1UpstreamReq);
+    const success =  ScopeMutator.applyUpstreamInitState(scope, h1UpstreamReq);
       if (!success) {
         return;
       }

@@ -1,23 +1,33 @@
 import * as http from "http";
 import tls from "tls";
 import net from "net";
- 
 export function parseConnectData(req: http.IncomingMessage) {
-  if (!req || !req.url) {
+  if (!req?.url) {
     return {
       host: "",
       port: null,
       url: "",
     };
   }
-  const [host, port] = req.url!.split(":");
-  return {
-    host: host!,
-    port: port ? Number(port) : 443,
-    url: req.url!,
-  };
-}
 
+  const target = req.url;
+
+  try {
+    const url = new URL(`http://${target}`);
+
+    return {
+      host: url.hostname,
+      port: url.port ? Number(url.port) : 443,
+      url: target,
+    };
+  } catch {
+    return {
+      host: "",
+      port: null,
+      url: target,
+    };
+  }
+}
 
 export function parseHttpRequestData(
   req: http.IncomingMessage,

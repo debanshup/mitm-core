@@ -74,7 +74,7 @@ export class ResponseDispatcher {
         scope.request.target.originalUrl,
       );
 
-      ScopeMutator.failPipeline(scope, error as Error);
+      ScopeMutator.failPipeline(scope);
     }
   }
 }

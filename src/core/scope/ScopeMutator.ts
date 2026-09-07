@@ -173,7 +173,7 @@ export class ScopeMutator {
     return true;
   }
 
-  public static async applyUpstreamInitState(
+  public static applyUpstreamInitState(
     scope: RequestScope,
     upstreamReq: ClientRequest,
   ) {
@@ -216,7 +216,7 @@ export class ScopeMutator {
   /**
    * Safely transitions the lifecycle to an error state.
    */
-  public static failPipeline(scope: RequestScope, err: Error | unknown): void {
+  public static failPipeline(scope: RequestScope): void {
     scope.lifecycle.state.set("error", true);
     // Explicitly halt the pipeline on fatal errors
     scope.lifecycle.nextPhase = undefined;

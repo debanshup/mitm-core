@@ -19,10 +19,7 @@ export class StreamingResponseHandler {
       if (!upstreamRes.destroyed) upstreamRes.destroy();
       if (!upstreamReq.destroyed) upstreamReq.destroy();
       ScopeMutator.failPipeline(
-        scope,
-        new Error(
-          "ERR_STREAM_PREMATURE_CLOSE: Client disconnected before streaming initialization",
-        ),
+        scope
       );
       return;
     }
@@ -62,7 +59,7 @@ export class StreamingResponseHandler {
         );
       }
 
-      ScopeMutator.failPipeline(scope, error);
+      ScopeMutator.failPipeline(scope);
 
       if (!res.writableEnded && !res.destroyed) {
         res.destroy(error);
