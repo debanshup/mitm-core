@@ -53,13 +53,11 @@ export default class Pipeline {
       console.info(
         `[Pipeline] Routing WS upgrade to Outbound Bridge: ${request.target.url}`,
       );
-      
+
       lifecycle.nextPhase = undefined;
       await WSOutboundBridge.execute(scope);
       return;
     }
-
-
     let executionJumps = 0;
     const MAX_JUMPS = 10;
 
@@ -160,5 +158,9 @@ export default class Pipeline {
         }
       }
     }
+  }
+
+  static setPipelineForTest(phase: Phase, handlers: BaseHandler[]): void {
+    this.pipelines[phase] = handlers;
   }
 }
