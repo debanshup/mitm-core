@@ -24,6 +24,7 @@ export class WatchableRuleFile<T> {
   private rules: T;
   private reloadTimer: NodeJS.Timeout | null = null;
   private pendingSaves = new Set<string>();
+  private watcher?: fs.FSWatcher;
   public readonly filePath: string;
   constructor(
     public readonly name: string,
@@ -49,7 +50,7 @@ export class WatchableRuleFile<T> {
 
     this.loadRules();
 
-    fs.watch(this.filePath, (event) => {
+    this.watcher = fs.watch(this.filePath, (event) => {
       if (event === "change") this.triggerDebounce();
     });
   }
@@ -103,5 +104,14 @@ export class WatchableRuleFile<T> {
     } catch (error) {
       console.error(`[AUTO_SAVE_ERR] ${this.name}`, error);
     }
+  }
+  public destroy(): void {
+    if (this.reloadTimer) {
+      clearTimeout(this.reloadTimer);
+      this.reloadTimer = null;
+    }
+
+    this.watcher?.close();
+    this.watcher = undefined;
   }
 }
