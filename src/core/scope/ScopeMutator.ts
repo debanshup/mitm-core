@@ -5,24 +5,19 @@ import {
   parseConnectData,
 } from "../../utils/parser/parseReqData";
 import { ContextManager } from "./ContextManager";
-import type { RequestScope } from "./types";
+import type { RequestScope, SessionContext } from "./types";
 
 export class ScopeMutator {
   /**
    * Initializes the root scope for a raw TCP socket connection.
    */
-  public static initializeSessionScope(socket: Duplex): RequestScope {
+  public static initializeSessionContext(socket: Duplex): SessionContext {
     socket.on("error", () => {
       // fail-safe: prevent unhandled socket errors from crashing the process
     });
 
     const session = ContextManager.getOrCreateSessionContext(socket);
-    const request = ContextManager.getOrCreateRequestContext(session);
-    const lifecycle = ContextManager.getOrCreateRequestLifecycle(
-      request.requestId,
-    );
-
-    return { session, request, lifecycle };
+    return session;
   }
 
   /**
@@ -212,6 +207,8 @@ export class ScopeMutator {
   public static finishPipeline(scope: RequestScope): void {
     scope.lifecycle.state.set("request.finished", true);
     scope.lifecycle.nextPhase = undefined;
+
+    ContextManager.destroyRequestLifecycle(scope.request.requestId);
   }
   /**
    * Safely transitions the lifecycle to an error state.
@@ -220,5 +217,7 @@ export class ScopeMutator {
     scope.lifecycle.state.set("error", true);
     // Explicitly halt the pipeline on fatal errors
     scope.lifecycle.nextPhase = undefined;
+
+    ContextManager.destroyRequestLifecycle(scope.request.requestId);
   }
 }
