@@ -4,7 +4,7 @@ import type { ClientRequest, IncomingMessage, ServerResponse } from "http";
 
 import { TypedEventEmitter } from "../EventBus";
 
-import type { RequestScope } from "../../scope/types";
+import type { RequestScope, SessionContext } from "../../scope/types";
 
 export interface ConnectionEventMap {
   /**
@@ -13,7 +13,6 @@ export interface ConnectionEventMap {
   TCP: [
     payload: {
       socket: Socket;
-      scope: RequestScope;
     },
   ];
 
