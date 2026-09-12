@@ -16,7 +16,7 @@ export function parseConnectData(req: http.IncomingMessage) {
     const url = new URL(`http://${target}`);
 
     return {
-      host: url.hostname,
+      host: url.hostname.replace(/^\[|\]$/g, ""),
       port: url.port ? Number(url.port) : 443,
       url: target,
     };
