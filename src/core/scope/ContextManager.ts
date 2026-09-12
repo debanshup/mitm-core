@@ -30,6 +30,38 @@ export class ContextManager {
     return `${connectionId}:${streamId}`;
   }
 
+  private static createRequestContext(
+    sessionContext: SessionContext,
+    req?: IncomingMessage,
+    requestKey?: string,
+  ): RequestContext {
+    const context: RequestContext = {
+      requestId: crypto.randomUUID(),
+      client: {
+        req,
+        res: req ? (req as any).res : undefined,
+        method: req?.method,
+        url: req?.url,
+        headers: req?.headers,
+      },
+      upstream: {},
+      target: {
+        originalUrl: req?.url,
+        originalHost: req?.headers.host,
+      },
+    };
+
+    if (requestKey) {
+      this.requestIndex.set(requestKey, context);
+
+      sessionContext.socket.once("close", () => {
+        this.requestIndex.delete(requestKey);
+      });
+    }
+
+    return context;
+  }
+
   public static setContext(
     socket: Stream.Duplex | Socket,
     context: SessionContext,
@@ -91,6 +123,10 @@ export class ContextManager {
     req?: IncomingMessage,
     streamId: string | number = "h1",
   ): RequestContext {
+    if (streamId === "h1" && req) {
+      return this.createRequestContext(sessionContext, req);
+    }
+
     const requestKey = this.getRequestKey(
       sessionContext.connectionId,
       streamId,
@@ -101,34 +137,7 @@ export class ContextManager {
     if (existingContext) {
       return existingContext;
     } else {
-      const context: RequestContext = {
-        requestId: crypto.randomUUID(),
-
-        client: {
-          req,
-          res: req ? (req as any).res : undefined,
-          method: req?.method,
-          url: req?.url,
-          headers: req?.headers,
-        },
-
-        upstream: {},
-
-        target: {
-          originalUrl: req?.url,
-          originalHost: req?.headers.host,
-        },
-      };
-
-      this.requestIndex.set(requestKey, context);
-      sessionContext.socket.once("close", () =>
-        // for h1 only
-        {
-          this.requestIndex.delete(requestKey);
-        },
-      );
-
-      return context;
+      return this.createRequestContext(sessionContext, req, requestKey);
     }
   }
 
@@ -179,7 +188,7 @@ export class ContextManager {
    * CRITICAL: Must be called when the proxy finishes serving the request
    * or when the socket abruptly closes to prevent OOM memory leaks.
    */
-  private static destroyRequestLifeCycle(requestId: string): void {
+  public static destroyRequestLifecycle(requestId: string): void {
     this.requestLifeCycleIndex.delete(requestId);
   }
 }
