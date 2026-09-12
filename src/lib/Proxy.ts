@@ -178,7 +178,6 @@ export class Proxy extends TypedEventEmitter<ProxyEventMap> implements IProxy {
     super();
 
     this.httpServer = options.server || http.createServer({ keepAlive: true });
-
     this.config = {
       useCertificateCache: options.useCertificateCache ?? true,
       useResponseCache: options.useResponseCache ?? false,
@@ -200,12 +199,8 @@ export class Proxy extends TypedEventEmitter<ProxyEventMap> implements IProxy {
   private bindAllEvents() {
     this.httpServer.on("connection", async (socket) => {
       connectionManager.track(socket);
-
-      const scope: RequestScope = ContextManager.getOrCreateScope(socket);
-
       await connectionEvents.emitAsync("TCP", {
         socket,
-        scope,
       });
     });
 
@@ -213,7 +208,7 @@ export class Proxy extends TypedEventEmitter<ProxyEventMap> implements IProxy {
       const scope: RequestScope = ContextManager.getOrCreateScope(socket);
 
       scope.request.client.req = req;
-
+      
       connectionEvents.emit("CONNECT", {
         req,
         socket,
