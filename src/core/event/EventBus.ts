@@ -36,7 +36,13 @@ export class TypedEventEmitter<T extends object> extends EventEmitter {
   }
 
   override removeAllListeners(event?: keyof T & (string | symbol)): this {
-    return super.removeAllListeners(event as string | symbol);
+      if (event === undefined) {
+        super.removeAllListeners();
+        return this;
+      }
+
+      super.removeAllListeners(event);
+      return this;
   }
 
   /**
