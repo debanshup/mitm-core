@@ -27,15 +27,10 @@ export class Middleware {
     } else {
       return;
     }
-
-    // ------------------- proxy emitted events ------------------
-
     connectionEvents.on("TCP", async ({ socket }) => {
       try {
-        const scope = ScopeMutator.initializeSessionScope(socket);
+        ScopeMutator.initializeSessionContext(socket);
         await proxyEventManager.emitAsync("connection:open", { socket });
-
-        await Pipeline.run(scope);
       } catch (err) {
         throw err;
       }
@@ -84,7 +79,6 @@ export class Middleware {
       }
     });
 
-    // ------------------- h1Inbound emitted events ------------------
 
     connectionEvents.on("HTTPS:DECRYPTED", async ({ scope }) => {
       try {
@@ -109,7 +103,7 @@ export class Middleware {
 
     connectionEvents.on("WS:UPGRADE", async ({ head, req, scope, socket }) => {
       try {
-        const wsScope = scope || ScopeMutator.initializeSessionScope(socket);
+        const wsScope = scope;
 
         const success = ScopeMutator.applyUpgradeState(
           wsScope,
