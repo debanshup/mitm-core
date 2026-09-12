@@ -6,6 +6,7 @@ import type { RequestScope } from "../../../src/core/scope/types";
 import { ScopeMutator } from "../../../src/core/scope/ScopeMutator";
 import { Duplex } from "node:stream";
 import type { ClientRequest, IncomingMessage, ServerResponse } from "node:http";
+import { ContextManager } from "../../../src/core/scope/ContextManager";
 
 function createScope(): RequestScope {
   return {
@@ -31,6 +32,15 @@ function createScope(): RequestScope {
       },
     },
   };
+}
+
+function createSocket() {
+  return new Duplex({
+    read() {},
+    write(_chunk, _encoding, callback) {
+      callback();
+    },
+  });
 }
 
 describe("ScopeMutator", () => {
@@ -67,6 +77,20 @@ describe("ScopeMutator", () => {
 
       assert.equal(scope.lifecycle.nextPhase, undefined);
     });
+    it("should destroy the request lifecycle when finishing the pipeline", () => {
+      const socket = createSocket();
+      const scope = ContextManager.getOrCreateScope(socket);
+
+      const originalLifecycle = scope.lifecycle;
+
+      ScopeMutator.finishPipeline(scope);
+
+      const newLifecycle = ContextManager.getOrCreateRequestLifecycle(
+        scope.request.requestId,
+      );
+
+      assert.notEqual(newLifecycle, originalLifecycle);
+    });
   });
 
   describe("failPipeline()", () => {
@@ -102,47 +126,47 @@ describe("ScopeMutator", () => {
 
       assert.equal(scope.lifecycle.nextPhase, undefined);
     });
+    it("should destroy the request lifecycle when failing the pipeline", () => {
+      const socket = createSocket();
+      const scope = ContextManager.getOrCreateScope(socket);
+
+      const originalLifecycle = scope.lifecycle;
+
+      ScopeMutator.failPipeline(scope);
+
+      const newLifecycle = ContextManager.getOrCreateRequestLifecycle(
+        scope.request.requestId,
+      );
+
+      assert.notEqual(newLifecycle, originalLifecycle);
+    });
   });
 
   describe("initializeSessionScope()", () => {
-    it("should create a complete request scope", () => {
-      const socket = new Duplex({
-        read() {},
-        write(_chunk, _encoding, callback) {
-          callback();
-        },
+    describe("initializeSessionContext()", () => {
+      it("should create a session context", () => {
+        const socket = createSocket();
+
+        const session = ScopeMutator.initializeSessionContext(socket);
+
+        assert.ok(session);
+        assert.equal(session.socket, socket);
+        assert.ok(session.connectionId);
+
+        socket.destroy();
       });
 
-      const scope = ScopeMutator.initializeSessionScope(socket);
+      it("should return the same session for the same socket", () => {
+        const socket = createSocket();
 
-      assert.ok(scope.session);
-      assert.ok(scope.request);
-      assert.ok(scope.lifecycle);
+        const first = ScopeMutator.initializeSessionContext(socket);
 
-      assert.equal(scope.session.socket, socket);
+        const second = ScopeMutator.initializeSessionContext(socket);
 
-      assert.ok(scope.session.connectionId);
-      assert.ok(scope.request.requestId);
+        assert.equal(first, second);
 
-      assert.ok(scope.lifecycle.state);
-      assert.equal(scope.lifecycle.isHijacked, false);
-
-      socket.destroy();
-    });
-    it("should create distinct session and request contexts", () => {
-      const socket = new Duplex({
-        read() {},
-        write(_chunk, _encoding, callback) {
-          callback();
-        },
+        socket.destroy();
       });
-
-      const scope = ScopeMutator.initializeSessionScope(socket);
-
-      assert.notEqual(scope.session, scope.request);
-      assert.notEqual(scope.request, scope.lifecycle);
-
-      socket.destroy();
     });
   });
 
@@ -319,12 +343,7 @@ describe("ScopeMutator", () => {
         },
       } as IncomingMessage;
 
-      const socket = new Duplex({
-        read() {},
-        write(_chunk, _encoding, callback) {
-          callback();
-        },
-      });
+      const socket = createSocket();
 
       const head = Buffer.from("tls-head");
 
@@ -355,12 +374,7 @@ describe("ScopeMutator", () => {
     it("should return false when request is missing", () => {
       const scope = createScope();
 
-      const socket = new Duplex({
-        read() {},
-        write(_chunk, _encoding, callback) {
-          callback();
-        },
-      });
+      const socket = createSocket();
 
       const result = ScopeMutator.applyConnectState(
         scope,
@@ -408,12 +422,7 @@ describe("ScopeMutator", () => {
         },
       } as IncomingMessage;
 
-      const socket = new Duplex({
-        read() {},
-        write(_chunk, _encoding, callback) {
-          callback();
-        },
-      });
+      const socket = createSocket();
 
       const head = Buffer.alloc(0);
 
@@ -487,12 +496,7 @@ describe("ScopeMutator", () => {
         },
       } as unknown as IncomingMessage;
 
-      const socket = new Duplex({
-        read() {},
-        write(_chunk, _encoding, callback) {
-          callback();
-        },
-      });
+      const socket = createSocket();
 
       const head = Buffer.from("upgrade-head");
 
@@ -534,13 +538,7 @@ describe("ScopeMutator", () => {
     it("should return false when request is missing", () => {
       const scope = createScope();
 
-      const socket = new Duplex({
-        read() {},
-        write(_chunk, _encoding, callback) {
-          callback();
-        },
-      });
-
+      const socket = createSocket();
       const result = ScopeMutator.applyUpgradeState(
         scope,
         undefined as unknown as IncomingMessage,
@@ -588,12 +586,7 @@ describe("ScopeMutator", () => {
         },
       } as IncomingMessage;
 
-      const socket = new Duplex({
-        read() {},
-        write(_chunk, _encoding, callback) {
-          callback();
-        },
-      }) as Duplex & { encrypted?: boolean };
+      const socket = createSocket() as Duplex & { encrypted?: boolean };
 
       socket.encrypted = true;
 
