@@ -514,13 +514,26 @@ describe("ResponseCacheProcessor", () => {
         useResponseCache: true,
       } as any);
 
-      const upstreamRes = new PassThrough() as any;
-      upstreamRes.statusCode = 304;
-      upstreamRes.headers = {};
+      (processor as any).cachedRes = {
+        headers: {},
+        body: Buffer.from(""),
+        expires: 0,
+      } as any;
+
+      const upstreamRes = {
+        statusCode: 304,
+        headers: {},
+        destroyed: false,
+
+        destroy() {
+          this.destroyed = true;
+        },
+      } as any;
 
       const result = processor.tryServeRevalidation(upstreamRes);
 
       assert.equal(result, false);
+      console.info("DESTROYED:", upstreamRes.destroyed);
       assert.equal(upstreamRes.destroyed, true);
     });
 
@@ -534,9 +547,22 @@ describe("ResponseCacheProcessor", () => {
         useResponseCache: true,
       } as any);
 
-      const upstreamRes = new PassThrough() as any;
-      upstreamRes.statusCode = 304;
-      upstreamRes.headers = {};
+       (processor as any).cachedRes = {
+         headers: {},
+         body: Buffer.from(""),
+         expires: 0,
+       } as any;
+
+
+      const upstreamRes = {
+        statusCode: 304,
+        headers: {},
+        destroyed: false,
+
+        destroy() {
+          this.destroyed = true;
+        },
+      } as any;
 
       const result = processor.tryServeRevalidation(upstreamRes);
 
