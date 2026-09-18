@@ -1,5 +1,5 @@
 import tls from "tls";
-import { CAManager } from "../cert/CAManager";
+import { CAManager } from "../CA/CAManager";
 import { BaseHandler } from "./base/base.handler";
 import { ProxyUtils } from "../utils/ProxyUtils";
 import type { RequestScope } from "../scope/types";
@@ -87,9 +87,9 @@ export class HandshakeHandler extends BaseHandler {
       secureContext = tls.createSecureContext(customLeaf);
     } else {
       if (this.config.useCertificateCache) {
-        secureContext = await CAManager.getCA(host);
+        secureContext = await CAManager.getCA(host, this.config);
       } else {
-        secureContext = await CAManager.generateCA(host);
+        secureContext = await CAManager.generateCA(host, this.config);
       }
     }
 
@@ -122,8 +122,8 @@ export class HandshakeHandler extends BaseHandler {
                 return cb(null, tls.createSecureContext(customLeaf));
               }
               const ctx = this.config.useCertificateCache
-                ? await CAManager.getCA(target)
-                : await CAManager.generateCA(target);
+                ? await CAManager.getCA(target, this.config)
+                : await CAManager.generateCA(target, this.config);
 
               cb(null, ctx);
             } catch (err) {
