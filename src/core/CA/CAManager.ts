@@ -3,9 +3,10 @@ import { CertificateCacheManager } from "../cache/CertificateCacheManager";
 import { pool } from "../workers/pool/Worker_pool";
 import tls from "tls";
 import { LRUCache } from "lru-cache";
+import type { ProxyConfig } from "../../lib/Proxy";
 
 export class CAManager {
-  static readonly config = getConfig();
+  // static readonly config = getConfig();
 
   private static ctxCache = new LRUCache<string, tls.SecureContext>({
     max: 500,
@@ -14,8 +15,11 @@ export class CAManager {
 
   private static inFlight = new Map<string, Promise<tls.SecureContext>>();
 
-  static async getCA(host: string): Promise<tls.SecureContext> {
-    if (!this.config.rootCa) {
+  static async getCA(
+    host: string,
+    config: ProxyConfig,
+  ): Promise<tls.SecureContext> {
+    if (!config.rootCa) {
       throw Error("No CA Provided");
     }
 
@@ -24,7 +28,7 @@ export class CAManager {
 
     const caConfig = await CertificateCacheManager.getCAFromCache(
       host,
-      this.config.rootCa,
+      config.rootCa,
     );
 
     const { cert, key } = caConfig!;
@@ -41,7 +45,14 @@ export class CAManager {
    * @param host - The target hostname.
    * @returns A promise that resolves to the instantiated SecureContext.
    */
-  public static async generateCA(host: string): Promise<tls.SecureContext> {
+  public static async generateCA(
+    host: string,
+    config: ProxyConfig,
+  ): Promise<tls.SecureContext> {
+    if (!config.rootCa) {
+      throw new Error("No CA Provided");
+    }
+
     const existingTask = this.inFlight.get(host);
     if (existingTask) return existingTask;
 
@@ -49,7 +60,7 @@ export class CAManager {
       try {
         const { cert, key } = await pool.run({
           host,
-          caConfig: this.config.rootCa,
+          caConfig: config.rootCa,
         });
 
         const ctx = tls.createSecureContext({ key, cert });
