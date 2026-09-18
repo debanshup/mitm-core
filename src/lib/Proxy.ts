@@ -208,7 +208,7 @@ export class Proxy extends TypedEventEmitter<ProxyEventMap> implements IProxy {
       const scope: RequestScope = ContextManager.getOrCreateScope(socket);
 
       scope.request.client.req = req;
-      
+
       connectionEvents.emit("CONNECT", {
         req,
         socket,
@@ -337,6 +337,10 @@ export class Proxy extends TypedEventEmitter<ProxyEventMap> implements IProxy {
         }
       });
     });
+  }
+
+  public address() {
+    return this.httpServer.address();
   }
 }
 
