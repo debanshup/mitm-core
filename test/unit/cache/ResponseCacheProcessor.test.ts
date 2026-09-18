@@ -1,7 +1,6 @@
 import assert from "node:assert";
 import { ResponseCacheProcessor } from "../../../src/core/cache/ResponseCacheProcessor";
 import { ResponseCache } from "../../../src/core/cache/ResponseCache";
-import { PassThrough } from "node:stream";
 
 describe("ResponseCacheProcessor", () => {
   describe("sanitizeHeaders()", () => {

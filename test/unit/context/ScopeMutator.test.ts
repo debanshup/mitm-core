@@ -142,7 +142,7 @@ describe("ScopeMutator", () => {
     });
   });
 
-  describe("initializeSessionScope()", () => {
+  describe("initializeSessionContext()", () => {
     describe("initializeSessionContext()", () => {
       it("should create a session context", () => {
         const socket = createSocket();
@@ -164,6 +164,20 @@ describe("ScopeMutator", () => {
         const second = ScopeMutator.initializeSessionContext(socket);
 
         assert.equal(first, second);
+
+        socket.destroy();
+      });
+
+      it("should safely handle a socket error", () => {
+        const socket = createSocket();
+
+        const session = ScopeMutator.initializeSessionContext(socket);
+
+        assert.ok(session);
+
+        assert.doesNotThrow(() => {
+          socket.emit("error", new Error("socket failure"));
+        });
 
         socket.destroy();
       });

@@ -175,4 +175,108 @@ describe("WatchableRuleFile", () => {
     assert.equal(store.match("initial.com"), false);
     assert.equal(store.match("updated.com"), true);
   });
+
+  it("should not append duplicate rules with differently formatted input", () => {
+    const filePath = path.join(tempDir, "rules.txt");
+
+    const store = createStore("test-rules", filePath, createParser(), []);
+
+    store.appendRule("example.com");
+    store.appendRule("  example.com  ");
+
+    const content = fs.readFileSync(filePath, "utf8");
+
+    assert.equal(content.split("example.com").length - 1, 1);
+  });
+
+  it("should preserve existing rules when reload parsing fails", async () => {
+    const filePath = path.join(tempDir, "rules.txt");
+
+    fs.writeFileSync(filePath, "initial.com\n");
+
+    let shouldFail = false;
+
+    const parser: IRuleParser<string[]> = {
+      parse(rawContent) {
+        if (shouldFail) {
+          throw new Error("parse failure");
+        }
+
+        return rawContent
+          .split(/\r?\n/)
+          .map((line) => line.trim())
+          .filter(Boolean);
+      },
+
+      match(rules, target) {
+        return rules.includes(target);
+      },
+    };
+
+    const store = createStore("test-rules", filePath, parser, []);
+
+    assert.equal(store.match("initial.com"), true);
+
+    shouldFail = true;
+    fs.writeFileSync(filePath, "broken content\n");
+
+    await new Promise((resolve) => setTimeout(resolve, 300));
+
+    assert.equal(store.match("initial.com"), true);
+  });
+
+  it("should preserve existing rules when reload parsing fails", async () => {
+    const filePath = path.join(tempDir, "rules.txt");
+
+    fs.writeFileSync(filePath, "initial.com\n");
+
+    let shouldFail = false;
+
+    const parser: IRuleParser<string[]> = {
+      parse(rawContent) {
+        if (shouldFail) {
+          throw new Error("parse failure");
+        }
+
+        return rawContent
+          .split(/\r?\n/)
+          .map((line) => line.trim())
+          .filter(Boolean);
+      },
+
+      match(rules, target) {
+        return rules.includes(target);
+      },
+    };
+
+    const store = createStore("test-rules", filePath, parser, []);
+
+    assert.equal(store.match("initial.com"), true);
+
+    shouldFail = true;
+    fs.writeFileSync(filePath, "broken content\n");
+
+    await new Promise((resolve) => setTimeout(resolve, 300));
+
+    assert.equal(store.match("initial.com"), true);
+  });
+
+  it("should stop watching the file after destroy", async () => {
+    const filePath = path.join(tempDir, "rules.txt");
+
+    fs.writeFileSync(filePath, "initial.com\n");
+
+    const store = createStore("test-rules", filePath, createParser(), []);
+
+    assert.equal(store.match("initial.com"), true);
+
+    store.destroy();
+
+    fs.writeFileSync(filePath, "updated.com\n");
+
+    await new Promise((resolve) => setTimeout(resolve, 300));
+
+    assert.equal(store.match("initial.com"), true);
+    assert.equal(store.match("updated.com"), false);
+  });
 });
