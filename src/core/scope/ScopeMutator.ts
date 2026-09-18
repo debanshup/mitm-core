@@ -112,7 +112,23 @@ export class ScopeMutator {
     const { host, fullUrl } = parseHttpRequestData(request.client.req);
 
     request.target.host = host;
-    request.target.url = fullUrl;
+
+    const originalAuthority = request.target.originalUrl;
+
+    if (originalAuthority && fullUrl) {
+      const targetUrl = new URL(fullUrl);
+
+      const hasProtocol = /^https?:\/\//i.test(originalAuthority);
+      const authorityUrl = new URL(
+        hasProtocol ? originalAuthority : `https://${originalAuthority}`,
+      );
+
+      targetUrl.port = authorityUrl.port;
+
+      request.target.url = targetUrl.toString();
+    } else {
+      request.target.url = fullUrl;
+    }
 
     lifecycle.nextPhase = "request";
     return true;
