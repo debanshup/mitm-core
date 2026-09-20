@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import http from "node:http";
 import { PassThrough } from "node:stream";
-import { UpstreamInitiator } from "../../src/core/transport/http1/UpstreamInitiator";
+import { UpstreamInitiator } from "../../../../../src/core/transport/http1/UpstreamInitiator";
 
 class MockServerResponse extends PassThrough {
   statusCode = 200;
