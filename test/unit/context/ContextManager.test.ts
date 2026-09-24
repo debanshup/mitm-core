@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "mocha";
 import { Duplex } from "node:stream";
 import { ContextManager } from "../../../src/core/scope/ContextManager";
-
+import net from "net"
 function createSocket(): Duplex {
   return new Duplex({
     read() {},
@@ -89,58 +89,58 @@ describe("ContextManager", () => {
   });
 
   describe("getOrCreateRequestContext()", () => {
-   it("should return the same request context for the same session and stream", () => {
-     const socket = createSocket();
+    it("should return the same request context for the same session and stream", () => {
+      const socket = createSocket();
 
-     const session = ContextManager.getOrCreateSessionContext(socket);
+      const session = ContextManager.getOrCreateSessionContext(socket);
 
-     const first = ContextManager.getOrCreateRequestContext(
-       session,
-       undefined,
-       1,
-     );
+      const first = ContextManager.getOrCreateRequestContext(
+        session,
+        undefined,
+        1,
+      );
 
-     const second = ContextManager.getOrCreateRequestContext(
-       session,
-       undefined,
-       1,
-     );
+      const second = ContextManager.getOrCreateRequestContext(
+        session,
+        undefined,
+        1,
+      );
 
-     assert.equal(first, second);
-   });
+      assert.equal(first, second);
+    });
 
-   it("should create a new request context for a new H1 transaction on the same socket", () => {
-     const socket = createSocket();
-     const session = ContextManager.getOrCreateSessionContext(socket);
+    it("should create a new request context for a new H1 transaction on the same socket", () => {
+      const socket = createSocket();
+      const session = ContextManager.getOrCreateSessionContext(socket);
 
-     const firstReq = {
-       method: "GET",
-       url: "/first",
-       headers: { host: "example.com" },
-     } as any;
+      const firstReq = {
+        method: "GET",
+        url: "/first",
+        headers: { host: "example.com" },
+      } as any;
 
-     const secondReq = {
-       method: "GET",
-       url: "/second",
-       headers: { host: "example.com" },
-     } as any;
+      const secondReq = {
+        method: "GET",
+        url: "/second",
+        headers: { host: "example.com" },
+      } as any;
 
-     const first = ContextManager.getOrCreateRequestContext(
-       session,
-       firstReq,
-       "h1",
-     );
+      const first = ContextManager.getOrCreateRequestContext(
+        session,
+        firstReq,
+        "h1",
+      );
 
-     const second = ContextManager.getOrCreateRequestContext(
-       session,
-       secondReq,
-       "h1",
-     );
+      const second = ContextManager.getOrCreateRequestContext(
+        session,
+        secondReq,
+        "h1",
+      );
 
-     assert.notEqual(first.requestId, second.requestId);
-     assert.equal(second.client.req, secondReq);
-     assert.equal(second.client.url, "/second");
-   });
+      assert.notEqual(first.requestId, second.requestId);
+      assert.equal(second.client.req, secondReq);
+      assert.equal(second.client.url, "/second");
+    });
 
     it("should create different request contexts for different streams", () => {
       const socket = createSocket();
@@ -423,4 +423,5 @@ describe("ContextManager", () => {
       assert.notEqual(newLifecycle, lifecycle);
     });
   });
+  
 });

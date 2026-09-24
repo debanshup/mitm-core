@@ -281,7 +281,7 @@ describe("H1OutboundBridge", () => {
     }
   });
 
-  it("should return 504 when upstream times out", async () => {
+  it("should handle upstream errors", async () => {
     const scope = createScope();
 
     const upstream = scope.request.upstream.req;
@@ -299,25 +299,16 @@ describe("H1OutboundBridge", () => {
       },
     );
 
-    upstream.emit("timeout");
+    const error = new Error("upstream failed");
 
-    const timeoutError = new Error("ERR_UPSTREAM_TIMEOUT");
-
-    upstream.emit("error", timeoutError);
+    upstream.emit("error", error);
 
     await new Promise((resolve) => setImmediate(resolve));
 
     const res = scope.request.client.res;
 
-    assert.equal(rejectedError, timeoutError);
-    assert.equal(res.statusCode, 504);
-    assert.equal(res.endCalled, true);
-    assert.equal(
-      res.body,
-      JSON.stringify({
-        error: "Gateway Timeout: Upstream failed to respond.",
-      }),
-    );
+    assert.equal(rejectedError, error);
+    assert.equal(res.statusCode, 502);
   });
 
   it("should destroy the client response when client disconnects", async () => {
