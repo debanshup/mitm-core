@@ -1,10 +1,10 @@
-import assert from "assert";
-import http from "http";
-import https from "https";
-import net from "net";
-import tls from "tls";
+import assert from "node:assert";
+import http from "node:http";
+import https from "node:https";
+import net from "node:net";
+import tls from "node:tls";
 
-import fs from "fs";
+import fs from "node:fs";
 
 import { Proxy } from "../../../src/lib/Proxy";
 

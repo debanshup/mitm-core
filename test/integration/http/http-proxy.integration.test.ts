@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import http from "node:http";
-
+import net from "net"
 import { Proxy } from "../../../src/lib/Proxy";
 
 describe("HTTP Proxy Integration", () => {
@@ -395,5 +395,190 @@ describe("HTTP Proxy Integration", () => {
     });
 
     assert.equal(response.statusCode, 502);
+  });
+
+  it("should stream a large HTTP response without truncation", async function () {
+    this.timeout(10000);
+
+    const SIZE = 10 * 1024 * 1024; // 10 MB
+
+    const payload = Buffer.alloc(SIZE, "a");
+
+    const largeUpstream = http.createServer((_req, res) => {
+      res.writeHead(200, {
+        "content-type": "application/octet-stream",
+        "content-length": payload.length,
+      });
+
+      const CHUNK_SIZE = 64 * 1024;
+
+      let offset = 0;
+
+      const writeChunk = () => {
+        while (offset < payload.length) {
+          const end = Math.min(offset + CHUNK_SIZE, payload.length);
+
+          const canContinue = res.write(payload.subarray(offset, end));
+
+          offset = end;
+
+          if (!canContinue) {
+            res.once("drain", writeChunk);
+            return;
+          }
+        }
+
+        res.end();
+      };
+
+      writeChunk();
+    });
+
+    await new Promise<void>((resolve) => {
+      largeUpstream.listen(0, "127.0.0.1", resolve);
+    });
+
+    const port = (largeUpstream.address() as net.AddressInfo).port;
+
+    try {
+      const chunks: Buffer[] = [];
+
+      await new Promise<void>((resolve, reject) => {
+        const req = http.get(
+          {
+            host: "127.0.0.1",
+            port: proxyPort,
+            path: `http://127.0.0.1:${port}/large`,
+          },
+          (res) => {
+            res.on("data", (chunk: Buffer) => {
+              chunks.push(chunk);
+            });
+
+            res.once("end", resolve);
+            res.once("error", reject);
+          },
+        );
+
+        req.once("error", reject);
+      });
+
+      const received = Buffer.concat(chunks);
+
+      assert.equal(received.length, SIZE);
+      assert.equal(received.equals(payload), true);
+    } finally {
+      await new Promise<void>((resolve) => {
+        largeUpstream.close(() => resolve());
+      });
+    }
+  });
+
+  it("should stream a large HTTP request body without truncation", async function () {
+    this.timeout(10000);
+
+    const SIZE = 10 * 1024 * 1024;
+    const payload = Buffer.alloc(SIZE, "b");
+
+    const largeUpstream = http.createServer((req, res) => {
+      const chunks: Buffer[] = [];
+
+      req.on("data", (chunk: Buffer) => {
+        chunks.push(chunk);
+      });
+
+      req.on("end", () => {
+        const received = Buffer.concat(chunks);
+
+        res.writeHead(200, {
+          "content-type": "application/json",
+        });
+
+        res.end(
+          JSON.stringify({
+            length: received.length,
+            matches: received.equals(payload),
+          }),
+        );
+      });
+
+      req.on("error", (err) => {
+        res.destroy(err);
+      });
+    });
+
+    await new Promise<void>((resolve) => {
+      largeUpstream.listen(0, "127.0.0.1", resolve);
+    });
+
+    const port = (largeUpstream.address() as net.AddressInfo).port;
+
+    try {
+      const response = await new Promise<{
+        statusCode?: number;
+        body: string;
+      }>((resolve, reject) => {
+        const req = http.request({
+          host: "127.0.0.1",
+          port: proxyPort,
+          method: "POST",
+          path: `http://127.0.0.1:${port}/large`,
+          headers: {
+            "content-type": "application/octet-stream",
+            "content-length": payload.length,
+          },
+        });
+
+        const chunks: Buffer[] = [];
+
+        req.on("response", (res) => {
+          res.on("data", (chunk: Buffer) => {
+            chunks.push(chunk);
+          });
+
+          res.on("end", () => {
+            resolve({
+              statusCode: res.statusCode,
+              body: Buffer.concat(chunks).toString(),
+            });
+          });
+        });
+
+        req.on("error", reject);
+
+        const CHUNK_SIZE = 64 * 1024;
+        let offset = 0;
+
+        const writeChunk = () => {
+          while (offset < payload.length) {
+            const end = Math.min(offset + CHUNK_SIZE, payload.length);
+
+            const canContinue = req.write(payload.subarray(offset, end));
+
+            offset = end;
+
+            if (!canContinue) {
+              req.once("drain", writeChunk);
+              return;
+            }
+          }
+
+          req.end();
+        };
+
+        writeChunk();
+      });
+
+      assert.equal(response.statusCode, 200);
+
+      assert.deepEqual(JSON.parse(response.body), {
+        length: SIZE,
+        matches: true,
+      });
+    } finally {
+      await new Promise<void>((resolve) => {
+        largeUpstream.close(() => resolve());
+      });
+    }
   });
 });

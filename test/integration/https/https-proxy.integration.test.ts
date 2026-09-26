@@ -633,4 +633,257 @@ describe("HTTPS Proxy Integration", () => {
 
     assert.equal(response.statusCode, 502);
   });
+
+  it("should stream a large HTTPS response without truncation", async function () {
+    this.timeout(10000);
+
+    const SIZE = 10 * 1024 * 1024;
+    const payload = Buffer.alloc(SIZE, "c");
+
+    const largeUpstream = https.createServer(
+      {
+        key: UPSTREAM_KEY,
+        cert: UPSTREAM_CERT,
+      },
+      (_req, res) => {
+        res.writeHead(200, {
+          "content-type": "application/octet-stream",
+          "content-length": payload.length,
+        });
+
+        const CHUNK_SIZE = 64 * 1024;
+        let offset = 0;
+
+        const writeChunk = () => {
+          while (offset < payload.length) {
+            const end = Math.min(offset + CHUNK_SIZE, payload.length);
+
+            const canContinue = res.write(payload.subarray(offset, end));
+
+            offset = end;
+
+            if (!canContinue) {
+              res.once("drain", writeChunk);
+              return;
+            }
+          }
+
+          res.end();
+        };
+
+        writeChunk();
+      },
+    );
+
+    await new Promise<void>((resolve) => {
+      largeUpstream.listen(0, "127.0.0.1", resolve);
+    });
+
+    const port = (largeUpstream.address() as net.AddressInfo).port;
+
+    try {
+      const chunks: Buffer[] = [];
+
+      await new Promise<void>((resolve, reject) => {
+        const connectReq = http.request({
+          host: "127.0.0.1",
+          port: proxyPort,
+          method: "CONNECT",
+          path: `127.0.0.1:${port}`,
+        });
+
+        connectReq.once("error", reject);
+
+        connectReq.once("connect", (_res, socket) => {
+          const tlsSocket = tls.connect({
+            socket,
+            servername: "localhost",
+            rejectUnauthorized: false,
+          });
+
+          tlsSocket.once("error", reject);
+
+          tlsSocket.once("secureConnect", () => {
+            tlsSocket.write(
+              [
+                "GET /large HTTP/1.1",
+                `Host: localhost:${port}`,
+                "Connection: close",
+                "",
+                "",
+              ].join("\r\n"),
+            );
+          });
+
+          tlsSocket.on("data", (chunk: Buffer) => {
+            chunks.push(chunk);
+          });
+
+          tlsSocket.once("end", resolve);
+        });
+
+        connectReq.end();
+      });
+
+      const received = Buffer.concat(chunks);
+
+      // Separate HTTP headers from the response body.
+      const headerEnd = received.indexOf(Buffer.from("\r\n\r\n"));
+
+      assert.notEqual(headerEnd, -1);
+
+      const body = received.subarray(headerEnd + 4);
+
+      assert.equal(body.length, SIZE);
+      assert.equal(body.equals(payload), true);
+    } finally {
+      await new Promise<void>((resolve) => {
+        largeUpstream.close(() => resolve());
+      });
+    }
+  });
+
+  it("should stream a large HTTPS request body without truncation", async function () {
+    this.timeout(10000);
+
+    const SIZE = 10 * 1024 * 1024;
+    const payload = Buffer.alloc(SIZE, "d");
+
+    let receivedBytes = 0;
+    let requestEnded = false;
+    let upstreamRequestCount = 0;
+
+    const testUpstream = https.createServer(
+      {
+        key: UPSTREAM_KEY,
+        cert: UPSTREAM_CERT,
+      },
+      (req, res) => {
+        upstreamRequestCount++;
+        const requestNumber = upstreamRequestCount;
+        const chunks: Buffer[] = [];
+        // SINGLE 'data' listener to prevent double-counting bytes
+        req.on("data", (chunk: Buffer) => {
+          receivedBytes += chunk.length;
+          chunks.push(chunk);
+        });
+
+        // SINGLE 'end' listener to process and respond exactly once
+        req.on("end", () => {
+          requestEnded = true;
+
+          const received = Buffer.concat(chunks);
+
+          // Assert inside the request cycle
+          assert.strictEqual(received.length, SIZE);
+          assert.strictEqual(received.equals(payload), true);
+
+          const responseBody = JSON.stringify({
+            length: received.length,
+            matches: received.equals(payload),
+          });
+
+          res.writeHead(200, {
+            "content-type": "application/json",
+            "content-length": Buffer.byteLength(responseBody),
+            connection: "close",
+          });
+
+          res.end(responseBody);
+        });
+
+        req.on("error", (err) => {
+          console.error(`[TEST] Upstream request error:`, err);
+        });
+      },
+    );
+
+    await new Promise<void>((resolve) => {
+      testUpstream.listen(0, "127.0.0.1", resolve);
+    });
+
+    const port = (testUpstream.address() as net.AddressInfo).port;
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const connectReq = http.request({
+          host: "127.0.0.1",
+          port: proxyPort, // Uses proxy from beforeEach
+          method: "CONNECT",
+          path: `127.0.0.1:${port}`,
+        });
+
+        connectReq.once("error", reject);
+
+        connectReq.once("connect", (_res, socket) => {
+          const tlsSocket = tls.connect({
+            socket,
+            servername: "localhost",
+            rejectUnauthorized: false,
+          });
+
+          const responseChunks: Buffer[] = [];
+
+          tlsSocket.on("data", (chunk: Buffer) => {
+            responseChunks.push(chunk);
+          });
+
+          tlsSocket.once("error", reject);
+
+          tlsSocket.once("end", () => {
+            resolve();
+          });
+
+          tlsSocket.once("secureConnect", () => {
+            tlsSocket.write(
+              [
+                "POST /large HTTP/1.1",
+                `Host: localhost:${port}`,
+                "Content-Type: application/octet-stream",
+                `Content-Length: ${SIZE}`,
+                "Connection: close",
+                "",
+                "",
+              ].join("\r\n"),
+            );
+
+            const CHUNK_SIZE = 64 * 1024;
+            let offset = 0;
+
+            const writeChunk = () => {
+              while (offset < payload.length) {
+                const end = Math.min(offset + CHUNK_SIZE, payload.length);
+                const canContinue = tlsSocket.write(
+                  payload.subarray(offset, end),
+                );
+                offset = end;
+
+                if (!canContinue) {
+                  tlsSocket.once("drain", writeChunk);
+                  return;
+                }
+              }
+              tlsSocket.end();
+            };
+
+            writeChunk();
+          });
+        });
+
+        connectReq.end();
+      });
+
+      // Verify overall test tracking metrics
+      assert.strictEqual(receivedBytes, SIZE);
+      assert.strictEqual(requestEnded, true);
+    } finally {
+      await new Promise<void>((resolve) => {
+        if (!testUpstream.listening) {
+          resolve();
+          return;
+        }
+        testUpstream.close(() => resolve());
+      });
+    }
+  });
 });

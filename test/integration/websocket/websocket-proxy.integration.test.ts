@@ -368,4 +368,102 @@ describe("WebSocket Proxy Integration", () => {
 
     await upstreamClosed;
   });
+
+  it("should close the upstream WS connection when the client terminates abruptly", async function () {
+    this.timeout(5000);
+
+    let upstreamConnected = false;
+    let upstreamClosed = false;
+
+    const upstreamClosedPromise = new Promise<void>((resolve) => {
+      wsUpstream.once("connection", (socket) => {
+        upstreamConnected = true;
+
+        socket.once("close", () => {
+          upstreamClosed = true;
+          resolve();
+        });
+      });
+    });
+
+    const client = new WebSocket(`ws://127.0.0.1:${upstreamPort}/abnormal`, {
+      agent: new HttpProxyAgent(`http://127.0.0.1:${proxyPort}`),
+    });
+
+    client.on("error", () => {
+      // Expected when the client is terminated.
+    });
+
+    await new Promise<void>((resolve, reject) => {
+      client.once("open", resolve);
+      client.once("error", reject);
+    });
+
+    assert.equal(upstreamConnected, true);
+
+    // Abruptly terminate the underlying WebSocket connection.
+    client.terminate();
+
+    await Promise.race([
+      upstreamClosedPromise,
+      new Promise<never>((_, reject) => {
+        setTimeout(() => {
+          reject(new Error("Upstream WS connection did not close"));
+        }, 3000);
+      }),
+    ]);
+
+    assert.equal(upstreamClosed, true);
+  });
+
+  it("should close the upstream WSS connection when the client terminates abruptly", async function () {
+    this.timeout(5000);
+
+    let upstreamConnected = false;
+    let upstreamClosed = false;
+
+    const upstreamClosedPromise = new Promise<void>((resolve) => {
+      wss.once("connection", (socket) => {
+        upstreamConnected = true;
+
+        socket.once("close", () => {
+          upstreamClosed = true;
+          resolve();
+        });
+      });
+    });
+
+    const client = new WebSocket(
+      `wss://localhost:${wssUpstreamPort}/abnormal`,
+      {
+        agent: new HttpsProxyAgent(`http://localhost:${proxyPort}`),
+        rejectUnauthorized: false,
+      },
+    );
+
+    client.on("error", () => {
+      // Expected when the client is terminated.
+    });
+
+    await new Promise<void>((resolve, reject) => {
+      client.once("open", resolve);
+      client.once("error", reject);
+    });
+
+    assert.equal(upstreamConnected, true);
+
+    // Abruptly terminate the underlying WebSocket connection.
+    client.terminate();
+
+    await Promise.race([
+      upstreamClosedPromise,
+      new Promise<never>((_, reject) => {
+        setTimeout(() => {
+          reject(new Error("Upstream WSS connection did not close"));
+        }, 3000);
+      }),
+    ]);
+
+    assert.equal(upstreamClosed, true);
+  });
 });
