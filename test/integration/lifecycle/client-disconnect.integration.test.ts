@@ -60,7 +60,7 @@ describe("Proxy Client Disconnect Integration", () => {
         cert: CA_CERT,
         key: CA_KEY,
       },
-      upstreamTimeoutMs: 5000,
+      upstreamTimeoutMs: 1000,
     });
 
     await new Promise<void>((resolve) => {
@@ -224,7 +224,7 @@ describe("Proxy Client Disconnect Integration", () => {
   });
 
   it("should return 504 when the upstream request times out", async function () {
-    this.timeout(6000);
+    this.timeout(1500);
 
     upstream.removeAllListeners("request");
 
@@ -250,10 +250,10 @@ describe("Proxy Client Disconnect Integration", () => {
       }>((resolve, reject) => {
         const req = http.request(
           {
-            host: "127.0.0.1",
+            host: "localhost",
             port: proxyPort,
             method: "GET",
-            path: `http://127.0.0.1:${upstreamPort}/timeout`,
+            path: `http://localhost:${upstreamPort}/timeout`,
           },
           (res) => {
             let body = "";
@@ -276,6 +276,8 @@ describe("Proxy Client Disconnect Integration", () => {
         });
         req.end();
       });
+
+      console.info("status code:",response.statusCode)
 
       assert.equal(upstreamRequestStarted, true);
       assert.equal(response.statusCode, 504);
@@ -352,114 +354,113 @@ describe("Proxy Client Disconnect Integration", () => {
     assert.equal(upstreamRequestClosed, true);
   });
 
-it("should close active HTTPS upstream connections when the proxy stops", async function () {
-  this.timeout(6000);
+  it("should close active HTTPS upstream connections when the proxy stops", async function () {
+    this.timeout(6000);
 
-  let upstreamRequestStarted = false;
-  let upstreamRequestClosed = false;
+    let upstreamRequestStarted = false;
+    let upstreamRequestClosed = false;
 
-  const httpsUpstream = https.createServer(
-    {
-      key: CA_KEY,
-      cert: CA_CERT,
-    },
-    (_req, res) => {
-      upstreamRequestStarted = true;
+    const httpsUpstream = https.createServer(
+      {
+        key: CA_KEY,
+        cert: CA_CERT,
+      },
+      (_req, res) => {
+        upstreamRequestStarted = true;
 
-      res.writeHead(200, {
-        "content-type": "text/plain",
-        "transfer-encoding": "chunked",
-      });
+        res.writeHead(200, {
+          "content-type": "text/plain",
+          "transfer-encoding": "chunked",
+        });
 
-      res.flushHeaders();
+        res.flushHeaders();
 
-      res.on("close", () => {
-        upstreamRequestClosed = true;
-      });
+        res.on("close", () => {
+          upstreamRequestClosed = true;
+        });
 
-      const interval = setInterval(() => {
-        if (!res.destroyed) {
-          res.write(".\n");
-        } else {
-          clearInterval(interval);
-        }
-      }, 100);
-    },
-  );
+        const interval = setInterval(() => {
+          if (!res.destroyed) {
+            res.write(".\n");
+          } else {
+            clearInterval(interval);
+          }
+        }, 100);
+      },
+    );
 
-  await new Promise<void>((resolve) => {
-    httpsUpstream.listen(0, "127.0.0.1", resolve);
-  });
-
-  const httpsUpstreamPort = (httpsUpstream.address() as net.AddressInfo).port;
-
-  try {
-    const upstreamStarted = new Promise<void>((resolve) => {
-      const check = setInterval(() => {
-        if (upstreamRequestStarted) {
-          clearInterval(check);
-          resolve();
-        }
-      }, 10);
+    await new Promise<void>((resolve) => {
+      httpsUpstream.listen(0, "127.0.0.1", resolve);
     });
 
-    const connectReq = http.request({
-      host: "127.0.0.1",
-      port: proxyPort,
-      method: "CONNECT",
-      path: `127.0.0.1:${httpsUpstreamPort}`,
-    });
+    const httpsUpstreamPort = (httpsUpstream.address() as net.AddressInfo).port;
 
-    connectReq.on("error", () => {
-      // Expected when proxy shuts down.
-    });
-
-    connectReq.on("connect", (_res, socket) => {
-      const tlsSocket = tls.connect({
-        socket,
-        servername: "localhost",
-        rejectUnauthorized: false,
+    try {
+      const upstreamStarted = new Promise<void>((resolve) => {
+        const check = setInterval(() => {
+          if (upstreamRequestStarted) {
+            clearInterval(check);
+            resolve();
+          }
+        }, 10);
       });
 
-      tlsSocket.on("error", () => {
+      const connectReq = http.request({
+        host: "127.0.0.1",
+        port: proxyPort,
+        method: "CONNECT",
+        path: `127.0.0.1:${httpsUpstreamPort}`,
+      });
+
+      connectReq.on("error", () => {
         // Expected when proxy shuts down.
       });
 
-      tlsSocket.on("secureConnect", () => {
-        tlsSocket.write(
-          [
-            `GET /shutdown HTTP/1.1`,
-            `Host: localhost:${httpsUpstreamPort}`,
-            `Connection: keep-alive`,
-            ``,
-            ``,
-          ].join("\r\n"),
-        );
+      connectReq.on("connect", (_res, socket) => {
+        const tlsSocket = tls.connect({
+          socket,
+          servername: "localhost",
+          rejectUnauthorized: false,
+        });
+
+        tlsSocket.on("error", () => {
+          // Expected when proxy shuts down.
+        });
+
+        tlsSocket.on("secureConnect", () => {
+          tlsSocket.write(
+            [
+              `GET /shutdown HTTP/1.1`,
+              `Host: localhost:${httpsUpstreamPort}`,
+              `Connection: keep-alive`,
+              ``,
+              ``,
+            ].join("\r\n"),
+          );
+        });
       });
-    });
 
-    connectReq.end();
+      connectReq.end();
 
-    await upstreamStarted;
+      await upstreamStarted;
 
-    assert.equal(upstreamRequestStarted, true);
+      assert.equal(upstreamRequestStarted, true);
 
-    await proxy.stop();
-    proxyStopped = true;
+      await proxy.stop();
+      proxyStopped = true;
 
-    await new Promise((resolve) => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
-    assert.equal(upstreamRequestClosed, true);
-  } finally {
-    await new Promise<void>((resolve) => {
-      if (!httpsUpstream.listening) {
-        resolve();
-        return;
-      }
+      assert.equal(upstreamRequestClosed, true);
+    } finally {
+      await new Promise<void>((resolve) => {
+        if (!httpsUpstream.listening) {
+          resolve();
+          return;
+        }
 
-      httpsUpstream.close(() => resolve());
-    });
-  }
+        httpsUpstream.close(() => resolve());
+      });
+    }
+  });
 });
-});
-

@@ -645,33 +645,13 @@ describe("HTTPS Proxy Integration", () => {
         key: UPSTREAM_KEY,
         cert: UPSTREAM_CERT,
       },
-      (_req, res) => {
+      (req, res) => {
+        req.socket?.setNoDelay(true);
         res.writeHead(200, {
           "content-type": "application/octet-stream",
           "content-length": payload.length,
         });
-
-        const CHUNK_SIZE = 64 * 1024;
-        let offset = 0;
-
-        const writeChunk = () => {
-          while (offset < payload.length) {
-            const end = Math.min(offset + CHUNK_SIZE, payload.length);
-
-            const canContinue = res.write(payload.subarray(offset, end));
-
-            offset = end;
-
-            if (!canContinue) {
-              res.once("drain", writeChunk);
-              return;
-            }
-          }
-
-          res.end();
-        };
-
-        writeChunk();
+        res.end(payload);
       },
     );
 
@@ -695,6 +675,7 @@ describe("HTTPS Proxy Integration", () => {
         connectReq.once("error", reject);
 
         connectReq.once("connect", (_res, socket) => {
+          socket.setNoDelay(true);
           const tlsSocket = tls.connect({
             socket,
             servername: "localhost",
