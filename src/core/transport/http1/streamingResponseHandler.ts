@@ -5,6 +5,7 @@ import { ProxyUtils } from "../../utils/ProxyUtils";
 import { ScopeMutator } from "../../scope/ScopeMutator";
 import { PassThrough } from "stream";
 import { pipeline } from "stream/promises";
+import { RES_HOP_HEADERS } from "./responseDispatcher";
 
 export class StreamingResponseHandler {
   static async handle(
@@ -14,21 +15,24 @@ export class StreamingResponseHandler {
     upstreamReq: ClientRequest,
   ): Promise<void> {
     const res = scope.request.client.res;
-
     if (!res || res.destroyed || res.writableEnded || !res.writable) {
       if (!upstreamRes.destroyed) upstreamRes.destroy();
       if (!upstreamReq.destroyed) upstreamReq.destroy();
-      ScopeMutator.failPipeline(
-        scope
-      );
+      ScopeMutator.failPipeline(scope);
       return;
     }
 
-    if (!res.headersSent) {
-      res.writeHead(upstreamRes.statusCode || 200, upstreamRes.headers);
-    }
+   if (!res.headersSent) {
+     const cleanedHeaders: Record<string, string | string[]> = {};
+     for (const [key, value] of Object.entries(upstreamRes.headers)) {
+       if (value !== undefined && !RES_HOP_HEADERS.has(key.toLowerCase())) {
+         cleanedHeaders[key] = value;
+       }
+     }
+     res.writeHead(upstreamRes.statusCode || 200, cleanedHeaders);
+   }
 
-    const teeStream = new PassThrough();
+    const teeStream = new PassThrough({ highWaterMark: 1024 * 1024 });
 
     teeStream.on("data", (chunk: Buffer) => {
       cacheProcessor.trackChunk(chunk);
