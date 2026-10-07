@@ -24,6 +24,13 @@ export class H1OutboundBridge {
       return resolve();
     }
 
+    inboundRes.once("finish", () => {
+      lifecycle.timestamps.respondedAt = Date.now();
+
+      lifecycle.timestamps.duration =
+        lifecycle.timestamps.respondedAt - lifecycle.timestamps.receivedAt;
+    });
+
     let isSettled = false;
 
     const safeResolve = () => {
@@ -45,6 +52,7 @@ export class H1OutboundBridge {
     }
 
     upstreamReq.on("response", async (upstreamRes) => {
+      scope.lifecycle.timestamps.upstreamReceivedAt = Date.now();
       await connectionEvents.emitAsync("UPSTREAM:RESPONSE", {
         scope,
         upstreamRes,
@@ -70,35 +78,67 @@ export class H1OutboundBridge {
     });
 
     upstreamReq.on("error", async (err) => {
+      const errorCode = (err as NodeJS.ErrnoException).code;
+
+      const isClientDisconnected =
+        errorCode === "ERR_CLIENT_DISCONNECTED" ||
+        err.message === "ERR_CLIENT_DISCONNECTED";
+
+      const isExpectedDrop =
+        errorCode === "ECONNRESET" ||
+        errorCode === "ERR_STREAM_PREMATURE_CLOSE";
+
+      if (!isExpectedDrop && !isClientDisconnected) {
+        console.error("[H1OutboundBridge] Upstream Error:", errorCode);
+        console.info(err);
+      }
+
       if (isSettled) return;
       isSettled = true;
+
       try {
         ScopeMutator.failPipeline(scope);
 
-        if (!upstreamReq.destroyed) upstreamReq.destroy();
+        if (!upstreamReq.destroyed) {
+          upstreamReq.destroy();
+        }
 
         if (typeof inboundReq.destroy === "function" && !inboundReq.destroyed) {
           inboundReq.destroy();
         }
 
-        if (!inboundRes.destroyed) {
-          if (!inboundRes.headersSent && !inboundRes.writableEnded) {
-            if (err.message === "ERR_UPSTREAM_TIMEOUT") {
-              inboundRes.writeHead(504, { "Content-Type": "application/json" });
-              inboundRes.end(
-                JSON.stringify({
-                  error: "Gateway Timeout: Upstream failed to respond.",
-                }),
-              );
-            } else if (err.message === "ERR_CLIENT_DISCONNECTED") {
-              inboundRes.destroy();
-            } else {
-              inboundRes.writeHead(502, { "Content-Type": "text/plain" });
-              inboundRes.end("Bad Gateway: Remote target connection dropped.");
-            }
+        if (inboundRes.destroyed) {
+          return;
+        }
+
+        if (!inboundRes.headersSent && !inboundRes.writableEnded) {
+          if (errorCode === "ERR_UPSTREAM_TIMEOUT") {
+            const body = JSON.stringify({
+              error: "Gateway Timeout: Upstream failed to respond.",
+            });
+
+            inboundRes.writeHead(504, {
+              "Content-Type": "application/json",
+              "Content-Length": Buffer.byteLength(body),
+              Connection: "close",
+            });
+
+            inboundRes.end(body);
+          } else if (isClientDisconnected) {
+            inboundRes.destroy();
           } else {
-            inboundRes.destroy(err);
+            const body = "Bad Gateway: Remote target connection dropped.";
+
+            inboundRes.writeHead(502, {
+              "Content-Type": "text/plain",
+              "Content-Length": Buffer.byteLength(body),
+              Connection: "close",
+            });
+
+            inboundRes.end(body);
           }
+        } else {
+          inboundRes.destroy(err);
         }
       } catch (criticalCleanupErr) {
         console.error(
@@ -110,7 +150,6 @@ export class H1OutboundBridge {
       try {
         await pluginEventManager.emitAsync("proxy:target-error", {
           scope,
-          // error: err,
         });
       } catch (pluginErr) {
         console.error(
@@ -119,14 +158,15 @@ export class H1OutboundBridge {
         );
       }
 
-      reject(err as any); // Bypass safeReject to avoid double-call since isSettled is true
+      reject(err as any);
     });
+
     upstreamReq.on("timeout", () => {
       console.warn(
         `[Proxy Timeout]: Upstream server ${request.target.host} timed out.`,
       );
       if (!upstreamReq.destroyed) {
-        upstreamReq.destroy(new Error("ERR_UPSTREAM_TIMEOUT")); // add a config for upstream timeout
+        upstreamReq.destroy(new Error("ERR_UPSTREAM_TIMEOUT"));
       }
     });
   }
