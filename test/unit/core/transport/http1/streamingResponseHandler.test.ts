@@ -333,150 +333,150 @@ describe("StreamingResponseHandler", () => {
     }
   });
 
-    it("should fail and clean up when client response is already ended", async () => {
-      const response = createResponse();
-      const scope = createScope(response);
+  it("should fail and clean up when client response is already ended", async () => {
+    const response = createResponse();
+    const scope = createScope(response);
 
-      // *** Set the state the handler checks ***
-      response.end();
+    // *** Set the state the handler checks ***
+    response.end();
 
-      const upstreamRes = new PassThrough() as any;
-      const upstreamReq = scope.request.upstream.req;
+    const upstreamRes = new PassThrough() as any;
+    const upstreamReq = scope.request.upstream.req;
 
-      const cacheProcessor = createCacheProcessor();
+    const cacheProcessor = createCacheProcessor();
 
-      const originalFailPipeline = ScopeMutator.failPipeline;
-      let failCalled = false;
+    const originalFailPipeline = ScopeMutator.failPipeline;
+    let failCalled = false;
 
-      ScopeMutator.failPipeline = () => {
-        failCalled = true;
-      };
+    ScopeMutator.failPipeline = () => {
+      failCalled = true;
+    };
 
-      try {
-        await StreamingResponseHandler.handle(
-          scope,
-          upstreamRes,
-          cacheProcessor,
-          upstreamReq,
-        );
+    try {
+      await StreamingResponseHandler.handle(
+        scope,
+        upstreamRes,
+        cacheProcessor,
+        upstreamReq,
+      );
 
-        assert.equal(failCalled, true);
-        assert.equal(upstreamRes.destroyed, true);
-        assert.equal(upstreamReq.destroyed, true);
-      } finally {
-        ScopeMutator.failPipeline = originalFailPipeline;
-      }
-    });
+      assert.equal(failCalled, true);
+      assert.equal(upstreamRes.destroyed, true);
+      assert.equal(upstreamReq.destroyed, true);
+    } finally {
+      ScopeMutator.failPipeline = originalFailPipeline;
+    }
+  });
 
-    it("should fail and clean up when client response is destroyed", async () => {
-      const response = createResponse();
-      const scope = createScope(response);
+  it("should fail and clean up when client response is destroyed", async () => {
+    const response = createResponse();
+    const scope = createScope(response);
 
-      response.destroy();
+    response.destroy();
 
-      const upstreamRes = new PassThrough() as any;
-      const upstreamReq = scope.request.upstream.req;
+    const upstreamRes = new PassThrough() as any;
+    const upstreamReq = scope.request.upstream.req;
 
-      const cacheProcessor = createCacheProcessor();
+    const cacheProcessor = createCacheProcessor();
 
-      const originalFailPipeline = ScopeMutator.failPipeline;
-      let failCalled = false;
+    const originalFailPipeline = ScopeMutator.failPipeline;
+    let failCalled = false;
 
-      ScopeMutator.failPipeline = () => {
-        failCalled = true;
-      };
+    ScopeMutator.failPipeline = () => {
+      failCalled = true;
+    };
 
-      try {
-        await StreamingResponseHandler.handle(
-          scope,
-          upstreamRes,
-          cacheProcessor,
-          upstreamReq,
-        );
+    try {
+      await StreamingResponseHandler.handle(
+        scope,
+        upstreamRes,
+        cacheProcessor,
+        upstreamReq,
+      );
 
-        assert.equal(failCalled, true);
-        assert.equal(upstreamRes.destroyed, true);
-        assert.equal(upstreamReq.destroyed, true);
-      } finally {
-        ScopeMutator.failPipeline = originalFailPipeline;
-      }
-    });
+      assert.equal(failCalled, true);
+      assert.equal(upstreamRes.destroyed, true);
+      assert.equal(upstreamReq.destroyed, true);
+    } finally {
+      ScopeMutator.failPipeline = originalFailPipeline;
+    }
+  });
 
-    it("should not overwrite response headers when they were already sent", async () => {
-      const response = createResponse();
-      const scope = createScope(response);
+  it("should not overwrite response headers when they were already sent", async () => {
+    const response = createResponse();
+    const scope = createScope(response);
 
-      response.headersSent = true;
-      response.statusCode = 299;
-      response.responseHeaders = {
+    response.headersSent = true;
+    response.statusCode = 299;
+    response.responseHeaders = {
+      "x-existing": "yes",
+    };
+
+    const upstreamRes = new PassThrough() as any;
+    upstreamRes.statusCode = 200;
+    upstreamRes.headers = {
+      "content-type": "text/plain",
+    };
+
+    const cacheProcessor = createCacheProcessor();
+
+    const originalFinishPipeline = ScopeMutator.finishPipeline;
+    ScopeMutator.finishPipeline = () => {};
+
+    try {
+      const promise = StreamingResponseHandler.handle(
+        scope,
+        upstreamRes,
+        cacheProcessor,
+        scope.request.upstream.req,
+      );
+
+      upstreamRes.end("body");
+
+      await promise;
+
+      assert.equal(response.statusCode, 299);
+      assert.deepEqual(response.responseHeaders, {
         "x-existing": "yes",
-      };
+      });
+    } finally {
+      ScopeMutator.finishPipeline = originalFinishPipeline;
+    }
+  });
 
-      const upstreamRes = new PassThrough() as any;
-      upstreamRes.statusCode = 200;
-      upstreamRes.headers = {
-        "content-type": "text/plain",
-      };
+  it("should not commit cache when streaming fails", async () => {
+    const scope = createScope();
 
-      const cacheProcessor = createCacheProcessor();
+    const upstreamRes = new PassThrough() as any;
+    upstreamRes.statusCode = 200;
+    upstreamRes.headers = {};
 
-      const originalFinishPipeline = ScopeMutator.finishPipeline;
-      ScopeMutator.finishPipeline = () => {};
+    const cacheProcessor = createCacheProcessor();
 
-      try {
-        const promise = StreamingResponseHandler.handle(
-          scope,
-          upstreamRes,
-          cacheProcessor,
-          scope.request.upstream.req,
-        );
+    let commitCalled = false;
 
-        upstreamRes.end("body");
+    cacheProcessor.commit = () => {
+      commitCalled = true;
+    };
 
-        await promise;
+    const originalFailPipeline = ScopeMutator.failPipeline;
+    ScopeMutator.failPipeline = () => {};
 
-        assert.equal(response.statusCode, 299);
-        assert.deepEqual(response.responseHeaders, {
-          "x-existing": "yes",
-        });
-      } finally {
-        ScopeMutator.finishPipeline = originalFinishPipeline;
-      }
-    });
+    try {
+      const promise = StreamingResponseHandler.handle(
+        scope,
+        upstreamRes,
+        cacheProcessor,
+        scope.request.upstream.req,
+      );
 
-    it("should not commit cache when streaming fails", async () => {
-      const scope = createScope();
+      upstreamRes.destroy(new Error("stream failed"));
 
-      const upstreamRes = new PassThrough() as any;
-      upstreamRes.statusCode = 200;
-      upstreamRes.headers = {};
+      await assert.rejects(promise);
 
-      const cacheProcessor = createCacheProcessor();
-
-      let commitCalled = false;
-
-      cacheProcessor.commit = () => {
-        commitCalled = true;
-      };
-
-      const originalFailPipeline = ScopeMutator.failPipeline;
-      ScopeMutator.failPipeline = () => {};
-
-      try {
-        const promise = StreamingResponseHandler.handle(
-          scope,
-          upstreamRes,
-          cacheProcessor,
-          scope.request.upstream.req,
-        );
-
-        upstreamRes.destroy(new Error("stream failed"));
-
-        await assert.rejects(promise);
-
-        assert.equal(commitCalled, false);
-      } finally {
-        ScopeMutator.failPipeline = originalFailPipeline;
-      }
-    });
+      assert.equal(commitCalled, false);
+    } finally {
+      ScopeMutator.failPipeline = originalFailPipeline;
+    }
+  });
 });

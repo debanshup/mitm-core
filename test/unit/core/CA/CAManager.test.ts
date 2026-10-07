@@ -8,10 +8,10 @@ import type { ProxyConfig } from "../../../../src/lib/Proxy";
 export const createProxyConfig = (
   overrides?: Partial<ProxyConfig>,
 ): ProxyConfig => {
-    const rootCa = {
-      cert: Buffer.from("ROOT CA CERT"),
-      key: Buffer.from("ROOT CA KEY"),
-    };
+  const rootCa = {
+    cert: Buffer.from("ROOT CA CERT"),
+    key: Buffer.from("ROOT CA KEY"),
+  };
   return {
     useCertificateCache: true,
     useResponseCache: false,

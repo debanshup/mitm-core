@@ -240,7 +240,7 @@ describe("RequestHandler", () => {
     const scope = createScope();
 
     scope.session.protocol.httpVersion = "unknown";
-   scope.request.client.req.url = "http://[invalid";
+    scope.request.client.req.url = "http://[invalid";
 
     await handler.handle(scope);
 
@@ -303,6 +303,4 @@ describe("RequestHandler", () => {
       pluginEventManager.emitAsync = originalEmit;
     }
   });
-
-  
 });

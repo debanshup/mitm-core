@@ -29,6 +29,8 @@ const createResponse = () => {
       response.destroyed = true;
       response.destroyError = error;
     },
+
+    once() {},
   };
 
   return response;
@@ -77,6 +79,8 @@ const createScope = () => {
         },
       },
       nextPhase: "response",
+
+      timestamps: {},
     },
   } as any;
 };
@@ -379,134 +383,134 @@ describe("H1OutboundBridge", () => {
     }
   });
 
-    it("should ignore an upstream error after the response was already handled", async () => {
-      const scope = createScope();
+  it("should ignore an upstream error after the response was already handled", async () => {
+    const scope = createScope();
 
-      const originalHandle = ResponseDispatcher.handle;
-      const expectedError = new Error("late upstream error");
+    const originalHandle = ResponseDispatcher.handle;
+    const expectedError = new Error("late upstream error");
 
-      let resolveCount = 0;
-      let rejectCount = 0;
+    let resolveCount = 0;
+    let rejectCount = 0;
 
-      ResponseDispatcher.handle = async () => {};
+    ResponseDispatcher.handle = async () => {};
 
-      try {
-        H1OutboundBridge.execute(
-          scope,
-          createConfig(),
-          () => {
-            resolveCount++;
-          },
-          () => {
-            rejectCount++;
-          },
-        );
+    try {
+      H1OutboundBridge.execute(
+        scope,
+        createConfig(),
+        () => {
+          resolveCount++;
+        },
+        () => {
+          rejectCount++;
+        },
+      );
 
-        const upstreamRes = new PassThrough() as any;
-        upstreamRes.statusCode = 200;
-        upstreamRes.headers = {};
-        upstreamRes.destroyed = false;
+      const upstreamRes = new PassThrough() as any;
+      upstreamRes.statusCode = 200;
+      upstreamRes.headers = {};
+      upstreamRes.destroyed = false;
 
-        scope.request.upstream.req.emit("response", upstreamRes);
+      scope.request.upstream.req.emit("response", upstreamRes);
 
-        await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
 
-        assert.equal(resolveCount, 1);
-        assert.equal(rejectCount, 0);
+      assert.equal(resolveCount, 1);
+      assert.equal(rejectCount, 0);
 
-        // Response is already settled.
-        scope.request.upstream.req.emit("error", expectedError);
+      // Response is already settled.
+      scope.request.upstream.req.emit("error", expectedError);
 
-        await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
 
-        assert.equal(resolveCount, 1);
-        assert.equal(rejectCount, 0);
-      } finally {
-        ResponseDispatcher.handle = originalHandle;
-      }
-    });
+      assert.equal(resolveCount, 1);
+      assert.equal(rejectCount, 0);
+    } finally {
+      ResponseDispatcher.handle = originalHandle;
+    }
+  });
 
-    it("should handle only the first upstream error", async () => {
-      const scope = createScope();
+  it("should handle only the first upstream error", async () => {
+    const scope = createScope();
 
-      const originalFailPipeline = ScopeMutator.failPipeline;
+    const originalFailPipeline = ScopeMutator.failPipeline;
 
-      let failPipelineCount = 0;
-      let rejectCount = 0;
+    let failPipelineCount = 0;
+    let rejectCount = 0;
 
-      ScopeMutator.failPipeline = () => {
-        failPipelineCount++;
-      };
+    ScopeMutator.failPipeline = () => {
+      failPipelineCount++;
+    };
 
-      try {
-        H1OutboundBridge.execute(
-          scope,
-          createConfig(),
-          () => {
-            assert.fail("should not resolve");
-          },
-          () => {
-            rejectCount++;
-          },
-        );
+    try {
+      H1OutboundBridge.execute(
+        scope,
+        createConfig(),
+        () => {
+          assert.fail("should not resolve");
+        },
+        () => {
+          rejectCount++;
+        },
+      );
 
-        scope.request.upstream.req.emit(
-          "error",
-          new Error("first upstream error"),
-        );
+      scope.request.upstream.req.emit(
+        "error",
+        new Error("first upstream error"),
+      );
 
-        await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
 
-        scope.request.upstream.req.emit(
-          "error",
-          new Error("second upstream error"),
-        );
+      scope.request.upstream.req.emit(
+        "error",
+        new Error("second upstream error"),
+      );
 
-        await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
 
-        assert.equal(failPipelineCount, 1);
-        assert.equal(rejectCount, 1);
-      } finally {
-        ScopeMutator.failPipeline = originalFailPipeline;
-      }
-    });
+      assert.equal(failPipelineCount, 1);
+      assert.equal(rejectCount, 1);
+    } finally {
+      ScopeMutator.failPipeline = originalFailPipeline;
+    }
+  });
 
-    it("should still reject the original error when target-error plugin fails", async () => {
-      const scope = createScope();
+  it("should still reject the original error when target-error plugin fails", async () => {
+    const scope = createScope();
 
-      const originalFailPipeline = ScopeMutator.failPipeline;
-      const originalEmitAsync = pluginEventManager.emitAsync;
+    const originalFailPipeline = ScopeMutator.failPipeline;
+    const originalEmitAsync = pluginEventManager.emitAsync;
 
-      const expectedError = new Error("target connection failed");
+    const expectedError = new Error("target connection failed");
 
-      let rejectedError: unknown;
+    let rejectedError: unknown;
 
-      ScopeMutator.failPipeline = () => {};
+    ScopeMutator.failPipeline = () => {};
 
-      pluginEventManager.emitAsync = (async () => {
-        throw new Error("plugin notification failed");
-      }) as typeof pluginEventManager.emitAsync;
+    pluginEventManager.emitAsync = (async () => {
+      throw new Error("plugin notification failed");
+    }) as typeof pluginEventManager.emitAsync;
 
-      try {
-        H1OutboundBridge.execute(
-          scope,
-          createConfig(),
-          () => {
-            assert.fail("should not resolve");
-          },
-          (err) => {
-            rejectedError = err;
-          },
-        );
+    try {
+      H1OutboundBridge.execute(
+        scope,
+        createConfig(),
+        () => {
+          assert.fail("should not resolve");
+        },
+        (err) => {
+          rejectedError = err;
+        },
+      );
 
-        scope.request.upstream.req.emit("error", expectedError);
+      scope.request.upstream.req.emit("error", expectedError);
 
-        await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
 
-        assert.equal(rejectedError, expectedError);
-      } finally {
-        ScopeMutator.failPipeline = originalFailPipeline;
-        pluginEventManager.emitAsync = originalEmitAsync;
-      }
-    });
+      assert.equal(rejectedError, expectedError);
+    } finally {
+      ScopeMutator.failPipeline = originalFailPipeline;
+      pluginEventManager.emitAsync = originalEmitAsync;
+    }
+  });
 });

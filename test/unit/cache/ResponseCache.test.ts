@@ -351,7 +351,7 @@ describe("ResponseCache", () => {
       assert.equal(ResponseCache.isCacheableResponse(req, res, 100), true);
     });
   });
-  
+
   describe("getExpirationTimestamp()", () => {
     const now = Date.now();
 

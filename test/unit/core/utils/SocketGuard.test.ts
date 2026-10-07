@@ -3,8 +3,6 @@ import { EventEmitter } from "node:events";
 import { SocketGuard } from "../../../../src/core/utils/SocketGuard";
 import { ProxyUtils } from "../../../../src/core/utils/ProxyUtils";
 
- 
-
 class MockSocket extends EventEmitter {
   destroyed = false;
 

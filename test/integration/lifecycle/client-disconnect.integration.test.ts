@@ -277,8 +277,6 @@ describe("Proxy Client Disconnect Integration", () => {
         req.end();
       });
 
-      console.info("status code:",response.statusCode)
-
       assert.equal(upstreamRequestStarted, true);
       assert.equal(response.statusCode, 504);
       assert.match(response.body, /Gateway Timeout/i);

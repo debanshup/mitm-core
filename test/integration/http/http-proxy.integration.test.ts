@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import http from "node:http";
-import net from "net"
+import net from "net";
 import { Proxy } from "../../../src/lib/Proxy";
 
 describe("HTTP Proxy Integration", () => {
@@ -11,23 +11,23 @@ describe("HTTP Proxy Integration", () => {
   let proxyPort: number;
 
   beforeEach(async () => {
-   upstream = http.createServer((req, res) => {
-     const chunks: Buffer[] = [];
+    upstream = http.createServer((req, res) => {
+      const chunks: Buffer[] = [];
 
-     req.on("data", (chunk) => {
-       chunks.push(Buffer.from(chunk));
-     });
+      req.on("data", (chunk) => {
+        chunks.push(Buffer.from(chunk));
+      });
 
-     req.on("end", () => {
-       const body = Buffer.concat(chunks).toString();
+      req.on("end", () => {
+        const body = Buffer.concat(chunks).toString();
 
-       res.writeHead(200, {
-         "content-type": "text/plain",
-       });
+        res.writeHead(200, {
+          "content-type": "text/plain",
+        });
 
-       res.end(body || "hello from upstream");
-     });
-   });
+        res.end(body || "hello from upstream");
+      });
+    });
 
     await new Promise<void>((resolve) => {
       upstream.listen(0, () => resolve());
@@ -50,17 +50,17 @@ describe("HTTP Proxy Integration", () => {
   afterEach(async () => {
     await proxy.stop();
 
-   await new Promise<void>((resolve, reject) => {
-     if (!upstream.listening) {
-       resolve();
-       return;
-     }
+    await new Promise<void>((resolve, reject) => {
+      if (!upstream.listening) {
+        resolve();
+        return;
+      }
 
-     upstream.close((err) => {
-       if (err) reject(err);
-       else resolve();
-     });
-   });
+      upstream.close((err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
   });
 
   it("should proxy a GET request to the upstream server", async () => {

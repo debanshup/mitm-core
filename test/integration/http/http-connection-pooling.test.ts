@@ -10,7 +10,6 @@ import assert from "node:assert";
 const CA_CERT = fs.readFileSync("creds/__self__/CA.pem", "utf8");
 const CA_KEY = fs.readFileSync("creds/__self__/key.pem", "utf8");
 
- 
 describe("HTTP/1.1 Connection Pooling", () => {
   let upstream: http.Server;
   let proxy: Proxy;

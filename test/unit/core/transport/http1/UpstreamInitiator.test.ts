@@ -60,6 +60,7 @@ describe("UpstreamInitiator", () => {
           res: clientRes,
         },
       },
+      lifecycle: { timestamps: {} },
     } as any;
   }
 
@@ -260,7 +261,7 @@ describe("UpstreamInitiator", () => {
 
     upstream.destroy();
   });
-  
+
   it("should destroy the upstream request when the client response closes", async () => {
     const scope = createScope();
 

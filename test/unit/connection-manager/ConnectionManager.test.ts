@@ -3,7 +3,6 @@ import { EventEmitter } from "node:events";
 import type net from "node:net";
 import { connectionManager } from "../../../src/core/connection/ConnectionManager";
 
-
 class MockSocket extends EventEmitter {
   destroyed = false;
 

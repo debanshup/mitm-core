@@ -546,12 +546,11 @@ describe("ResponseCacheProcessor", () => {
         useResponseCache: true,
       } as any);
 
-       (processor as any).cachedRes = {
-         headers: {},
-         body: Buffer.from(""),
-         expires: 0,
-       } as any;
-
+      (processor as any).cachedRes = {
+        headers: {},
+        body: Buffer.from(""),
+        expires: 0,
+      } as any;
 
       const upstreamRes = {
         statusCode: 304,

@@ -668,6 +668,4 @@ describe("HTTPS Error Path Matrix", () => {
       }, 1000);
     });
   });
-
-  
 });

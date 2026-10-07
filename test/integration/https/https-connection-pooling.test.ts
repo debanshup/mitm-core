@@ -367,60 +367,60 @@ describe("HTTPS Connection Pooling", () => {
     assert.strictEqual(second.body, "ok");
   });
 
-//   it("reuses the same upstream HTTPS connection for sequential requests", async () => {
-//     const first = await makeHttpsProxyRequest(
-//       proxyPort,
-//       upstreamPort,
-//       "/first",
-//     );
+  //   it("reuses the same upstream HTTPS connection for sequential requests", async () => {
+  //     const first = await makeHttpsProxyRequest(
+  //       proxyPort,
+  //       upstreamPort,
+  //       "/first",
+  //     );
 
-//     const second = await makeHttpsProxyRequest(
-//       proxyPort,
-//       upstreamPort,
-//       "/second",
-//     );
+  //     const second = await makeHttpsProxyRequest(
+  //       proxyPort,
+  //       upstreamPort,
+  //       "/second",
+  //     );
 
-//     const third = await makeHttpsProxyRequest(
-//       proxyPort,
-//       upstreamPort,
-//       "/third",
-//     );
+  //     const third = await makeHttpsProxyRequest(
+  //       proxyPort,
+  //       upstreamPort,
+  //       "/third",
+  //     );
 
-//     assert.strictEqual(first.statusCode, 200);
-//     assert.strictEqual(first.body, "ok");
+  //     assert.strictEqual(first.statusCode, 200);
+  //     assert.strictEqual(first.body, "ok");
 
-//     assert.strictEqual(second.statusCode, 200);
-//     assert.strictEqual(second.body, "ok");
+  //     assert.strictEqual(second.statusCode, 200);
+  //     assert.strictEqual(second.body, "ok");
 
-//     assert.strictEqual(third.statusCode, 200);
-//     assert.strictEqual(third.body, "ok");
+  //     assert.strictEqual(third.statusCode, 200);
+  //     assert.strictEqual(third.body, "ok");
 
-//     assert.strictEqual(upstreamRequestCount, 3);
-//     assert.strictEqual(upstreamConnectionCount, 1);
-//   });
+  //     assert.strictEqual(upstreamRequestCount, 3);
+  //     assert.strictEqual(upstreamConnectionCount, 1);
+  //   });
 
-//   it("reuses an idle HTTPS upstream connection", async () => {
-//     const first = await makeHttpsProxyRequest(
-//       proxyPort,
-//       upstreamPort,
-//       "/first",
-//     );
+  //   it("reuses an idle HTTPS upstream connection", async () => {
+  //     const first = await makeHttpsProxyRequest(
+  //       proxyPort,
+  //       upstreamPort,
+  //       "/first",
+  //     );
 
-//     const second = await makeHttpsProxyRequest(
-//       proxyPort,
-//       upstreamPort,
-//       "/second",
-//     );
+  //     const second = await makeHttpsProxyRequest(
+  //       proxyPort,
+  //       upstreamPort,
+  //       "/second",
+  //     );
 
-//     assert.strictEqual(first.statusCode, 200);
-//     assert.strictEqual(first.body, "ok");
+  //     assert.strictEqual(first.statusCode, 200);
+  //     assert.strictEqual(first.body, "ok");
 
-//     assert.strictEqual(second.statusCode, 200);
-//     assert.strictEqual(second.body, "ok");
+  //     assert.strictEqual(second.statusCode, 200);
+  //     assert.strictEqual(second.body, "ok");
 
-//     assert.strictEqual(upstreamRequestCount, 2);
-//     assert.strictEqual(upstreamConnectionCount, 1);
-//   });
+  //     assert.strictEqual(upstreamRequestCount, 2);
+  //     assert.strictEqual(upstreamConnectionCount, 1);
+  //   });
 
   it("uses the upstream HTTPS connection pool for concurrent requests", async () => {
     const results = await Promise.all([
