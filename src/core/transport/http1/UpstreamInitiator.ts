@@ -4,6 +4,7 @@ import { pipeline } from "stream";
 import { ProxyUtils } from "../../utils/ProxyUtils";
 import type { RequestScope } from "../../scope/types";
 import { pluginEventManager } from "../../event/plugin-events/pluginEvents";
+import { getConfig } from "../../../config.registry";
 
 export class UpstreamInitiator {
   private static httpsAgent = new https.Agent({
@@ -13,7 +14,7 @@ export class UpstreamInitiator {
     maxFreeSockets: 256,
     scheduling: "fifo",
     timeout: 60000,
-    rejectUnauthorized: false,
+    rejectUnauthorized: false, // strictly local
     checkServerIdentity: () => undefined,
   });
 
@@ -27,7 +28,7 @@ export class UpstreamInitiator {
   });
 
   public static async initH1UpstreamReq(targetUrl: URL, scope: RequestScope) {
-    const { request } = scope;
+    const { request, lifecycle } = scope;
     const clientReq = request.client.req;
 
     if (!clientReq) {
@@ -41,6 +42,8 @@ export class UpstreamInitiator {
     let upstream: ClientRequest;
 
     try {
+      scope.lifecycle.timestamps.upstreamSentAt = Date.now();
+
       upstream = requestModule.request({
         host: targetUrl.hostname,
         port: targetUrl.port || (isHTTPS ? 443 : 80),
@@ -59,7 +62,7 @@ export class UpstreamInitiator {
 
         agent,
 
-        timeout: 30000,
+        timeout: getConfig().upstreamTimeoutMs,
 
         maxHeaderSize: 128 * 1024,
       });
@@ -72,10 +75,40 @@ export class UpstreamInitiator {
       this.handleUpstreamFailure(syncError as Error, scope, targetUrl);
       throw syncError;
     }
-
+    
     // Disable Nagle's algorithm for lower latency
     upstream.setNoDelay(true);
 
+    upstream.on("timeout", () => {
+      console.warn(
+        `[Proxy Timeout]: Upstream server ${request.target.host} timed out.`,
+      );
+
+      const inboundRes = request.client.res;
+
+      if (!inboundRes || inboundRes.destroyed || inboundRes.writableEnded) {
+        lifecycle.state.set("error", true);
+        return;
+      }
+
+      inboundRes.writeHead(504, {
+        "Content-Type": "application/json",
+      });
+
+      inboundRes.end(
+        JSON.stringify({
+          error: "Gateway Timeout: Upstream failed to respond.",
+        }),
+      );
+
+      lifecycle.state.set("error", true);
+
+      if (!upstream.destroyed) {
+        const timeoutErr = new Error("ERR_UPSTREAM_TIMEOUT");
+        (timeoutErr as any).code = "ERR_UPSTREAM_TIMEOUT";
+        upstream.destroy(timeoutErr);
+      }
+    });
     upstream.once("socket", (socket) => {
       if (socket.connecting) {
         const connectEvent = isHTTPS ? "secureConnect" : "connect";
@@ -97,30 +130,69 @@ export class UpstreamInitiator {
       await pluginEventManager.emitAsync("proxy:upstream-request", { scope });
     });
 
-    const onClientClose = () => {
-      if (upstream && !upstream.destroyed) {
+    let clientDisconnected = false;
+    let cleanedUp = false;
+
+    const onClientDisconnect = () => {
+      if (clientDisconnected) return;
+      clientDisconnected = true;
+
+      if (!upstream.destroyed) {
         upstream.destroy();
       }
     };
 
-    request.client.res?.once("close", onClientClose);
+    const onClientAborted = () => {
+      if (!clientReq.readableEnded) {
+        onClientDisconnect();
+      }
+    };
+
+    const onClientResponseClose = () => {
+      if (!request.client.res?.writableEnded) {
+        onClientDisconnect();
+      }
+    };
+
+    const cleanupClientListeners = () => {
+      if (cleanedUp) return;
+
+      cleanedUp = true;
+
+      clientSocket?.removeListener("close", onClientDisconnect);
+
+      clientReq.removeListener("aborted", onClientAborted);
+
+      request.client.res?.removeListener("close", onClientResponseClose);
+    };
+
+    const clientSocket = clientReq.socket;
+
+    clientSocket?.once("close", onClientDisconnect);
+
+    clientReq.once("aborted", onClientAborted);
+
+    request.client.res?.once("close", onClientResponseClose);
+
+    request.client.res?.once("finish", cleanupClientListeners);
+
+    request.client.res?.once("close", cleanupClientListeners);
 
     pipeline(clientReq, upstream, (err) => {
-      request.client.res?.removeListener("close", onClientClose);
+      if (!err) return;
 
-      if (err) {
-        const errCode = (err as NodeJS.ErrnoException).code;
-        // Ignore pipeline errors caused by expected client disconnections
-        if (
-          errCode !== "ERR_STREAM_PREMATURE_CLOSE" &&
-          err.message !== "ERR_CLIENT_DISCONNECTED"
-        ) {
-          console.error(
-            "Pipeline mapping failed from client to upstream:",
-            err,
-          );
-          this.handleUpstreamFailure(err, scope, targetUrl);
-        }
+      const errCode = (err as NodeJS.ErrnoException).code;
+
+      if (clientDisconnected) {
+        return;
+      }
+
+      if (
+        errCode !== "ERR_STREAM_PREMATURE_CLOSE" &&
+        errCode !== "ERR_CLIENT_DISCONNECTED"
+      ) {
+        console.error("Pipeline mapping failed from client to upstream:", err);
+        this.handleUpstreamFailure(err, scope, targetUrl);
       }
     });
 
