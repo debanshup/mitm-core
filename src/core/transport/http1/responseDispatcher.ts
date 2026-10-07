@@ -3,7 +3,8 @@ import type { RequestScope } from "../../scope/types";
 import type { ResponseCacheProcessor } from "../../cache/ResponseCacheProcessor";
 import { StreamingResponseHandler } from "./streamingResponseHandler";
 import { ScopeMutator } from "../../scope/ScopeMutator";
-const RES_HOP_HEADERS = new Set([
+
+export const RES_HOP_HEADERS = new Set([
   "connection",
   "keep-alive",
   "transfer-encoding",
@@ -26,7 +27,7 @@ export class ResponseDispatcher {
       statusCode === 101 &&
       upstreamRes.headers["upgrade"]?.toLowerCase() === "websocket";
 
-      // console.info(isWebSocketUpgrade, upstreamRes.statusCode, scope.request.target.url)
+    // console.info(isWebSocketUpgrade, upstreamRes.statusCode, scope.request.target.url)
 
     const isNoContent =
       !isWebSocketUpgrade &&
@@ -67,8 +68,17 @@ export class ResponseDispatcher {
         upstream,
       );
     } catch (error) {
+      const errorCode = (error as NodeJS.ErrnoException)?.code ?? "";
+
+      const expectedTermination =
+        errorCode === "ERR_STREAM_PREMATURE_CLOSE" ||
+        errorCode === "ECONNRESET" ||
+        errorCode === "EPIPE"
+      if (expectedTermination) {
+        return;
+      }
       console.error(
-        `[Dispatcher Error Capture] Stream routing failed:`,
+        "[Dispatcher Error Capture] Stream routing failed:",
         error,
         "| target:",
         scope.request.target.originalUrl,
