@@ -1,9 +1,6 @@
 import type { IncomingMessage } from "http";
 import type { ProxyConfig } from "../../lib/Proxy";
-import {
-  ResponseCache,
-  type CachedResponse,
-} from "./ResponseCache";
+import { ResponseCache, type CachedResponse } from "./ResponseCache";
 import type { RequestScope } from "../scope/types";
 
 // Prevent V8 OOM crashes if a stream is infinitely large

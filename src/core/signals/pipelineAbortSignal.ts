@@ -1,6 +1,5 @@
 import type { AbortMessage } from "./types";
 
-
 /**
  * Custom error signaled to stop the execution of a pipeline.
  * Used for intentional control flow interruptions rather than unexpected failures.
@@ -19,8 +18,8 @@ export class PipelineAbortSignal extends Error {
     }
     this.name = "PipelineAbortSignal";
 
-    Error.captureStackTrace(this, this.constructor)
-    
+    Error.captureStackTrace(this, this.constructor);
+
     // maintain proper stack trace
     Object.setPrototypeOf(this, PipelineAbortSignal.prototype);
   }

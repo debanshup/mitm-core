@@ -35,9 +35,7 @@ export interface ProxyEventMap {
    * Fired after the ProxyContext is initialized, but immediately before the
    * bidirectional data streams (client <-> proxy <-> upstream) are piped together.
    */
-  "connect:before": [
-    payload: { scope: RequestScope; socket: Stream.Duplex },
-  ];
+  "connect:before": [payload: { scope: RequestScope; socket: Stream.Duplex }];
 
   /**
    * Fired when the secure tunnel is fully established and data is actively
@@ -54,7 +52,7 @@ export interface ProxyEventMap {
    * @note This does NOT trigger for `https://` requests. For HTTPS modification,
    * listen to the `https:request` event instead.
    */
-  
+
   "http:request": [
     payload: {
       scope: RequestScope;
@@ -80,8 +78,7 @@ export interface ProxyEventMap {
    * Hook into this event to inspect or alter the secure response before it is
    * re-encrypted and sent back to the client.
    */
-  "response": [payload: { scope: RequestScope }];
-
+  response: [payload: { scope: RequestScope }];
 
   /**
    * Fired when an unhandled exception occurs within the proxy network stack
@@ -90,5 +87,4 @@ export interface ProxyEventMap {
   error: [err: Error | unknown];
 }
 
-
-export const proxyEventManager = new TypedEventEmitter<ProxyEventMap>()
+export const proxyEventManager = new TypedEventEmitter<ProxyEventMap>();

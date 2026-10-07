@@ -20,10 +20,10 @@ export class ResponseHandler extends BaseHandler {
         H1OutboundBridge.execute(scope, this.config, resolve, reject);
       } else if (session.protocol.httpVersion === "h2") {
         // HTTP/2 later
-        resolve()
+        resolve();
       } else {
         // Other / unknown protocol
-        resolve()
+        resolve();
       }
     });
   }

@@ -1,6 +1,6 @@
 import { BaseHandler } from "./base/base.handler";
 import type { RequestScope } from "../scope/types";
-import { UpstreamInitiator} from "../transport/http1/UpstreamInitiator";
+import { UpstreamInitiator } from "../transport/http1/UpstreamInitiator";
 import { getConfig } from "../../config.registry";
 import { pluginEventManager } from "../event/plugin-events/pluginEvents";
 import { ScopeMutator } from "../scope/ScopeMutator";
@@ -96,10 +96,10 @@ export class RequestHandler extends BaseHandler {
       targetUrl,
       scope,
     );
-    const success =  ScopeMutator.applyUpstreamInitState(scope, h1UpstreamReq);
-      if (!success) {
-        return;
-      }
-      await pluginEventManager.emitAsync("proxy:upstream-dispatch", { scope });
+    const success = ScopeMutator.applyUpstreamInitState(scope, h1UpstreamReq);
+    if (!success) {
+      return;
+    }
+    await pluginEventManager.emitAsync("proxy:upstream-dispatch", { scope });
   }
 }

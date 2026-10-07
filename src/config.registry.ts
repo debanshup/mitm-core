@@ -1,6 +1,6 @@
 import type { ProxyConfig } from "./lib/Proxy";
 
- const configRegistry: Partial<ProxyConfig> = {};
+const configRegistry: Partial<ProxyConfig> = {};
 
 export function registerGlobalConfig(config: ProxyConfig) {
   Object.assign(configRegistry, config);
@@ -13,4 +13,3 @@ export function registerGlobalConfig(config: ProxyConfig) {
 export function getConfig(): Partial<ProxyConfig> {
   return configRegistry;
 }
-

@@ -50,9 +50,9 @@ export default class Pipeline {
     }
 
     if (request.webSocket && !request.webSocket.isUpgraded) {
-      console.info(
-        `[Pipeline] Routing WS upgrade to Outbound Bridge: ${request.target.url}`,
-      );
+      // console.info(
+      //   `[Pipeline] Routing WS upgrade to Outbound Bridge: ${request.target.url}`,
+      // );
 
       lifecycle.nextPhase = undefined;
       await WSOutboundBridge.execute(scope);

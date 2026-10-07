@@ -8,7 +8,7 @@ import type { RequestScope } from "../../scope/types";
  */
 export abstract class BaseHandler {
   abstract readonly phase: Phase;
-  abstract readonly config: ProxyConfig
+  abstract readonly config: ProxyConfig;
   abstract handle(scope: RequestScope): Promise<void>;
   get name(): string {
     return this.constructor.name;
