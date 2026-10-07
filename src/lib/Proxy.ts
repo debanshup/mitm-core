@@ -49,6 +49,11 @@ export type ProxyConfig = {
    * @default 10000
    */
   handshakeTimeoutMs?: number;
+
+  /**
+   * @default 30000
+   */
+  upstreamTimeoutMs?: number;
 };
 
 /**
@@ -185,14 +190,16 @@ export class Proxy extends TypedEventEmitter<ProxyEventMap> implements IProxy {
       rootCa: options.rootCa || { key: "", cert: "" },
       // rejectUnauthorized: options.rejectUnauthorized ?? true,
       handshakeTimeoutMs: options.handshakeTimeoutMs ?? 10000,
+      upstreamTimeoutMs: options.upstreamTimeoutMs ?? 30000,
     };
 
     // initialization
-    this.bindAllEvents();
-
     Middleware.register({
       initializePipelines: this.config.useDefaultPipelines,
     });
+
+    this.bindAllEvents();
+
     registerGlobalConfig(this.config);
   }
 
@@ -205,6 +212,7 @@ export class Proxy extends TypedEventEmitter<ProxyEventMap> implements IProxy {
     });
 
     this.httpServer.on("connect", async (req, socket, head) => {
+      
       const scope: RequestScope = ContextManager.getOrCreateScope(socket);
 
       scope.request.client.req = req;
@@ -215,6 +223,7 @@ export class Proxy extends TypedEventEmitter<ProxyEventMap> implements IProxy {
         head,
         scope,
       });
+      
     });
 
     this.httpServer.on("request", async (req, res) => {
@@ -315,28 +324,65 @@ export class Proxy extends TypedEventEmitter<ProxyEventMap> implements IProxy {
   }
 
   /**
-   * Stops the HTTP server and forcibly closes all active connections.
-   * @returns A promise that resolves when the server is successfully closed, or rejects if an error occurs.
+   * Stops the HTTP server, allowing in-flight requests to drain within a specific timeframe.
+   * Forcibly closes any lingering connections if the timeout is reached.
+   * @param shutdownTimeoutMs The maximum time to wait for active requests to finish (defaults to 0 ms).
+   * @returns A promise that resolves when the server has shut down.
    */
-  public stop(): Promise<void> {
-    if (!this.httpServer || !this.httpServer.listening)
-      return Promise.resolve();
-    // force close all active and idle sockets
-    if ("closeAllConnections" in this.httpServer) {
-      this.httpServer.closeAllConnections();
+  public async stop(shutdownTimeoutMs: number = 0): Promise<void> {
+    if (!this.httpServer || !this.httpServer.listening) {
+      return;
     }
 
-    return new Promise((resolve, reject) => {
-      connectionManager.destroyAll();
+    // Stop accepting new connections immediately
+    const serverClosePromise = new Promise<void>((resolve, reject) => {
       this.httpServer!.close((err) => {
-        if (err) {
-          console.error(err);
-          return reject(err);
-        } else {
-          return resolve();
-        }
+        if (err) return reject(err);
+        resolve();
       });
     });
+
+    const drainPromise = new Promise<void>((resolve) => {
+      if (ContextManager.getActiveRequests().length === 0) {
+        return resolve();
+      }
+
+      const interval = setInterval(() => {
+        if (ContextManager.getActiveRequests().length === 0) {
+          clearInterval(interval);
+          resolve();
+        }
+      }, 50);
+
+      interval.unref();
+    });
+
+    const timeoutPromise = new Promise<void>((resolve) => {
+      const timer = setTimeout(() => {
+        console.warn(
+          `[Shutdown] Shutdown timeout of ${shutdownTimeoutMs}ms reached. Force-closing ${ContextManager.getActiveRequests().length} requests.`,
+        );
+        resolve();
+      }, shutdownTimeoutMs);
+
+      timer.unref();
+    });
+
+    // Race the natural drain against the hard cutoff timeout
+    await Promise.race([drainPromise, timeoutPromise]);
+
+    ContextManager.destroyActiveRequests();
+    connectionManager.destroyAll();
+
+    if (typeof this.httpServer!.closeAllConnections === "function") {
+      this.httpServer!.closeAllConnections();
+    }
+
+    connectionEvents.removeAllListeners();
+    pluginEventManager.removeAllListeners();
+    proxyEventManager.removeAllListeners();
+
+    await serverClosePromise;
   }
 
   public address() {
