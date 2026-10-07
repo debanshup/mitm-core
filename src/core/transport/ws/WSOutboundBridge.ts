@@ -3,6 +3,7 @@ import type { RequestScope } from "../../scope/types";
 import { pluginEventManager } from "../../event/plugin-events/pluginEvents";
 import { ProxyUtils } from "../../utils/ProxyUtils";
 import { WSUpstreamInitiator } from "./WSUpstreamInitiator";
+import { ScopeMutator } from "../../scope/ScopeMutator";
 
 export class WSOutboundBridge {
   public static async execute(scope: RequestScope): Promise<void> {
@@ -56,18 +57,19 @@ export class WSOutboundBridge {
           originChannel?: string,
         ) => {
           if (isTornDown) return;
+
           isTornDown = true;
+
           if (err) {
             console.error(
               `[WS_INFRA_FAILURE] [${originChannel}] Stream Exception:`,
               err.message,
             );
-          } else {
-            console.info(
-              `[WS_TUNNEL_CLOSED] Connection terminated cleanly for: ${targetUrl.host}`,
-            );
           }
+
           ProxyUtils.cleanUp([clientSocket, upstreamSocket]);
+
+          ScopeMutator.finishPipeline(scope);
         };
 
         try {
