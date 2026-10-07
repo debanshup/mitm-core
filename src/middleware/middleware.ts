@@ -3,6 +3,11 @@ import { connectionEvents } from "../core/event/connection-events/connectionEven
 import { ScopeMutator } from "../core/scope/ScopeMutator";
 import { proxyEventManager } from "../core/event/proxy-events/proxyEvents";
 import { pluginEventManager } from "../core/event/plugin-events/pluginEvents";
+import type { Proxy } from "../lib/Proxy";
+import type { Socket } from "net";
+import type { IncomingMessage, ServerResponse } from "http";
+import type { Duplex } from "stream";
+import type { RequestScope } from "../core/scope/types";
 
 /**
  * Manages middleware registration and orchestrates the proxy connection lifecycle.
@@ -19,42 +24,37 @@ export class Middleware {
    */
   public static register({
     initializePipelines,
+    // proxy,
   }: {
     initializePipelines: boolean;
+    // proxy: Proxy;
   }) {
     if (initializePipelines) {
       Pipeline.compile();
     } else {
       return;
     }
-    connectionEvents.on("TCP", async ({ socket }) => {
+
+    const onTCP = async ({ socket }: { socket: Socket }) => {
       try {
         ScopeMutator.initializeSessionContext(socket);
         await proxyEventManager.emitAsync("connection:open", { socket });
       } catch (err) {
         throw err;
       }
-    });
+    };
 
-    connectionEvents.on("HTTP:PLAIN", async ({ req, res, scope }) => {
-      try {
-        const success = ScopeMutator.applyHttpPlainState(scope, req, res);
-        if (!success) return;
-
-        await pluginEventManager.emitAsync("proxy:client-http-request", {
-          scope,
-        });
-        await proxyEventManager.emitAsync("http:request", { scope });
-
-        await Pipeline.run(scope);
-      } catch (err) {
-        console.error(`[Middleware Fatal] Pipeline crash on HTTP:PLAIN:`, err);
-        ScopeMutator.failPipeline(scope);
-        if (!res.destroyed) res.destroy();
-      }
-    });
-
-    connectionEvents.on("CONNECT", async ({ req, socket, head, scope }) => {
+    const onConnect = async ({
+      req,
+      socket,
+      head,
+      scope,
+    }: {
+      scope: RequestScope;
+      req: IncomingMessage;
+      socket: Duplex;
+      head: Buffer;
+    }) => {
       try {
         const success = ScopeMutator.applyConnectState(
           scope,
@@ -77,10 +77,35 @@ export class Middleware {
         ScopeMutator.failPipeline(scope);
         if (!socket.destroyed) socket.destroy();
       }
-    });
+    };
 
+    const onHttpPlain = async ({
+      req,
+      res,
+      scope,
+    }: {
+      scope: RequestScope;
+      req: IncomingMessage;
+      res: ServerResponse;
+    }) => {
+      try {
+        const success = ScopeMutator.applyHttpPlainState(scope, req, res);
+        if (!success) return;
 
-    connectionEvents.on("HTTPS:DECRYPTED", async ({ scope }) => {
+        await pluginEventManager.emitAsync("proxy:client-http-request", {
+          scope,
+        });
+        await proxyEventManager.emitAsync("http:request", { scope });
+
+        await Pipeline.run(scope);
+      } catch (err) {
+        console.error(`[Middleware Fatal] Pipeline crash on HTTP:PLAIN:`, err);
+        ScopeMutator.failPipeline(scope);
+        if (!res.destroyed) res.destroy();
+      }
+    };
+
+    const onHttpsDecrypted = async ({ scope }: { scope: RequestScope }) => {
       try {
         const success = ScopeMutator.applyHttpsDecryptedState(scope);
         if (!success) return;
@@ -99,9 +124,33 @@ export class Middleware {
         if (!scope.request.client.res?.destroyed)
           scope.request.client.res?.destroy();
       }
-    });
+    };
 
-    connectionEvents.on("WS:UPGRADE", async ({ head, req, scope, socket }) => {
+    const onUpstreamResponse = async ({
+      scope,
+      upstreamRes,
+    }: {
+      scope: RequestScope;
+      upstreamRes: IncomingMessage;
+    }) => {
+      const success = ScopeMutator.applyResponseState(scope, upstreamRes);
+      if (!success) {
+        return;
+      }
+      await pluginEventManager.emitAsync("proxy:target-response", { scope });
+    };
+
+    const onWsUpgrade = async ({
+      head,
+      req,
+      scope,
+      socket,
+    }: {
+      scope: RequestScope;
+      req: IncomingMessage;
+      socket: Duplex;
+      head: Buffer;
+    }) => {
       try {
         const wsScope = scope;
 
@@ -120,14 +169,33 @@ export class Middleware {
         );
         if (!socket.destroyed) socket.destroy();
       }
-    });
+    };
 
-    connectionEvents.on("UPSTREAM:RESPONSE", async ({ scope, upstreamRes }) => {
-      const success = ScopeMutator.applyResponseState(scope, upstreamRes);
-      if (!success) {
-        return;
-      }
-      await pluginEventManager.emitAsync("proxy:target-response", { scope });
-    });
+    connectionEvents.on("TCP", onTCP);
+
+    connectionEvents.on("HTTP:PLAIN", onHttpPlain);
+
+    connectionEvents.on("CONNECT", onConnect);
+
+    connectionEvents.on("HTTPS:DECRYPTED", onHttpsDecrypted);
+
+    connectionEvents.on("WS:UPGRADE", onWsUpgrade);
+
+    connectionEvents.on("UPSTREAM:RESPONSE", onUpstreamResponse);
+
+    // let cleanedUp = false;
+
+    // return () => {
+    //   if (cleanedUp) return;
+
+    //   cleanedUp = true;
+
+    //   connectionEvents.off("TCP", onTCP);
+    //   connectionEvents.off("CONNECT", onConnect);
+    //   connectionEvents.off("HTTP:PLAIN", onHttpPlain);
+    //   connectionEvents.off("HTTPS:DECRYPTED", onHttpsDecrypted);
+    //   connectionEvents.off("UPSTREAM:RESPONSE", onUpstreamResponse);
+    //   connectionEvents.off("WS:UPGRADE", onWsUpgrade);
+    // };
   }
 }
