@@ -22,15 +22,15 @@ export class StreamingResponseHandler {
       return;
     }
 
-   if (!res.headersSent) {
-     const cleanedHeaders: Record<string, string | string[]> = {};
-     for (const [key, value] of Object.entries(upstreamRes.headers)) {
-       if (value !== undefined && !RES_HOP_HEADERS.has(key.toLowerCase())) {
-         cleanedHeaders[key] = value;
-       }
-     }
-     res.writeHead(upstreamRes.statusCode || 200, cleanedHeaders);
-   }
+    if (!res.headersSent) {
+      const cleanedHeaders: Record<string, string | string[]> = {};
+      for (const [key, value] of Object.entries(upstreamRes.headers)) {
+        if (value !== undefined && !RES_HOP_HEADERS.has(key.toLowerCase())) {
+          cleanedHeaders[key] = value;
+        }
+      }
+      res.writeHead(upstreamRes.statusCode || 200, cleanedHeaders);
+    }
 
     const teeStream = new PassThrough({ highWaterMark: 1024 * 1024 });
 
@@ -52,11 +52,13 @@ export class StreamingResponseHandler {
       cleanupSockets();
 
       const errorCode = error.code ?? "";
-      if (
-        !["ECONNRESET", "EPIPE", "ERR_STREAM_PREMATURE_CLOSE"].includes(
-          errorCode,
-        )
-      ) {
+
+      const isExpectedClose =
+        errorCode === "ECONNRESET" ||
+        errorCode === "EPIPE" ||
+        errorCode === "ERR_STREAM_PREMATURE_CLOSE";
+
+      if (!isExpectedClose) {
         console.error(
           "[StreamingResponseHandler] Upstream runtime streaming fault:",
           error,
