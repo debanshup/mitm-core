@@ -20,6 +20,9 @@ export class ContextManager {
   private static connectionIndex = new Map<string, SessionContext>();
   //  request index
   private static requestIndex = new Map<string, RequestContext>();
+
+  private static activeRequests = new Map<string, RequestContext>();
+
   // lifecycle index
   private static requestLifeCycleIndex = new Map<string, RequestLifecycle>();
 
@@ -58,6 +61,8 @@ export class ContextManager {
         this.requestIndex.delete(requestKey);
       });
     }
+
+    this.activeRequests.set(context.requestId, context);
 
     return context;
   }
@@ -184,11 +189,34 @@ export class ContextManager {
     };
   }
 
+  public static getActiveRequests(): RequestContext[] {
+    return [...this.activeRequests.values()];
+  }
+
+  public static destroyActiveRequests(): void {
+    for (const request of this.activeRequests.values()) {
+      const upstreamReq = request.upstream.req;
+
+      if (upstreamReq && !upstreamReq.destroyed) {
+        upstreamReq.destroy();
+      }
+
+      const clientRes = request.client.res;
+
+      if (clientRes && !clientRes.destroyed) {
+        clientRes.destroy();
+      }
+    }
+
+    this.activeRequests.clear();
+  }
+
   /**
    * CRITICAL: Must be called when the proxy finishes serving the request
    * or when the socket abruptly closes to prevent OOM memory leaks.
    */
   public static destroyRequestLifecycle(requestId: string): void {
     this.requestLifeCycleIndex.delete(requestId);
+    this.activeRequests.delete(requestId);
   }
 }
