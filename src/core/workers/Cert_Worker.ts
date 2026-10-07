@@ -63,12 +63,12 @@ export default ({ host, caConfig }: WorkerPayload) => {
         },
       ],
     },
-    {
-      name: "authorityKeyIdentifier",
-      keyIdentifier: true,
-      authorityCertIssuer: true,
-      serialNumber: cachedCaCert.serialNumber,
-    },
+    // {
+    //   name: "authorityKeyIdentifier",
+    //   keyIdentifier: true,
+    //   authorityCertIssuer: true,
+    //   serialNumber: cachedCaCert.serialNumber,
+    // },
     { name: "subjectKeyIdentifier" },
   ]);
 
