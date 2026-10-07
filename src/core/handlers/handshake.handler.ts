@@ -1,4 +1,5 @@
-import tls from "tls";
+import tls from "node:tls";
+import net from "node:net";
 import { CAManager } from "../CA/CAManager";
 import { BaseHandler } from "./base/base.handler";
 import { ProxyUtils } from "../utils/ProxyUtils";
@@ -9,6 +10,7 @@ import { proxyEventManager } from "../event/proxy-events/proxyEvents";
 import { pluginEventManager } from "../event/plugin-events/pluginEvents";
 import { SocketGuard } from "../utils/SocketGuard";
 import { PipelineAbortSignal } from "../signals/pipelineAbortSignal";
+import { ContextManager } from "../scope/ContextManager";
 
 export class HandshakeHandler extends BaseHandler {
   readonly phase = "handshake";
@@ -107,7 +109,10 @@ export class HandshakeHandler extends BaseHandler {
         SNICallback: (servername, cb) => {
           (async () => {
             try {
-              const target = servername || host;
+              const isValidSNI = servername && net.isIP(servername) === 0;
+
+              const target = isValidSNI ? servername : host;
+
               if (!target) {
                 return cb(new Error("No hostname available for TLS handshake"));
               }
@@ -124,7 +129,6 @@ export class HandshakeHandler extends BaseHandler {
               const ctx = this.config.useCertificateCache
                 ? await CAManager.getCA(target, this.config)
                 : await CAManager.generateCA(target, this.config);
-
               cb(null, ctx);
             } catch (err) {
               console.error(`[Fatal SNI Error] ${err}`);
@@ -153,6 +157,7 @@ export class HandshakeHandler extends BaseHandler {
         isSettled = true;
         clearTimeout(handshakeTimeout);
         const httpVersion = session.protocol.httpVersion;
+
         try {
           if (httpVersion === "h2") {
             // to be executed
@@ -188,6 +193,12 @@ export class HandshakeHandler extends BaseHandler {
 
         lifecycle.state.set("error", true);
         reject(err);
+      });
+
+      tlsSocket.once("close", () => {
+        if (scope.request?.requestId) {
+          ContextManager.destroyRequestLifecycle(scope.request.requestId);
+        }
       });
     });
   }
