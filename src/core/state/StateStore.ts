@@ -1,17 +1,6 @@
-// create stream based treansform
-
 export type RequestState = {
-  "cert.cacheHit": boolean;
-  "request.cacheHit": boolean;
   "response.cacheHit": boolean;
-
   "request.finished": boolean;
-  "request.aborted": boolean;
-  "response.aborted": boolean;
-
-  "upstream.connected": boolean;
-  "upstream.responseReceived": boolean;
-
   "request.error": boolean;
   error: boolean;
 };
