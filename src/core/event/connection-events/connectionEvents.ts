@@ -4,7 +4,7 @@ import type { ClientRequest, IncomingMessage, ServerResponse } from "http";
 
 import { TypedEventEmitter } from "../EventBus";
 
-import type { RequestScope, SessionContext } from "../../scope/types";
+import type { RequestScope } from "../../scope/types";
 
 export interface ConnectionEventMap {
   /**

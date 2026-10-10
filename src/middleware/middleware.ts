@@ -24,10 +24,8 @@ export class Middleware {
    */
   public static register({
     initializePipelines,
-    // proxy,
   }: {
     initializePipelines: boolean;
-    // proxy: Proxy;
   }) {
     if (initializePipelines) {
       Pipeline.compile();
