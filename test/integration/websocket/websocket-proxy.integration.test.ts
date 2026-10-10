@@ -5,10 +5,10 @@ import net from "net";
 import { WebSocket, WebSocketServer } from "ws";
 import { HttpProxyAgent } from "http-proxy-agent";
 import { HttpsProxyAgent } from "https-proxy-agent";
-
 import fs from "fs";
 import path from "path";
 
+import { ContextManager } from "../../../src/core/scope/ContextManager";
 import { Proxy } from "../../../src/lib/Proxy";
 
 const CA_CERT = fs.readFileSync("creds/__self__/CA.pem", "utf8");
@@ -374,7 +374,7 @@ describe("WebSocket Proxy Integration", () => {
 
     let upstreamConnected = false;
     let upstreamClosed = false;
-
+    const activeRequestsBefore = ContextManager.getActiveRequests().length;
     const upstreamClosedPromise = new Promise<void>((resolve) => {
       wsUpstream.once("connection", (socket) => {
         upstreamConnected = true;
@@ -414,6 +414,26 @@ describe("WebSocket Proxy Integration", () => {
     ]);
 
     assert.equal(upstreamClosed, true);
+    assert.equal(
+      client.readyState,
+      WebSocket.CLOSED,
+      "Expected downstream WS to close after upstream termination",
+    );
+
+    const cleanupDeadline = Date.now() + 3000;
+
+    while (
+      ContextManager.getActiveRequests().length > activeRequestsBefore &&
+      Date.now() < cleanupDeadline
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+
+    assert.equal(
+      ContextManager.getActiveRequests().length,
+      activeRequestsBefore,
+      "Expected the WS request context to be removed after tunnel teardown",
+    );
   });
 
   it("should close the upstream WSS connection when the client terminates abruptly", async function () {
@@ -421,7 +441,7 @@ describe("WebSocket Proxy Integration", () => {
 
     let upstreamConnected = false;
     let upstreamClosed = false;
-
+    const activeRequestsBefore = ContextManager.getActiveRequests().length;
     const upstreamClosedPromise = new Promise<void>((resolve) => {
       wss.once("connection", (socket) => {
         upstreamConnected = true;
@@ -465,5 +485,121 @@ describe("WebSocket Proxy Integration", () => {
     ]);
 
     assert.equal(upstreamClosed, true);
+    assert.equal(
+      client.readyState,
+      WebSocket.CLOSED,
+      "Expected downstream WSS to close after upstream termination",
+    );
+    const cleanupDeadline = Date.now() + 3000;
+
+    while (
+      ContextManager.getActiveRequests().length > activeRequestsBefore &&
+      Date.now() < cleanupDeadline
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+
+    assert.equal(
+      ContextManager.getActiveRequests().length,
+      activeRequestsBefore,
+      "Expected the WSS request context to be removed after tunnel teardown",
+    );
+  });
+
+  it("should close the client WS connection when the upstream terminates abruptly", async function () {
+    this.timeout(5000);
+
+    let upstreamSocket: import("ws").WebSocket | undefined;
+
+    const upstreamConnected = new Promise<void>((resolve) => {
+      wsUpstream.once("connection", (socket) => {
+        upstreamSocket = socket;
+        resolve();
+      });
+    });
+
+    const client = new WebSocket(
+      `ws://127.0.0.1:${upstreamPort}/upstream-abort`,
+      {
+        agent: new HttpProxyAgent(`http://127.0.0.1:${proxyPort}`),
+      },
+    );
+
+    client.on("error", () => {
+      // Abrupt termination can surface as a connection error.
+    });
+
+    const clientClosed = new Promise<number>((resolve) => {
+      client.once("close", (code) => resolve(code));
+    });
+
+    await new Promise<void>((resolve, reject) => {
+      client.once("open", resolve);
+      client.once("error", reject);
+    });
+
+    await upstreamConnected;
+
+    assert.ok(upstreamSocket, "Expected upstream WebSocket to connect");
+
+    // Destroy the transport without a WebSocket close handshake.
+    upstreamSocket!.terminate();
+
+    await clientClosed;
+
+    assert.equal(
+      client.readyState,
+      WebSocket.CLOSED,
+      "Expected downstream WS to close after upstream termination",
+    );
+  });
+
+  it("should close the client WSS connection when the upstream terminates abruptly", async function () {
+    this.timeout(5000);
+
+    let upstreamSocket: import("ws").WebSocket | undefined;
+
+    const upstreamConnected = new Promise<void>((resolve) => {
+      wss.once("connection", (socket) => {
+        upstreamSocket = socket;
+        resolve();
+      });
+    });
+
+    const client = new WebSocket(
+      `wss://localhost:${wssUpstreamPort}/upstream-abort`,
+      {
+        agent: new HttpsProxyAgent(`http://127.0.0.1:${proxyPort}`),
+        rejectUnauthorized: false,
+      },
+    );
+
+    client.on("error", () => {
+      // Abrupt termination can surface as a connection error.
+    });
+
+    const clientClosed = new Promise<number>((resolve) => {
+      client.once("close", (code) => resolve(code));
+    });
+
+    await new Promise<void>((resolve, reject) => {
+      client.once("open", resolve);
+      client.once("error", reject);
+    });
+
+    await upstreamConnected;
+
+    assert.ok(upstreamSocket, "Expected upstream WSS to connect");
+
+    // Destroy the transport without a WebSocket close handshake.
+    upstreamSocket!.terminate();
+
+    await clientClosed;
+
+    assert.equal(
+      client.readyState,
+      WebSocket.CLOSED,
+      "Expected downstream WSS to close after upstream termination",
+    );
   });
 });

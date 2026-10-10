@@ -7,6 +7,7 @@ import net from "node:net";
 import tls from "node:tls";
 
 import { Proxy } from "../../../src/lib/Proxy";
+import { ContextManager } from "../../../src/core/scope/ContextManager";
 
 const CA_CERT = fs.readFileSync("creds/__self__/CA.pem", "utf8");
 const CA_KEY = fs.readFileSync("creds/__self__/key.pem", "utf8");
@@ -243,6 +244,8 @@ describe("Proxy Client Disconnect Integration", () => {
       // Intentionally never respond to simulate a timeout
     });
 
+    const activeRequestsBefore = ContextManager.getActiveRequests().length;
+
     try {
       const response = await new Promise<{
         statusCode?: number;
@@ -281,21 +284,57 @@ describe("Proxy Client Disconnect Integration", () => {
       assert.equal(response.statusCode, 504);
       assert.match(response.body, /Gateway Timeout/i);
 
-      await new Promise<void>((resolve) => {
-        if (upstreamRequestClosed) {
-          resolve();
-          return;
-        }
+      await new Promise<void>((resolve, reject) => {
+        const deadline = Date.now() + 500;
 
-        const interval = setInterval(() => {
+        const check = () => {
           if (upstreamRequestClosed) {
-            clearInterval(interval);
             resolve();
+            return;
           }
-        }, 10);
+
+          if (Date.now() >= deadline) {
+            reject(
+              new Error("Upstream response socket did not close after timeout"),
+            );
+            return;
+          }
+
+          setTimeout(check, 10);
+        };
+
+        check();
       });
 
       assert.equal(upstreamRequestClosed, true);
+
+      await new Promise<void>((resolve, reject) => {
+        const deadline = Date.now() + 1000;
+
+        const check = () => {
+          const activeRequests = ContextManager.getActiveRequests().length;
+
+          if (activeRequests <= activeRequestsBefore) {
+            resolve();
+            return;
+          }
+
+          if (Date.now() >= deadline) {
+            reject(
+              new Error(
+                `Timed-out request was not cleaned up. ` +
+                  `Active requests before: ${activeRequestsBefore}, ` +
+                  `after: ${activeRequests}`,
+              ),
+            );
+            return;
+          }
+
+          setTimeout(check, 10);
+        };
+
+        check();
+      });
     } finally {
       if (upstreamSocket && !upstreamSocket.destroyed) {
         upstreamSocket.destroy();
@@ -346,10 +385,31 @@ describe("Proxy Client Disconnect Integration", () => {
 
     assert.equal(upstreamRequestStarted, true);
 
-    // Give socket cleanup a chance to propagate.
-    await new Promise((resolve) => setTimeout(resolve, 100));
+   await new Promise<void>((resolve, reject) => {
+     const deadline = Date.now() + 1000;
 
-    assert.equal(upstreamRequestClosed, true);
+     const check = () => {
+       if (upstreamRequestClosed) {
+         resolve();
+         return;
+       }
+
+       if (Date.now() >= deadline) {
+         reject(
+           new Error(
+             "HTTP upstream request did not close after proxy shutdown",
+           ),
+         );
+         return;
+       }
+
+       setTimeout(check, 10);
+     };
+
+     check();
+   });
+
+   assert.equal(upstreamRequestClosed, true);
   });
 
   it("should close active HTTPS upstream connections when the proxy stops", async function () {
@@ -447,7 +507,29 @@ describe("Proxy Client Disconnect Integration", () => {
       await proxy.stop();
       proxyStopped = true;
 
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      await new Promise<void>((resolve, reject) => {
+        const deadline = Date.now() + 1000;
+
+        const check = () => {
+          if (upstreamRequestClosed) {
+            resolve();
+            return;
+          }
+
+          if (Date.now() >= deadline) {
+            reject(
+              new Error(
+                "HTTPS upstream request did not close after proxy shutdown",
+              ),
+            );
+            return;
+          }
+
+          setTimeout(check, 10);
+        };
+
+        check();
+      });
 
       assert.equal(upstreamRequestClosed, true);
     } finally {
@@ -460,5 +542,122 @@ describe("Proxy Client Disconnect Integration", () => {
         httpsUpstream.close(() => resolve());
       });
     }
+  });
+
+  it("should share the same shutdown operation across concurrent stop calls", async function () {
+    this.timeout(6000);
+
+    const firstStop = proxy.stop();
+    const secondStop = proxy.stop();
+    const thirdStop = proxy.stop();
+
+    assert.strictEqual(
+      firstStop,
+      secondStop,
+      "Concurrent stop calls should return the same promise",
+    );
+
+    assert.strictEqual(
+      secondStop,
+      thirdStop,
+      "All concurrent stop calls should share the same promise",
+    );
+
+    await Promise.all([firstStop, secondStop, thirdStop]);
+
+    proxyStopped = true;
+  });
+
+  it("should force-close active requests when the shutdown deadline expires", async function () {
+    this.timeout(5000);
+
+    upstream.removeAllListeners("request");
+
+    let upstreamRequestStarted = false;
+    let upstreamRequestClosed = false;
+
+    upstream.on("request", (_req, res) => {
+      upstreamRequestStarted = true;
+
+      res.on("close", () => {
+        upstreamRequestClosed = true;
+      });
+
+      // Deliberately never respond.
+    });
+
+    const req = http.request({
+      host: "127.0.0.1",
+      port: proxyPort,
+      method: "GET",
+      path: `http://127.0.0.1:${upstreamPort}/forced-shutdown`,
+    });
+
+    req.on("error", () => {
+      // Expected when shutdown destroys the downstream connection.
+    });
+
+    req.end();
+
+    await new Promise<void>((resolve, reject) => {
+      const deadline = Date.now() + 1000;
+
+      const check = () => {
+        if (upstreamRequestStarted) {
+          resolve();
+          return;
+        }
+
+        if (Date.now() >= deadline) {
+          reject(new Error("Upstream request did not start"));
+          return;
+        }
+
+        setTimeout(check, 10);
+      };
+
+      check();
+    });
+
+    const activeRequestsBefore = ContextManager.getActiveRequests().length;
+    assert.ok(
+      activeRequestsBefore > 0,
+      "Expected an active request before shutdown",
+    );
+
+    await proxy.stop(300);
+    proxyStopped = true;
+
+    await new Promise<void>((resolve, reject) => {
+      const deadline = Date.now() + 1000;
+
+      const check = () => {
+        const activeRequests = ContextManager.getActiveRequests().length;
+
+        if (upstreamRequestClosed && activeRequests <= activeRequestsBefore) {
+          resolve();
+          return;
+        }
+
+        if (Date.now() >= deadline) {
+          reject(
+            new Error(
+              `Client disconnect cleanup incomplete: ` +
+                `upstreamClosed=${upstreamRequestClosed}, ` +
+                `activeRequestsBefore=${activeRequestsBefore}, ` +
+                `activeRequests=${activeRequests}`,
+            ),
+          );
+          return;
+        }
+
+        setTimeout(check, 10);
+      };
+
+      check();
+    });
+
+    assert.equal(upstreamRequestClosed, true);
+    assert.equal(ContextManager.getActiveRequests().length, 0);
   });
 });

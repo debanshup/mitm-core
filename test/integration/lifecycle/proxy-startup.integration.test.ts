@@ -32,4 +32,23 @@ describe("Proxy startup lifecycle", () => {
       });
     }
   });
+
+  it("cleans up the server when the startup callback rejects", async () => {
+    const proxy = new Proxy();
+
+    await assert.rejects(
+      proxy.listen(0, () => {
+        throw new Error("startup callback failed");
+      }),
+      /startup callback failed/,
+    );
+
+    assert.equal(
+      proxy.address(),
+      null,
+      "Server should not remain listening after startup callback failure",
+    );
+
+    await proxy.stop();
+  });
 });
