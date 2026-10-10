@@ -165,8 +165,14 @@ export class H1OutboundBridge {
       console.warn(
         `[Proxy Timeout]: Upstream server ${request.target.host} timed out.`,
       );
+
       if (!upstreamReq.destroyed) {
-        upstreamReq.destroy(new Error("ERR_UPSTREAM_TIMEOUT"));
+        const timeoutErr = Object.assign(
+          new Error("Upstream request timed out"),
+          { code: "ERR_UPSTREAM_TIMEOUT" },
+        );
+
+        upstreamReq.destroy(timeoutErr);
       }
     });
   }
