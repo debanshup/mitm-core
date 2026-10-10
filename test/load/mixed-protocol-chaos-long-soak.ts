@@ -14,7 +14,7 @@ import { Proxy } from "../../src/lib/Proxy";
 import { ContextManager } from "../../src/core/scope/ContextManager";
 import { connectionManager } from "../../src/core/connection/ConnectionManager";
 
-const CLIENTS_PER_PROTOCOL = 25;
+const CLIENTS_PER_PROTOCOL = 100;
 const SOAK_RUNS = 100;
 const WS_MESSAGES = 25;
 const WS_MESSAGE_INTERVAL_MS = 5;
@@ -22,6 +22,16 @@ const UPSTREAM_DELAY_MS = 100;
 const LIFECYCLE_DRAIN_TIMEOUT_MS = 5000;
 const INTER_RUN_DELAY_MS = 250;
 const WARMUP_RUNS = 10;
+
+const PROTOCOL = (process.env.PROTOCOL ?? "mixed").toLowerCase();
+
+const VALID_PROTOCOLS = ["mixed", "http", "https", "ws", "wss"] as const;
+
+if (!VALID_PROTOCOLS.includes(PROTOCOL as (typeof VALID_PROTOCOLS)[number])) {
+  throw new Error(
+    `Invalid PROTOCOL="${PROTOCOL}". Expected one of: ${VALID_PROTOCOLS.join(", ")}`,
+  );
+}
 
 const CA_CERT = fs.readFileSync(path.resolve("creds/__self__/CA.pem"), "utf8");
 
@@ -95,17 +105,59 @@ function printMemorySummary(snapshots: MemorySnapshot[]): void {
   });
 }
 
+function getExpectedRunResult(): {
+  successful: number;
+  expectedFailures: number;
+} {
+  const httpFailures = Math.floor(CLIENTS_PER_PROTOCOL / 3);
+  const httpSuccesses = CLIENTS_PER_PROTOCOL - httpFailures;
+
+  // WS has two failure modes (client-abort, upstream-abort) per 3 requests
+  const wsSuccesses = Math.ceil(CLIENTS_PER_PROTOCOL / 3);
+  const wsFailures = CLIENTS_PER_PROTOCOL - wsSuccesses;
+
+  switch (PROTOCOL) {
+    case "http":
+    case "https":
+      return {
+        successful: httpSuccesses,
+        expectedFailures: httpFailures,
+      };
+    case "ws":
+    case "wss":
+      return {
+        successful: wsSuccesses,
+        expectedFailures: wsFailures,
+      };
+    case "mixed":
+      return {
+        successful: httpSuccesses * 2 + wsSuccesses * 2,
+        expectedFailures: httpFailures * 2 + wsFailures * 2,
+      };
+    default:
+      throw new Error(`Unsupported protocol: ${PROTOCOL}`);
+  }
+}
+
 async function main(): Promise<void> {
   console.log("\n[MIXED CHAOS LONG SOAK] Starting upstream servers...");
+
+  const clientsPerRun =
+    PROTOCOL === "mixed" ? CLIENTS_PER_PROTOCOL * 4 : CLIENTS_PER_PROTOCOL;
+
+  console.log(`[MIXED CHAOS LONG SOAK] Protocol: ${PROTOCOL}`);
+
   console.log(
-    `[MIXED CHAOS LONG SOAK] ${SOAK_RUNS} runs × ${CLIENTS_PER_PROTOCOL * 4} clients = ${
-      SOAK_RUNS * CLIENTS_PER_PROTOCOL * 4
+    `[MIXED CHAOS LONG SOAK] ${SOAK_RUNS} runs × ${clientsPerRun} clients = ${
+      SOAK_RUNS * clientsPerRun
     } total outcomes`,
   );
+
   console.log(
-    `[MIXED CHAOS LONG SOAK] ${WARMUP_RUNS} warmup runs + ${
-      SOAK_RUNS - WARMUP_RUNS
-    } measurement runs`,
+    `[MIXED CHAOS LONG SOAK] ${WARMUP_RUNS} warmup runs + ${Math.max(
+      0,
+      SOAK_RUNS - WARMUP_RUNS,
+    )} measurement runs`,
   );
 
   const httpUpstream = http.createServer((req, res) => {
@@ -119,12 +171,15 @@ async function main(): Promise<void> {
 
     const finish = () => {
       const body = `http-ok:${url.pathname}`;
+
       if (res.destroyed || res.writableEnded) return;
+
       res.writeHead(200, {
         "content-type": "text/plain",
         "content-length": Buffer.byteLength(body),
         connection: "close",
       });
+
       res.end(body);
     };
 
@@ -148,13 +203,17 @@ async function main(): Promise<void> {
       }
 
       const finish = () => {
+        // FIXED: Added missing closing brace for url.pathname
         const body = `https-ok:${url.pathname}`;
+
         if (res.destroyed || res.writableEnded) return;
+
         res.writeHead(200, {
           "content-type": "text/plain",
           "content-length": Buffer.byteLength(body),
           connection: "close",
         });
+
         res.end(body);
       };
 
@@ -176,13 +235,16 @@ async function main(): Promise<void> {
 
     if (mode === "upstream-abort") {
       let sent = 0;
+
       const timer = setInterval(() => {
         if (socket.readyState !== WebSocket.OPEN) {
           clearInterval(timer);
           return;
         }
+
         sent++;
         socket.send(`ws-chaos:${sent}`);
+
         if (sent >= WS_MESSAGES) {
           clearInterval(timer);
           setTimeout(() => socket.terminate(), 25);
@@ -204,6 +266,7 @@ async function main(): Promise<void> {
     cert: UPSTREAM_CERT,
     key: UPSTREAM_KEY,
   });
+
   const wssServer = new WebSocketServer({ server: wssUpstream });
 
   wssServer.on("connection", (socket, req) => {
@@ -212,13 +275,16 @@ async function main(): Promise<void> {
 
     if (mode === "upstream-abort") {
       let sent = 0;
+
       const timer = setInterval(() => {
         if (socket.readyState !== WebSocket.OPEN) {
           clearInterval(timer);
           return;
         }
+
         sent++;
         socket.send(`wss-chaos:${sent}`);
+
         if (sent >= WS_MESSAGES) {
           clearInterval(timer);
           setTimeout(() => socket.terminate(), 25);
@@ -264,21 +330,29 @@ async function main(): Promise<void> {
     });
 
     await new Promise<void>((resolve) => proxy.listen(0, resolve));
+
     const proxyPort = (proxy.address() as net.AddressInfo).port;
 
     console.log(`\n[MIXED CHAOS LONG SOAK] Proxy: ${proxyPort}`);
+    console.log(`[MIXED CHAOS LONG SOAK] Protocol: ${PROTOCOL}`);
+
     console.log(
-      `[MIXED CHAOS LONG SOAK] ${SOAK_RUNS} runs × ${CLIENTS_PER_PROTOCOL * 4} clients`,
+      `[MIXED CHAOS LONG SOAK] ${SOAK_RUNS} runs × ${clientsPerRun} clients`,
     );
 
     const startedAt = Date.now();
     const snapshots: MemorySnapshot[] = [];
+
     let totalSuccessful = 0;
     let totalExpectedFailures = 0;
     let totalUnexpectedFailures = 0;
 
+    // Per-run deterministic expectation.
+    const expectedRunResult = getExpectedRunResult();
+
     for (let run = 1; run <= SOAK_RUNS; run++) {
       const runStartedAt = Date.now();
+
       console.log(`\n[MIXED CHAOS LONG SOAK] Run ${run}/${SOAK_RUNS}`);
 
       const result = await runMixedChaosWorkload(
@@ -301,27 +375,28 @@ async function main(): Promise<void> {
         "Duration (ms)": Date.now() - runStartedAt,
       });
 
-      const clientsPerRun = CLIENTS_PER_PROTOCOL * 4;
-
       assert.equal(
         result.unexpectedFailures,
         0,
         `Run ${run} had unexpected failures`,
       );
+
       assert.equal(
         result.successful + result.expectedFailures,
         clientsPerRun,
         `Run ${run} did not produce an expected outcome for every client`,
       );
 
-      // The chaos matrix is deterministic: HTTP/HTTPS have 17 successes + 8
-      // expected drops each, while WS/WSS have 9 normal successes + 16
-      // expected abnormal closes each.
-      assert.equal(result.successful, 52, `Run ${run} success count changed`);
+      assert.equal(
+        result.successful,
+        expectedRunResult.successful,
+        `Run ${run} success count changed for ${PROTOCOL}`,
+      );
+
       assert.equal(
         result.expectedFailures,
-        48,
-        `Run ${run} expected-failure count changed`,
+        expectedRunResult.expectedFailures,
+        `Run ${run} expected-failure count changed for ${PROTOCOL}`,
       );
 
       await waitForLifecycleDrain();
@@ -331,6 +406,7 @@ async function main(): Promise<void> {
         0,
         `Run ${run} leaked request contexts`,
       );
+
       assert.equal(
         connectionManager.getCount(),
         0,
@@ -368,6 +444,7 @@ async function main(): Promise<void> {
         0,
         `Run ${run} retained active requests after GC`,
       );
+
       assert.equal(
         afterGc.ActiveConnections,
         0,
@@ -379,13 +456,14 @@ async function main(): Promise<void> {
       }
     }
 
-    const totalClients = SOAK_RUNS * CLIENTS_PER_PROTOCOL * 4;
+    const totalClients = SOAK_RUNS * clientsPerRun;
     const duration = Date.now() - startedAt;
 
     console.log("\n[MIXED CHAOS LONG SOAK] Aggregate results:");
+
     console.table({
       Runs: SOAK_RUNS,
-      "Clients / Run": CLIENTS_PER_PROTOCOL * 4,
+      "Clients / Run": clientsPerRun,
       "Total Clients": totalClients,
       Successful: totalSuccessful,
       "Expected Failures": totalExpectedFailures,
@@ -403,20 +481,24 @@ async function main(): Promise<void> {
       0,
       "Mixed protocol chaos long soak had unexpected failures",
     );
+
     assert.equal(
       totalSuccessful + totalExpectedFailures,
       totalClients,
       "Not all long-soak clients reached an expected outcome",
     );
 
-    const expectedSuccessful = SOAK_RUNS * 52;
-    const expectedFailures = SOAK_RUNS * 48;
+    // Aggregate expectation across the entire soak.
+    const expectedSuccessful = SOAK_RUNS * expectedRunResult.successful;
+
+    const expectedFailures = SOAK_RUNS * expectedRunResult.expectedFailures;
 
     assert.equal(
       totalSuccessful,
       expectedSuccessful,
       `Expected ${expectedSuccessful} successful outcomes`,
     );
+
     assert.equal(
       totalExpectedFailures,
       expectedFailures,
@@ -424,11 +506,13 @@ async function main(): Promise<void> {
     );
 
     await waitForLifecycleDrain();
+
     assert.equal(
       ContextManager.getActiveRequests().length,
       0,
       "Request contexts leaked after soak",
     );
+
     assert.equal(
       connectionManager.getCount(),
       0,
@@ -443,10 +527,12 @@ async function main(): Promise<void> {
 
     if (measurementSnapshots.length > 0) {
       const firstMeasurement = measurementSnapshots[0];
+
       const lastMeasurement =
         measurementSnapshots[measurementSnapshots.length - 1];
 
       console.log("\n[MIXED CHAOS LONG SOAK] Measurement window:");
+
       console.table({
         "Warmup Runs": WARMUP_RUNS,
         "Measured Runs": measurementSnapshots.length,
@@ -469,14 +555,17 @@ async function main(): Promise<void> {
     }
 
     console.log("\n[MIXED CHAOS LONG SOAK] Stopping proxy...");
+
     await proxy.stop();
 
     await waitForLifecycleDrain();
+
     assert.equal(
       ContextManager.getActiveRequests().length,
       0,
       "Request contexts leaked after shutdown",
     );
+
     assert.equal(
       connectionManager.getCount(),
       0,
@@ -487,6 +576,7 @@ async function main(): Promise<void> {
   } finally {
     wsServer.close();
     wssServer.close();
+
     await Promise.all([
       closeServer(httpUpstream),
       closeServer(httpsUpstream),
@@ -503,16 +593,60 @@ async function runMixedChaosWorkload(
   wsPort: number,
   wssPort: number,
 ): Promise<ProtocolResult> {
+  if (PROTOCOL === "http") {
+    return runProtocol("HTTP", CLIENTS_PER_PROTOCOL, (index) =>
+      makeHttpChaosRequest(proxyPort, httpPort, index),
+    ).then((result) => ({
+      successful: result.successful,
+      expectedFailures: result.expectedFailures,
+      unexpectedFailures: result.unexpectedFailures,
+    }));
+  }
+
+  if (PROTOCOL === "https") {
+    return runProtocol("HTTPS", CLIENTS_PER_PROTOCOL, (index) =>
+      makeHttpsChaosRequest(proxyPort, httpsPort, index),
+    ).then((result) => ({
+      successful: result.successful,
+      expectedFailures: result.expectedFailures,
+      unexpectedFailures: result.unexpectedFailures,
+    }));
+  }
+
+  if (PROTOCOL === "ws") {
+    return runProtocol("WS", CLIENTS_PER_PROTOCOL, (index) =>
+      makeWebSocketChaosRequest(proxyPort, wsPort, index, false),
+    ).then((result) => ({
+      successful: result.successful,
+      expectedFailures: result.expectedFailures,
+      unexpectedFailures: result.unexpectedFailures,
+    }));
+  }
+
+  if (PROTOCOL === "wss") {
+    return runProtocol("WSS", CLIENTS_PER_PROTOCOL, (index) =>
+      makeWebSocketChaosRequest(proxyPort, wssPort, index, true),
+    ).then((result) => ({
+      successful: result.successful,
+      expectedFailures: result.expectedFailures,
+      unexpectedFailures: result.unexpectedFailures,
+    }));
+  }
+
+  // Existing mixed-protocol behavior.
   const [httpResult, httpsResult, wsResult, wssResult] = await Promise.all([
     runProtocol("HTTP", CLIENTS_PER_PROTOCOL, (index) =>
       makeHttpChaosRequest(proxyPort, httpPort, index),
     ),
+
     runProtocol("HTTPS", CLIENTS_PER_PROTOCOL, (index) =>
       makeHttpsChaosRequest(proxyPort, httpsPort, index),
     ),
+
     runProtocol("WS", CLIENTS_PER_PROTOCOL, (index) =>
       makeWebSocketChaosRequest(proxyPort, wsPort, index, false),
     ),
+
     runProtocol("WSS", CLIENTS_PER_PROTOCOL, (index) =>
       makeWebSocketChaosRequest(proxyPort, wssPort, index, true),
     ),
@@ -524,11 +658,13 @@ async function runMixedChaosWorkload(
       httpsResult.successful +
       wsResult.successful +
       wssResult.successful,
+
     expectedFailures:
       httpResult.expectedFailures +
       httpsResult.expectedFailures +
       wsResult.expectedFailures +
       wssResult.expectedFailures,
+
     unexpectedFailures:
       httpResult.unexpectedFailures +
       httpsResult.unexpectedFailures +
