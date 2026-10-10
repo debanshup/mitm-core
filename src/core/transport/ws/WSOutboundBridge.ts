@@ -1,6 +1,6 @@
 import WebSocket, { WebSocketServer } from "ws";
 import type { RequestScope } from "../../scope/types";
-import { pluginEventManager } from "../../event/plugin-events/pluginEvents";
+import { pluginEventManager, type WsMessageContext } from "../../event/plugin-events/pluginEvents";
 import { ProxyUtils } from "../../utils/ProxyUtils";
 import { WSUpstreamInitiator } from "./WSUpstreamInitiator";
 import { ScopeMutator } from "../../scope/ScopeMutator";
@@ -181,7 +181,7 @@ export class WSOutboundBridge {
     rawIsBinary: boolean,
     upstreamWS: WebSocket,
   ): Promise<void> {
-    const messageContext = {
+    const messageContext: WsMessageContext = {
       data: rawData,
       isBinary: rawIsBinary,
       drop: false,
@@ -205,7 +205,7 @@ export class WSOutboundBridge {
     rawIsBinary: boolean,
     clientWS: WebSocket,
   ): Promise<void> {
-    const messageContext = {
+    const messageContext: WsMessageContext = {
       data: rawData,
       isBinary: rawIsBinary,
       drop: false,

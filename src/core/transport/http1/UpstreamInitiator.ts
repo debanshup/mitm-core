@@ -28,7 +28,7 @@ export class UpstreamInitiator {
   });
 
   public static async initH1UpstreamReq(targetUrl: URL, scope: RequestScope) {
-    const { request, lifecycle } = scope;
+    const { request } = scope;
     const clientReq = request.client.req;
 
     if (!clientReq) {
@@ -75,40 +75,10 @@ export class UpstreamInitiator {
       this.handleUpstreamFailure(syncError as Error, scope, targetUrl);
       throw syncError;
     }
-    
+
     // Disable Nagle's algorithm for lower latency
     upstream.setNoDelay(true);
 
-    upstream.on("timeout", () => {
-      console.warn(
-        `[Proxy Timeout]: Upstream server ${request.target.host} timed out.`,
-      );
-
-      const inboundRes = request.client.res;
-
-      if (!inboundRes || inboundRes.destroyed || inboundRes.writableEnded) {
-        lifecycle.state.set("error", true);
-        return;
-      }
-
-      inboundRes.writeHead(504, {
-        "Content-Type": "application/json",
-      });
-
-      inboundRes.end(
-        JSON.stringify({
-          error: "Gateway Timeout: Upstream failed to respond.",
-        }),
-      );
-
-      lifecycle.state.set("error", true);
-
-      if (!upstream.destroyed) {
-        const timeoutErr = new Error("ERR_UPSTREAM_TIMEOUT");
-        (timeoutErr as any).code = "ERR_UPSTREAM_TIMEOUT";
-        upstream.destroy(timeoutErr);
-      }
-    });
     upstream.once("socket", (socket) => {
       if (socket.connecting) {
         const connectEvent = isHTTPS ? "secureConnect" : "connect";
@@ -184,6 +154,10 @@ export class UpstreamInitiator {
       const errCode = (err as NodeJS.ErrnoException).code;
 
       if (clientDisconnected) {
+        return;
+      }
+
+      if (errCode === "ERR_UPSTREAM_TIMEOUT") {
         return;
       }
 
