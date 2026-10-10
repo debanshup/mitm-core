@@ -3,29 +3,78 @@ import os from "os";
 import path from "path";
 
 /**
- * Defines the strategy for parsing, matching, and formatting rule files.
- * Implementations provide the domain-specific logic to interpret raw file data.
+ * Defines the parsing, matching, and optional formatting operations
+ * for a rule configuration.
+ *
+ * Implementations provide the logic for converting raw file content
+ * into a typed rule representation, evaluating targets against those
+ * rules, and formatting new rules for persistence.
+ *
+ * @typeParam T - The parsed representation of the rule configuration.
  */
 export interface IRuleParser<T> {
-  /** Parses raw file content into an internal rule format */
+  /**
+   * Parses raw configuration file content into the rule representation.
+   *
+   * @param rawContent - The complete configuration file content.
+   * @returns The parsed rule representation.
+   */
   parse(rawContent: string): T;
-  /** Evaluates a target against the parsed rules */
+
+  /**
+   * Evaluates whether a target matches the parsed rules.
+   *
+   * @param rules - The parsed rules to evaluate.
+   * @param target - The target string to check.
+   * @returns `true` if the target matches the rules; otherwise, `false`.
+   */
   match(rules: T, target: string): boolean;
-  /** Formats a string to be safely appended to the file (optional) */
+
+  /**
+   * Optionally formats an input value for appending to the rule file.
+   *
+   * Implementations can use this method to normalize or serialize
+   * a new rule before it is persisted.
+   *
+   * @param input - The input value to format.
+   * @returns The formatted rule string.
+   */
   formatForSave?(input: string): string;
 }
 
 /**
- * A reactive file handler that watches a specific configuration file for changes.
- * It automatically reloads rules using a debounced approach when the file is modified,
- * and provides methods to query matches and safely persist new rules.
+ * Manages a rule configuration file and keeps its parsed state available
+ * for matching and updates.
+ *
+ * Creates the parent directory and file when they do not exist, loads
+ * the initial rules, and watches the file for changes. File-change events
+ * trigger a debounced reload of the parsed rule state.
+ *
+ * Supports matching targets against the current rules, appending formatted
+ * rules when the parser provides a formatter, and releasing watcher resources.
+ *
+ * @typeParam T - The parsed representation of the rule configuration.
  */
 export class WatchableRuleFile<T> {
   private rules: T;
   private reloadTimer: NodeJS.Timeout | null = null;
   private pendingSaves = new Set<string>();
   private watcher?: fs.FSWatcher;
+  /** Absolute, normalized path to the rule configuration file. */
   public readonly filePath: string;
+
+  /**
+   * Creates a rule-file store and initializes its file and watcher.
+   *
+   * Relative paths are resolved against the current working directory.
+   * The supplied default state is assigned before the initial file load.
+   *
+   * @param name - Identifier used to associate the store with a rule engine.
+   * @param inputPath - Path to the configuration file, absolute or relative.
+   * @param parser - Parser used to load, match, and optionally format rules.
+   * @param defaultState - Initial rule state used before or when loading
+   *                       parsed file content fails.
+   */
   constructor(
     public readonly name: string,
     inputPath: string,
@@ -74,20 +123,26 @@ export class WatchableRuleFile<T> {
   }
 
   /**
-   * Checks if the provided target string matches any of the currently loaded rules.
-   * * @param target - The string to evaluate against the loaded rules.
-   * @returns True if a match is found; otherwise, false.
+   * Checks whether a target matches the currently loaded rules.
+   *
+   * @param target - The target string to evaluate.
+   * @returns `true` if the parser reports a match; otherwise, `false`.
    */
   public match(target: string): boolean {
     return this.parser.match(this.rules, target);
   }
 
   /**
-   * Formats and appends a new rule to the configuration file.
-   * * This method ensures the rule is formatted correctly via the parser, avoids
-   * duplicate entries, and handles file I/O safely. File changes will trigger
-   * an automatic reload via the internal watcher.
-   * * @param input - The raw input data to be processed and appended to the file.
+   * Formats and appends a rule to the configuration file.
+   *
+   * Does nothing if the parser does not provide `formatForSave()` or
+   * the input is already present in the pending-save set. Before writing,
+   * checks whether the formatted rule already occurs in the file.
+   *
+   * File changes are handled by the existing watcher and reload mechanism.
+   * File I/O errors are logged rather than rethrown.
+   *
+   * @param input - Raw rule input to format and append.
    */
   public appendRule(input: string): void {
     if (!this.parser.formatForSave || this.pendingSaves.has(input)) return;
@@ -100,11 +155,17 @@ export class WatchableRuleFile<T> {
       if (currentContent.includes(newRule)) return;
 
       fs.appendFileSync(this.filePath, `${os.EOL}${newRule}`);
-      // fs.watch will trigger a reload automatically
     } catch (error) {
       console.error(`[AUTO_SAVE_ERR] ${this.name}`, error);
     }
   }
+
+  /**
+   * Stops the file watcher and clears any pending reload timer.
+   *
+   * Call this when the store is no longer needed to release its
+   * watcher and timer resources.
+   */
   public destroy(): void {
     if (this.reloadTimer) {
       clearTimeout(this.reloadTimer);

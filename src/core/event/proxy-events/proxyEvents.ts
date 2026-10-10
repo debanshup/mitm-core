@@ -4,87 +4,93 @@ import type { RequestScope } from "../../scope/types";
 import { TypedEventEmitter } from "../EventBus";
 
 /**
- * Defines the comprehensive event lifecycle for the Proxy server.
- * All events utilize a single-payload object pattern to ensure backward compatibility
- * and predictable plugin development.
+ * Defines the events emitted by the proxy throughout its connection
+ * and request lifecycle.
+ *
+ * Each event maps to a tuple describing its emitted arguments. Events
+ * that carry structured data use a single payload object.
  */
 export interface ProxyEventMap {
-  //  tcp / tunneling
+  // TCP connections and tunneling
+
   /**
-   * Fired when a raw TCP connection is made to the proxy server.
-   * This occurs at the transport layer, before any HTTP parsing happens.
+   * Fired when a client establishes a raw TCP connection to the proxy.
+   *
+   * Occurs at the transport layer, before HTTP request parsing.
    */
   "connection:open": [payload: { socket: Socket }];
 
   /**
-   * Fired when an HTTP `CONNECT` method is received (typically for `https://` or `wss://` traffic).
-   * This is the initial handshake requesting a secure tunnel to an upstream host.
+   * Fired when the proxy receives an HTTP CONNECT request to establish
+   * a tunnel to an upstream destination, commonly for HTTPS or WSS traffic.
+   *
+   * Provides the request scope, client socket, and any initial data
+   * received alongside the CONNECT request.
    */
   "connect:request": [
     payload: {
       scope: RequestScope;
-      // req: http.IncomingMessage;
       socket: Stream.Duplex;
       head: Buffer;
-      // payloadEvent: PayloadEvents;
     },
   ];
 
   /**
-   * @todo change this docstring
-   * Fired after the ProxyContext is initialized, but immediately before the
-   * bidirectional data streams (client <-> proxy <-> upstream) are piped together.
+   * Fired after the request scope and proxy context have been initialized,
+   * immediately before the client and upstream streams are connected.
+   *
+   * Use this event to inspect or prepare the tunnel before data forwarding
+   * begins.
    */
   "connect:before": [payload: { scope: RequestScope; socket: Stream.Duplex }];
 
   /**
-   * Fired when the secure tunnel is fully established and data is actively
-   * capable of flowing between the client and the destination.
+   * Fired when the secure tunnel has been established and the proxy
+   * is ready to forward data between the client and upstream destination.
    */
   "connect:established": [
     payload: { scope: RequestScope; socket: Stream.Duplex },
   ];
 
-  // plain http traffic (Unencrypted)
-
   /**
-   * Fired ONLY for standard, unencrypted `http://` traffic.
-   * @note This does NOT trigger for `https://` requests. For HTTPS modification,
-   * listen to the `https:request` event instead.
+   * Fired when the proxy receives a standard, unencrypted HTTP request.
+   *
+   * This event does not handle intercepted HTTPS requests. Use
+   * {@link "https:request"} for requests received after HTTPS interception
+   * and decryption.
    */
-
   "http:request": [
     payload: {
       scope: RequestScope;
-      // req: http.IncomingMessage;
-      // res: http.ServerResponse;
     },
   ];
 
   /**
-   * Fired when an HTTPS request has been successfully intercepted and decrypted.
-   * Hook into this event to read or modify secure request headers, bodies, or routing.
+   * Fired when an HTTPS request has been intercepted and decrypted
+   * by the proxy.
+   *
+   * The request scope provides access to the request data and target
+   * metadata available for inspection or modification.
    */
   "https:request": [
     payload: {
       scope: RequestScope;
-      // req: http.IncomingMessage;
-      // res: http.ServerResponse;
     },
   ];
 
   /**
-   * Fired when the upstream server responds to an intercepted HTTPS request.
-   * Hook into this event to inspect or alter the secure response before it is
-   * re-encrypted and sent back to the client.
-   */
-  response: [payload: { scope: RequestScope }];
-
-  /**
-   * Fired when an unhandled exception occurs within the proxy network stack
-   * or during the execution of a plugin.
+   * Fired when an error is reported through the proxy's error event.
+   *
+   * The error may originate from the proxy's network stack or plugin
+   * execution.
    */
   error: [err: Error | unknown];
 }
 
+/**
+ * Shared event emitter for proxy lifecycle and request events.
+ *
+ * Uses {@link ProxyEventMap} to associate event names with their
+ * corresponding argument types.
+ */
 export const proxyEventManager = new TypedEventEmitter<ProxyEventMap>();

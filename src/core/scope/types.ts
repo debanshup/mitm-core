@@ -8,49 +8,54 @@ import type { Phase } from "../../phase/Phase";
 import type { Duplex } from "stream";
 import type { StateStore } from "../state/StateStore";
 import type { WebSocket as NodeWebSocket } from "ws";
+
 /**
- * The core context entity passed throughout the entire proxy execution pipeline.
+ * Contains connection-level information shared across requests handled
+ * over the same underlying proxy connection.
  *
- * It encapsulates connection-level metadata, low-level networking streams, and
- * transactional states for both raw TCP streams and high-level HTTP protocol layers.
+ * Provides access to the network stream, protocol metadata, initial
+ * connection data, and optional custom TLS certificates.
  */
 export type SessionContext = {
   /**
-   * @type {string} A unique identifier (UUID) assigned to the raw TCP connection.
-   * Essential for telemetry, structured logging, and tracking concurrent
-   * HTTP requests multiplexed over a single keep-alive session.
+   * Unique identifier assigned to the underlying connection.
+   *
+   * Useful for correlating logs and tracing requests associated with
+   * the same connection, including requests over HTTP keep-alive.
    */
   connectionId: string;
 
   /**
-   * @type {Duplex} The underlying readable/writable duplex network stream.
+   * The underlying readable and writable network stream.
+   *
+   * Represents the connection stream used by the proxy. Its concrete
+   * behavior depends on the connection and transport being handled.
    */
   socket: Duplex;
 
+  /** Protocol information detected or established for this connection. */
   protocol: {
+    /** Connection protocol, when identified. */
     connectionType?: "tcp" | "http" | "https";
+
+    /** HTTP version associated with the connection, when identified. */
     httpVersion?: "h1" | "h2" | "h3" | "unknown";
   };
 
   /**
-   * @type {Buffer | any} The initial slice of data read from the socket immediately upon connection.
-   * Used primarily for zero-byte protocol sniffing (e.g., parsing a TLS `ClientHello`
-   * to extract the SNI before committing to a routing decision).
+   * Initial data received with the connection, if available.
+   *
+   * May be used during protocol detection or TLS ClientHello inspection
+   * before the proxy commits to a routing decision.
    */
   head?: Buffer | null;
 
   /**
-   * @type {Error} Tracks connection-level or socket-level exceptions.
-   * Captures events like `ECONNRESET`, client hang-ups, or TLS handshake failures.
-   */
-  error?: Error;
-
-  /**
-   * @type {Map<string, { cert: string | Buffer; key: string | Buffer }>}
-   * An optional registry mapping target domains to pre-loaded, static TLS credentials.
+   * Optional map of domain names to explicitly supplied TLS certificates.
    *
-   * ⚠️ If a domain exists in this map, the proxy bypasses its dynamic, worker-driven
-   * leaf certificate generator and uses these explicit certificates for MITM negotiation instead.
+   * When a matching entry is used by the certificate-selection logic,
+   * these credentials take precedence over dynamically generated
+   * certificates for that domain.
    */
   customCertificates?: Map<
     string,
@@ -59,131 +64,166 @@ export type SessionContext = {
 };
 
 /**
- * The transactional context object created for every individual HTTP request-response lifecycle.
+ * Contains the data associated with an individual request-response
+ * transaction passing through the proxy.
  *
- * It encapsulates downstream client payloads, upstream network descriptors, and
- * intermediate routing metadata generated during request parsing and mutation.
+ * Separates client-facing request data, upstream request data, and
+ * the target information used for routing. WebSocket-specific metadata
+ * is available when the transaction involves an upgrade.
  */
 export type RequestContext = {
-  /**
-   * @type {string} A unique identifier (UUID) assigned to this specific HTTP transaction.
-   */
+  /** Unique identifier assigned to this request-response transaction. */
   requestId: string;
 
+  /** Client-facing HTTP request and response information. */
   client: {
+    /** Incoming request received from the client, when available. */
     req?: IncomingMessage;
+
+    /** Response object used to send data back to the client, when available. */
     res?: ServerResponse;
 
+    /** HTTP method of the client request, when available. */
     method?: string;
+
+    /** Request URL as received or represented by the proxy. */
     url?: string;
+
+    /** Headers associated with the client request. */
     headers?: IncomingHttpHeaders;
   };
 
+  /** Upstream HTTP request and response information. */
   upstream: {
+    /** Outgoing request sent to the upstream server, when available. */
     req?: ClientRequest;
+
+    /** Response received from the upstream server, when available. */
     res?: IncomingMessage;
   };
 
+  /** Original and current destination information for routing. */
   target: {
+    /** Original host extracted from the client request, when available. */
     originalHost?: string;
+
+    /** Original URL extracted from the client request, when available. */
     originalUrl?: string;
 
+    /** Current target host used by the proxy, when available. */
     host?: string;
+
+    /** Current target URL used by the proxy, when available. */
     url?: string;
   };
 
   /**
-   * Complete lifecycle, state, and socket metadata for active WebSocket tunnels.
-   * This object remains undefined for standard REST/HTTP transactional streams.
+   * WebSocket-specific state and endpoint references.
+   *
+   * Present for WebSocket-related transactions when the proxy populates
+   * this field; otherwise, it is undefined.
    */
   webSocket?: WebSocketContext;
-
-  mock?: {
-    statusCode: number;
-    headers?: Record<string, string | string[]>;
-    body?: Buffer | string;
-  };
 };
 
+/**
+ * Contains WebSocket upgrade state and references to the client-side
+ * and upstream WebSocket endpoints.
+ *
+ * Raw upgrade socket information is also available when applicable.
+ */
 export type WebSocketContext = {
+  /** Indicates whether the WebSocket connection has been upgraded. */
   isUpgraded: boolean;
+
+  /** Negotiated WebSocket subprotocol, when available. */
   subprotocol?: string;
 
+  /** Client-side WebSocket endpoint, when available. */
   client?: NodeWebSocket;
+
+  /** Upstream WebSocket endpoint, when available. */
   upstream?: NodeWebSocket;
 
+  /** Raw socket associated with the client-side upgrade, when available. */
   rawUpgradeSocket?: Duplex;
+
+  /** Unconsumed bytes received alongside the HTTP upgrade request, when available. */
   upgradeHead?: Buffer;
 };
 
 /**
- * Represents the end-to-end context and control state of an individual
- * HTTP/HTTPS transaction passing through the MITM proxy engine.
+ * Tracks request lifecycle metadata and controls request-pipeline execution.
+ *
+ * Includes the hijack flag, timing information, and internal pipeline
+ * execution state.
  */
 export type RequestLifecycle = {
-  state: StateStore;
-  nextPhase?: Phase;
+  /**
+   * Indicates whether the request has been taken over by a handler
+   * and should no longer follow the normal pipeline path.
+   *
+   * @remarks
+   * The effect of this flag depends on how the pipeline and handlers
+   * interpret it.
+   */
   isHijacked: boolean;
 
+  /** Timing measurements collected during request processing. */
   timestamps: {
+    /** Timestamp recorded when the request is received. */
     receivedAt: number;
+
+    /** Timestamp recorded when the request is sent upstream, if available. */
     upstreamSentAt?: number;
+
+    /** Timestamp recorded when the upstream response is received, if available. */
     upstreamReceivedAt?: number;
+
+    /** Timestamp recorded when the response is completed, if available. */
     respondedAt?: number;
+
+    /** Total request duration, when calculated. */
     duration?: number;
   };
+
+  /**
+   * Identifies the next pipeline phase to execute.
+   *
+   * @internal
+   */
+  nextPhase?: Phase;
+
+  /**
+   * Internal state store used by proxy handlers and transport logic.
+   *
+   * @internal
+   */
+  state: StateStore;
 };
 
-export type BodyTransform = (
-  body: Buffer,
-  scope: RequestScope,
-) => Buffer | Promise<Buffer>;
-
-export class TransformPipeline {
-  private transforms: BodyTransform[] = [];
-
-  use(transform: BodyTransform): void {
-    this.transforms.push(transform);
-  }
-
-  async execute(body: Buffer, scope: RequestScope): Promise<Buffer> {
-    let result = body;
-
-    for (const transform of this.transforms) {
-      result = await transform(result, scope);
-    }
-
-    return result;
-  }
-
-  get size(): number {
-    return this.transforms.length;
-  }
-}
-
 /**
- * The root execution boundary and dependency injection container for a single transaction.
- * It provides middleware and core routing engines with unified access to connection telemetry,
- * HTTP transactional payloads, and the active state machine of the request loop.
+ * Root context for processing an individual proxy transaction.
+ *
+ * Combines the connection-level context, request-level data, and
+ * lifecycle information into a single object shared across the
+ * proxy's execution pipeline.
  */
 export type RequestScope = {
   /**
-   * @type {SessionContext}
-   * The long-lived network socket context that persists across multiple sequential requests
+   * Connection-level context shared across requests associated with
+   * the same underlying connection.
    */
   session: SessionContext;
 
   /**
-   * @type {RequestContext}
-   * The transient, isolated data structure representing the current HTTP transaction's payload,
-   * containing mutable headers, request/response bodies, URI paths, and HTTP methods.
+   * Data associated with the current request-response transaction,
+   * including client, upstream, and target information.
    */
   request: RequestContext;
 
   /**
-   * @type {RequestLifecycle}
-   * The active operational state engine and performance monitor controlling the execution flow
-   * of the proxy loop, enabling short-circuiting, phase jumps, and latency audits.
+   * Lifecycle metadata and pipeline execution controls for this transaction.
    */
   lifecycle: RequestLifecycle;
 };
