@@ -18,42 +18,83 @@ import { TypedEventEmitter } from "../core/event/EventBus";
 
 /**
  * Configuration options for the proxy server, controlling caching,
- * SSL/TLS behavior, custom CA signing, and connection timeouts.
+ * TLS certificate handling, default pipeline registration, and timeouts.
  */
 export type ProxyConfig = {
-  /** Enables caching of generated/forged TLS leaf certificates. */
+  /**
+   * Enables caching of generated TLS leaf certificates.
+   *
+   * @default true
+   */
   useCertificateCache?: boolean;
 
-  /** Enables caching of proxy responses to improve performance. */
+  /**
+   * Enables caching of proxy responses to improve performance.
+   *
+   * @default false
+   */
   useResponseCache?: boolean;
 
-  /** If true, applies the default request/response processing pipelines. */
+  /**
+   * Determines whether the default request and response processing
+   * pipelines are registered.
+   *
+   * @default true
+   */
   useDefaultPipelines?: boolean;
 
   /**
-   * The Root Certificate Authority (CA) used to dynamically sign forged leaf certificates.
+   * Root Certificate Authority (CA) credentials used to sign generated
+   * TLS leaf certificates during HTTPS interception.
+   *
+   * The certificate and private key must be compatible CA credentials.
    */
   rootCa?: {
+    /** CA private key, provided as a PEM string or Buffer. */
     key: string | Buffer;
+
+    /** CA certificate, provided as a PEM string or Buffer. */
     cert: string | Buffer;
   };
 
-  // /**
-  //  * If false, the proxy will allow upstream connections to servers with invalid/self-signed certs.
-  //  * @default true
-  //  */
-  // rejectUnauthorized?: boolean;
-
   /**
-   * Maximum time (in ms) to wait for a client to complete the TLS ClientHello.
+   * Maximum time, in milliseconds, to wait for the client to complete
+   * the TLS ClientHello.
+   *
    * @default 10000
    */
   handshakeTimeoutMs?: number;
 
   /**
+   * Maximum time, in milliseconds, allowed for an upstream operation
+   * before the configured timeout is reached.
+   *
    * @default 30000
    */
   upstreamTimeoutMs?: number;
+
+  /**
+   * Maximum time, in milliseconds, to wait for plugin execution to finish.
+   * Set to 0 to disable the timeout completely.
+   *
+   * @default 10000
+   */
+  pluginTimeoutMs?: number;
+};
+
+/**
+ * Configuration options for creating a Proxy instance.
+ *
+ * Extends the proxy configuration with an optional existing HTTP server
+ * to which the proxy can attach.
+ */
+export type ProxyOptions = ProxyConfig & {
+  /**
+   * An existing HTTP server to attach the proxy to.
+   *
+   * If omitted, the proxy creates a new HTTP server.
+   */
+  server?: http.Server;
 };
 
 /**
@@ -62,57 +103,231 @@ export type ProxyConfig = {
  */
 export interface IProxy {
   /**
-   * Registers a plugin to its explicitly defined proxy event.
+   * Registers a plugin before the proxy starts.
+   * Duplicate registration of the same plugin instance is ignored.
+   *
+   * @param plugin - Plugin to register.
+   * @returns The current proxy instance for chaining.
+   * @throws If the proxy is starting, running, or has been stopped.
    */
   use<K extends keyof PluginEventMap>(plugin: BasePlugin<K>): this;
 
   /**
-   * Unregisters a plugin.
+   * Unregisters a plugin before the proxy starts.
+   * Does nothing if the plugin is not registered.
+   *
+   * @param plugin - Plugin to unregister.
+   * @returns The current proxy instance for chaining.
+   * @throws If the proxy is starting, running, or has been stopped.
    */
   unuse(plugin: BasePlugin<any>): this;
 
   /**
-   * Starts the HTTP server on the specified port.
-   * @param port - The network port to listen on.
-   * @param callback - Optional sync or async function to execute once the server is ready.
+   * Starts the proxy's HTTP server.
+   *
+   * @param port - Port to listen on. Use 0 to request an available port.
+   * @param callback - Optional callback invoked after the server starts.
+   * @returns A promise representing startup.
    */
-  listen(port: number, callback?: () => void | Promise<void>): void;
+  listen(port: number, callback?: () => void | Promise<void>): Promise<void>;
 
   /**
-   * Gracefully shuts down the server and forcibly closes all active and idle connections.
-   * @returns A promise that resolves when the server has successfully closed.
+   * Gracefully shuts down the proxy, allowing active requests to drain
+   * until the shutdown timeout expires before forcing cleanup.
+   *
+   * @param shutdownTimeoutMs - Maximum time to wait for active requests.
+   * Defaults to 1500 ms.
+   * @returns A promise that resolves when shutdown completes.
    */
-  stop(): Promise<void>;
+  stop(shutdownTimeoutMs?: number): Promise<void>;
 }
-
-/**
- * Configuration options for the Proxy instance.
- */
-
-type ProxyOptions = {
-  /** * An existing HTTP server to attach the proxy to.
-   * If omitted, a new one is created.
-   */
-  server?: http.Server;
-
-  /** * Maximum time (in milliseconds) to wait for plugins to finish.
-   * Defaults to 5000ms. Set to 0 to disable the timeout completely.
-   */
-  pluginTimeoutMs?: number;
-};
 
 /**
  * The main proxy server implementation.
  */
 export class Proxy extends TypedEventEmitter<ProxyEventMap> implements IProxy {
+  private pluginListeners = new Map<
+    BasePlugin<any>,
+    (...args: any[]) => Promise<void>
+  >();
+
   private httpServer: http.Server;
 
-  // plugins
   private activePlugins = new Set<BasePlugin<any>>();
+  private initializedPlugins: BasePlugin<any>[] = [];
+  private isStarting = false;
 
   private config: Required<ProxyConfig>;
 
-  //------------------- overrides ----------------------
+  private stopPromise?: Promise<void>;
+  private shutdownHandlersCleanup?: () => void;
+
+  private async initializePlugins(): Promise<void> {
+    try {
+      for (const plugin of this.activePlugins) {
+        await plugin.init?.();
+
+        // Track only after initialization succeeds.
+        // Plugins without init() are valid too.
+        this.initializedPlugins.push(plugin);
+      }
+    } catch (error) {
+      const cleanupErrors = await this.cleanupInitializedPlugins();
+
+      for (const cleanupError of cleanupErrors) {
+        console.error("[Plugin Cleanup Error]", cleanupError);
+      }
+
+      throw error;
+    }
+  }
+
+  private async cleanupInitializedPlugins(): Promise<Error[]> {
+    const plugins = this.initializedPlugins.splice(0).reverse();
+    const errors: Error[] = [];
+
+    for (const plugin of plugins) {
+      try {
+        await plugin.cleanup?.();
+      } catch (error) {
+        const cleanupError =
+          error instanceof Error ? error : new Error(String(error));
+
+        errors.push(cleanupError);
+
+        console.error(
+          `[Plugin Cleanup Error] Plugin: ${plugin.name}`,
+          cleanupError,
+        );
+      }
+    }
+
+    return errors;
+  }
+
+  private async stopInternal(shutdownTimeoutMs: number): Promise<void> {
+    this.shutdownHandlersCleanup?.();
+    // Stop accepting new connections immediately.
+    const serverClosePromise = new Promise<void>((resolve, reject) => {
+      this.httpServer!.close((err) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+
+        resolve();
+      });
+    });
+
+    let drainInterval: NodeJS.Timeout | undefined;
+    let shutdownTimer: NodeJS.Timeout | undefined;
+
+    const drainPromise = new Promise<void>((resolve) => {
+      if (ContextManager.getActiveRequests().length === 0) {
+        resolve();
+        return;
+      }
+
+      drainInterval = setInterval(() => {
+        if (ContextManager.getActiveRequests().length === 0) {
+          resolve();
+        }
+      }, 50);
+
+      drainInterval.unref();
+    });
+
+    const timeoutPromise = new Promise<void>((resolve) => {
+      shutdownTimer = setTimeout(() => {
+        console.warn(
+          `[Shutdown] Shutdown timeout of ${shutdownTimeoutMs}ms reached. ` +
+            `Force-closing ${ContextManager.getActiveRequests().length} requests.`,
+        );
+
+        resolve();
+      }, shutdownTimeoutMs);
+
+      shutdownTimer.unref();
+    });
+
+    try {
+      await Promise.race([drainPromise, timeoutPromise]);
+    } finally {
+      if (drainInterval) {
+        clearInterval(drainInterval);
+      }
+
+      if (shutdownTimer) {
+        clearTimeout(shutdownTimer);
+      }
+    }
+
+    ContextManager.destroyActiveRequests();
+    connectionManager.destroyAll();
+
+    if (typeof this.httpServer.closeAllConnections === "function") {
+      this.httpServer.closeAllConnections();
+    }
+
+    // Preserve the existing single-instance lifecycle behavior.
+    connectionEvents.removeAllListeners();
+    pluginEventManager.removeAllListeners();
+    proxyEventManager.removeAllListeners();
+
+    let shutdownError: unknown;
+
+    try {
+      await serverClosePromise;
+    } catch (error) {
+      shutdownError = error;
+    }
+
+    const cleanupErrors = await this.cleanupInitializedPlugins();
+
+    console.info("[SERVER] Proxy stopped successfully.");
+
+    if (shutdownError) {
+      throw shutdownError;
+    }
+
+    if (cleanupErrors.length > 0) {
+      throw new Error(
+        `Proxy stopped, but ${cleanupErrors.length} plugin cleanup operation(s) failed.`,
+      );
+    }
+  }
+
+  private installShutdownHandlers(): void {
+    if (this.shutdownHandlersCleanup) return;
+
+    const cleanup = () => {
+      process.off("SIGINT", onSigint);
+      process.off("SIGTERM", onSigterm);
+      process.off("SIGHUP", onSighup);
+
+      if (this.shutdownHandlersCleanup === cleanup) {
+        this.shutdownHandlersCleanup = undefined;
+      }
+    };
+
+    const shutdown = (signal: NodeJS.Signals) => {
+      cleanup();
+
+      void this.stop().catch((error: unknown) => {
+        console.error(`[SERVER] Shutdown failed after ${signal}:`, error);
+      });
+    };
+
+    const onSigint = () => shutdown("SIGINT");
+    const onSigterm = () => shutdown("SIGTERM");
+    const onSighup = () => shutdown("SIGHUP");
+
+    process.once("SIGINT", onSigint);
+    process.once("SIGTERM", onSigterm);
+    process.once("SIGHUP", onSighup);
+
+    this.shutdownHandlersCleanup = cleanup;
+  }
 
   override on<K extends keyof ProxyEventMap>(
     event: K,
@@ -173,13 +388,36 @@ export class Proxy extends TypedEventEmitter<ProxyEventMap> implements IProxy {
     proxyEventManager,
   ) as any;
 
-  // ------------------------------------------------------------
-
   /**
-   * Accepts an existing HTTP server (e.g., from Express),
-   * or creates a new one if none is provided.
+   * Creates and configures a proxy instance.
+   *
+   * Uses the provided HTTP server or creates a new one, applies the
+   * configured defaults, initializes plugin event handling, registers
+   * middleware pipelines, binds proxy events, and registers the global
+   * proxy configuration.
+   *
+   * @param options - Configuration options for the proxy instance.
+   *
+   * @remarks
+   * - Certificate caching is enabled by default.
+   * - Response caching is disabled by default.
+   * - Default processing pipelines are enabled by default.
+   * - Handshake timeout defaults to 10 seconds.
+   * - Upstream timeout defaults to 30 seconds.
+   * - Plugin execution timeout defaults to 10 seconds.
+   * - If no root CA credentials are provided, empty key and certificate
+   *   values are used.
+   *
+   * @example
+   * ```ts
+   * const proxy = new Proxy({
+   *   useResponseCache: true,
+   *   handshakeTimeoutMs: 15_000,
+   *   upstreamTimeoutMs: 45_000,
+   * });
+   * ```
    */
-  constructor(options: ProxyOptions & ProxyConfig = {}) {
+  constructor(options: ProxyOptions = {}) {
     super();
 
     this.httpServer = options.server || http.createServer({ keepAlive: true });
@@ -188,10 +426,12 @@ export class Proxy extends TypedEventEmitter<ProxyEventMap> implements IProxy {
       useResponseCache: options.useResponseCache ?? false,
       useDefaultPipelines: options.useDefaultPipelines ?? true,
       rootCa: options.rootCa || { key: "", cert: "" },
-      // rejectUnauthorized: options.rejectUnauthorized ?? true,
-      handshakeTimeoutMs: options.handshakeTimeoutMs ?? 10000,
-      upstreamTimeoutMs: options.upstreamTimeoutMs ?? 30000,
+      handshakeTimeoutMs: options.handshakeTimeoutMs ?? 10_000,
+      upstreamTimeoutMs: options.upstreamTimeoutMs ?? 30_000,
+      pluginTimeoutMs: options.pluginTimeoutMs ?? 10_000,
     };
+
+    pluginEventManager.setPluginTimeout(this.config.pluginTimeoutMs);
 
     // initialization
     Middleware.register({
@@ -212,7 +452,6 @@ export class Proxy extends TypedEventEmitter<ProxyEventMap> implements IProxy {
     });
 
     this.httpServer.on("connect", async (req, socket, head) => {
-      
       const scope: RequestScope = ContextManager.getOrCreateScope(socket);
 
       scope.request.client.req = req;
@@ -223,7 +462,6 @@ export class Proxy extends TypedEventEmitter<ProxyEventMap> implements IProxy {
         head,
         scope,
       });
-      
     });
 
     this.httpServer.on("request", async (req, res) => {
@@ -248,153 +486,147 @@ export class Proxy extends TypedEventEmitter<ProxyEventMap> implements IProxy {
       });
     });
 
-    this.httpServer.on("error", async (err: any) => {
-      proxyEventManager.emit("error", err);
-
-      if (err.code === "EADDRINUSE") {
-        console.error(
-          `[FATAL] Proxy server failed to bind: Port is already in use.`,
-        );
-        process.exit(1);
+    this.httpServer.on("error", (err: NodeJS.ErrnoException) => {
+      // Startup errors are propagated by listen() through its one-time
+      // error listener. Avoid logging them twice here.
+      if (err.code === "EADDRINUSE" || err.code === "EACCES") {
+        return;
       }
 
-      if (err.code === "EACCES") {
-        console.error(
-          `[FATAL] Permission Denied: Cannot bind proxy to this network port.`,
-        );
-        process.exit(1);
+      // Node's EventEmitter throws when "error" is emitted without a listener.
+      // Preserve the proxy's error event API without crashing when nobody
+      // subscribes to it.
+      if (proxyEventManager.listenerCount("error") > 0) {
+        proxyEventManager.emit("error", err);
       }
 
       if (err.code === "EMFILE") {
         console.warn(
-          `[SERVER_OS_WARN] Operating system file descriptor limit reached! Incoming connections are being throttled.`,
+          "[SERVER_OS_WARN] Operating system file descriptor limit reached.",
         );
-      } else {
-        console.error(
-          `[Root HTTPServer Error Hook Captured]:`,
-          err.message || err,
-        );
+      } else if (proxyEventManager.listenerCount("error") === 0) {
+        console.error("[Root HTTPServer Error Hook Captured]:", err.message);
       }
     });
   }
 
   public use<K extends keyof PluginEventMap>(plugin: BasePlugin<K>): this {
-    this.activePlugins.add(plugin);
+    if (this.isStarting || this.httpServer.listening || this.stopPromise) {
+      throw new Error("Plugins must be registered before the proxy starts.");
+    }
 
-    pluginEventManager.on(plugin.event, (async (...args: any[]) => {
-      // console.info(":args:", JSON.stringify(args[0]));
+    if (this.activePlugins.has(plugin)) {
+      return this;
+    }
+
+    const listener = async (...args: any[]) => {
       await plugin.run(args[0]);
-    }) as any);
+    };
 
-    console.debug(
-      `[REGISTRY] Registered: ${plugin.name} | event: (${plugin.event})`,
-    );
+    this.activePlugins.add(plugin);
+    this.pluginListeners.set(plugin, listener);
+
+    pluginEventManager.on(plugin.event, listener as any);
+
     return this;
   }
-  /**
-   * Removes a plugin from the active tracking set.
-   * * @experimental This method is a partial implementation and may change in future versions.
-   * @param plugin - The plugin instance to deactivate.
-   * @limitations This does **not** automatically detach event listeners.
-   * Manual cleanup via `this.off()` is required to prevent ghost executions.
-   */
+
   public unuse(plugin: BasePlugin<any>): this {
+    if (this.isStarting || this.httpServer.listening || this.stopPromise) {
+      throw new Error("Plugins cannot be unregistered after the proxy starts.");
+    }
+    const listener = this.pluginListeners.get(plugin);
+
+    if (listener) {
+      pluginEventManager.off(plugin.event, listener as any);
+      this.pluginListeners.delete(plugin);
+    }
+
     this.activePlugins.delete(plugin);
+
     return this;
   }
 
-  /**
-   * Starts the HTTP server on the specified port.
-   * @param port - The port number to listen on.
-   * @param callback - Optional function to execute once the server starts. Defaults to logging the server address if omitted.
-   */
-  public listen(port: number, callback?: () => void | Promise<void>) {
-    if (this.httpServer) {
-      this.httpServer.listen(port, async () => {
-        if (callback) {
-          await callback();
-        } else {
-          console.info(
-            `[SERVER] Started | Address:`,
-            this.httpServer?.address(),
-          );
-        }
-      });
-    }
-  }
-
-  /**
-   * Stops the HTTP server, allowing in-flight requests to drain within a specific timeframe.
-   * Forcibly closes any lingering connections if the timeout is reached.
-   * @param shutdownTimeoutMs The maximum time to wait for active requests to finish (defaults to 0 ms).
-   * @returns A promise that resolves when the server has shut down.
-   */
-  public async stop(shutdownTimeoutMs: number = 0): Promise<void> {
-    if (!this.httpServer || !this.httpServer.listening) {
-      return;
+  public async listen(
+    port: number,
+    callback?: () => void | Promise<void>,
+  ): Promise<void> {
+    if (this.isStarting || this.httpServer.listening || this.stopPromise) {
+      throw new Error("Proxy is already starting, running, or stopped.");
     }
 
-    // Stop accepting new connections immediately
-    const serverClosePromise = new Promise<void>((resolve, reject) => {
-      this.httpServer!.close((err) => {
-        if (err) return reject(err);
-        resolve();
-      });
-    });
+    this.isStarting = true;
 
-    const drainPromise = new Promise<void>((resolve) => {
-      if (ContextManager.getActiveRequests().length === 0) {
-        return resolve();
+    try {
+      await this.initializePlugins();
+
+      await new Promise<void>((resolve, reject) => {
+        const onError = (error: Error) => {
+          this.httpServer.off("listening", onListening);
+          reject(error);
+        };
+
+        const onListening = async () => {
+          this.httpServer.off("error", onError);
+
+          try {
+            if (callback) {
+              await callback();
+            } else {
+              console.info(
+                "[SERVER] Started | Address:",
+                this.httpServer.address(),
+              );
+            }
+
+            resolve();
+          } catch (error) {
+            this.httpServer.close((closeError) => {
+              if (closeError) {
+                console.error(
+                  "[SERVER] Failed to close after startup callback error:",
+                  closeError,
+                );
+              }
+
+              reject(error);
+            });
+          }
+        };
+
+        this.httpServer.once("error", onError);
+        this.httpServer.once("listening", onListening);
+        this.httpServer.listen(port);
+
+        this.installShutdownHandlers();
+      });
+    } catch (error) {
+      const cleanupErrors = await this.cleanupInitializedPlugins();
+
+      for (const cleanupError of cleanupErrors) {
+        console.error("[Plugin Cleanup Error During Startup]", cleanupError);
       }
 
-      const interval = setInterval(() => {
-        if (ContextManager.getActiveRequests().length === 0) {
-          clearInterval(interval);
-          resolve();
-        }
-      }, 50);
+      throw error;
+    } finally {
+      this.isStarting = false;
+    }
+  }
 
-      interval.unref();
-    });
-
-    const timeoutPromise = new Promise<void>((resolve) => {
-      const timer = setTimeout(() => {
-        console.warn(
-          `[Shutdown] Shutdown timeout of ${shutdownTimeoutMs}ms reached. Force-closing ${ContextManager.getActiveRequests().length} requests.`,
-        );
-        resolve();
-      }, shutdownTimeoutMs);
-
-      timer.unref();
-    });
-
-    // Race the natural drain against the hard cutoff timeout
-    await Promise.race([drainPromise, timeoutPromise]);
-
-    ContextManager.destroyActiveRequests();
-    connectionManager.destroyAll();
-
-    if (typeof this.httpServer!.closeAllConnections === "function") {
-      this.httpServer!.closeAllConnections();
+  public stop(shutdownTimeoutMs = 1500): Promise<void> {
+    if (this.stopPromise) {
+      return this.stopPromise;
     }
 
-    connectionEvents.removeAllListeners();
-    pluginEventManager.removeAllListeners();
-    proxyEventManager.removeAllListeners();
+    if (!this.httpServer?.listening) {
+      return Promise.resolve();
+    }
 
-    await serverClosePromise;
+    this.stopPromise = this.stopInternal(shutdownTimeoutMs);
+    return this.stopPromise;
   }
 
   public address() {
     return this.httpServer.address();
   }
 }
-
-process.on("uncaughtException", (err) => {
-  console.error(`[FATAL_EXCEPTION]`, err);
-  process.exit(1);
-});
-
-process.on("unhandledRejection", (reason) => {
-  console.error(`[UNHANDLED_REJECTION]`, reason);
-});
