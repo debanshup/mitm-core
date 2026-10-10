@@ -3,7 +3,6 @@ import { connectionEvents } from "../core/event/connection-events/connectionEven
 import { ScopeMutator } from "../core/scope/ScopeMutator";
 import { proxyEventManager } from "../core/event/proxy-events/proxyEvents";
 import { pluginEventManager } from "../core/event/plugin-events/pluginEvents";
-import type { Proxy } from "../lib/Proxy";
 import type { Socket } from "net";
 import type { IncomingMessage, ServerResponse } from "http";
 import type { Duplex } from "stream";
