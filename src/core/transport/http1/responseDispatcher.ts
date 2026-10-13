@@ -73,7 +73,7 @@ export class ResponseDispatcher {
       const expectedTermination =
         errorCode === "ERR_STREAM_PREMATURE_CLOSE" ||
         errorCode === "ECONNRESET" ||
-        errorCode === "EPIPE"
+        errorCode === "EPIPE";
       if (expectedTermination) {
         return;
       }

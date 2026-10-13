@@ -385,31 +385,31 @@ describe("Proxy Client Disconnect Integration", () => {
 
     assert.equal(upstreamRequestStarted, true);
 
-   await new Promise<void>((resolve, reject) => {
-     const deadline = Date.now() + 1000;
+    await new Promise<void>((resolve, reject) => {
+      const deadline = Date.now() + 1000;
 
-     const check = () => {
-       if (upstreamRequestClosed) {
-         resolve();
-         return;
-       }
+      const check = () => {
+        if (upstreamRequestClosed) {
+          resolve();
+          return;
+        }
 
-       if (Date.now() >= deadline) {
-         reject(
-           new Error(
-             "HTTP upstream request did not close after proxy shutdown",
-           ),
-         );
-         return;
-       }
+        if (Date.now() >= deadline) {
+          reject(
+            new Error(
+              "HTTP upstream request did not close after proxy shutdown",
+            ),
+          );
+          return;
+        }
 
-       setTimeout(check, 10);
-     };
+        setTimeout(check, 10);
+      };
 
-     check();
-   });
+      check();
+    });
 
-   assert.equal(upstreamRequestClosed, true);
+    assert.equal(upstreamRequestClosed, true);
   });
 
   it("should close active HTTPS upstream connections when the proxy stops", async function () {

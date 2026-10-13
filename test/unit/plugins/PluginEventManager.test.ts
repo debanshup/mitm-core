@@ -112,66 +112,59 @@ describe("PluginEventManager timeout", () => {
     assert.deepEqual(executionOrder, ["first", "second"]);
   });
 
+  it("propagates a synchronous plugin error and skips subsequent listeners", async () => {
+    const manager = new PluginEventManager();
+    manager.setPluginTimeout(1000);
 
-it("propagates a synchronous plugin error and skips subsequent listeners", async () => {
-  const manager = new PluginEventManager();
-  manager.setPluginTimeout(1000);
+    const pluginError = new Error("synchronous plugin failure");
+    let secondPluginExecuted = false;
 
-  const pluginError = new Error("synchronous plugin failure");
-  let secondPluginExecuted = false;
+    manager.on(EVENT, () => {
+      throw pluginError;
+    });
 
-  manager.on(EVENT, () => {
-    throw pluginError;
+    manager.on(EVENT, () => {
+      secondPluginExecuted = true;
+    });
+
+    await assert.rejects(
+      manager.emitAsync(EVENT, createPayload()),
+      (error: Error) => error === pluginError,
+    );
+
+    assert.equal(
+      secondPluginExecuted,
+      false,
+      "Subsequent listeners must not run after a plugin error",
+    );
   });
 
-  manager.on(EVENT, () => {
-    secondPluginExecuted = true;
+  it("does not time out when a plugin completes before the deadline", async () => {
+    const manager = new PluginEventManager();
+    manager.setPluginTimeout(1000);
+
+    const executionOrder: string[] = [];
+
+    manager.on(EVENT, async () => {
+      await delay(10);
+      executionOrder.push("first");
+    });
+
+    manager.on(EVENT, () => {
+      executionOrder.push("second");
+    });
+
+    await manager.emitAsync(EVENT, createPayload());
+
+    assert.deepEqual(executionOrder, ["first", "second"]);
   });
 
-  await assert.rejects(
-    manager.emitAsync(EVENT, createPayload()),
-    (error: Error) => error === pluginError,
-  );
+  it("clears the timeout after a plugin completes successfully", async () => {
+    const manager = new PluginEventManager();
+    manager.setPluginTimeout(60_000);
 
-  assert.equal(
-    secondPluginExecuted,
-    false,
-    "Subsequent listeners must not run after a plugin error",
-  );
-});
+    manager.on(EVENT, () => {});
 
-it("does not time out when a plugin completes before the deadline", async () => {
-  const manager = new PluginEventManager();
-  manager.setPluginTimeout(1000);
-
-  const executionOrder: string[] = [];
-
-  manager.on(EVENT, async () => {
-    await delay(10);
-    executionOrder.push("first");
+    await manager.emitAsync(EVENT, createPayload());
   });
-
-  manager.on(EVENT, () => {
-    executionOrder.push("second");
-  });
-
-  await manager.emitAsync(EVENT, createPayload());
-
-  assert.deepEqual(executionOrder, ["first", "second"]);
-});
-
-it("clears the timeout after a plugin completes successfully", async () => {
-  const manager = new PluginEventManager();
-  manager.setPluginTimeout(60_000);
-
-  manager.on(EVENT, () => {
-    // Complete immediately, well before the timeout.
-  });
-
-  await manager.emitAsync(EVENT, createPayload());
-
-  // If the timer were still active, it could keep Node.js alive.
-  // The test runner's process-level behavior provides the final check.
-});
-
 });

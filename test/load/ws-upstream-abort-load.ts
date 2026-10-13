@@ -13,11 +13,13 @@ import { connectionManager } from "../../src/core/connection/ConnectionManager";
 const CLIENTS = 50;
 
 const CA_CERT = fs.readFileSync(
-  path.resolve(process.cwd(), "creds/__self__/CA.pem"),"utf-8"
+  path.resolve(process.cwd(), "creds/__self__/CA.pem"),
+  "utf-8",
 );
 
 const CA_KEY = fs.readFileSync(
-  path.resolve(process.cwd(), "creds/__self__/key.pem"), "utf-8",
+  path.resolve(process.cwd(), "creds/__self__/key.pem"),
+  "utf-8",
 );
 
 function listen(server: http.Server): Promise<number> {

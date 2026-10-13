@@ -1,4 +1,3 @@
- 
 import { monitorEventLoopDelay } from "node:perf_hooks";
 import http from "node:http";
 import assert from "node:assert/strict";
@@ -8,7 +7,7 @@ import autocannon from "autocannon";
 import { Proxy } from "../../src/lib/Proxy";
 import { ContextManager } from "../../src/core/scope/ContextManager";
 import { connectionManager } from "../../src/core/connection/ConnectionManager";
- 
+
 const UPSTREAM_HOST = "127.0.0.1";
 
 type FaultType = "tcp-drop" | "timeout" | "premature-close" | "normal";

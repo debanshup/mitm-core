@@ -1,6 +1,9 @@
 import WebSocket, { WebSocketServer } from "ws";
 import type { RequestScope } from "../../scope/types";
-import { pluginEventManager, type WsMessageContext } from "../../event/plugin-events/pluginEvents";
+import {
+  pluginEventManager,
+  type WsMessageContext,
+} from "../../event/plugin-events/pluginEvents";
 import { ProxyUtils } from "../../utils/ProxyUtils";
 import { WSUpstreamInitiator } from "./WSUpstreamInitiator";
 import { ScopeMutator } from "../../scope/ScopeMutator";

@@ -9,7 +9,7 @@ import { HttpProxyAgent } from "http-proxy-agent";
 import { Proxy } from "../../src/lib/Proxy";
 import { ContextManager } from "../../src/core/scope/ContextManager";
 import { connectionManager } from "../../src/core/connection/ConnectionManager";
- 
+
 const CLIENTS = 25;
 
 const CA_CERT = fs.readFileSync(
