@@ -1,4 +1,4 @@
-import { RuleEngine, type IRuleParser } from "../../src/index";
+import { RuleEngine, type IRuleParser } from "../../../src";
 
 export class BypassRuleParser implements IRuleParser<RegExp[]> {
   parse(raw: string): RegExp[] {
