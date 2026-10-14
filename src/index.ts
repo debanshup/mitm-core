@@ -7,11 +7,14 @@
  * Internal implementation details, including event managers, emitters,
  * handlers, and configuration registries, are not exported from this module.
  */
-import type { PluginEventMap } from "./core/event/plugin-events/pluginEvents";
+import type {
+  PluginEventMap,
+  WsMessageContext,
+} from "./core/event/plugin-events/pluginEvents";
 import type { ProxyEventMap } from "./core/event/proxy-events/proxyEvents";
 import { BasePlugin } from "./core/plugin/BasePlugin";
 import { RuleEngine } from "./core/rule/RuleEngine";
-import type { IRuleParser } from "./core/rule/ruleStore";
+import type { IRuleParser, WatchableRuleFile } from "./core/rule/ruleStore";
 import type {
   RequestContext,
   RequestScope,
@@ -22,12 +25,13 @@ import type {
 import { PipelineAbortSignal } from "./core/signals/pipelineAbortSignal";
 import type { AbortMessage } from "./core/signals/types";
 import type { ProxyOptions, IProxy } from "./lib/Proxy";
-import { Proxy } from "./lib/Proxy";
+import { Proxy, type ProxyConfig } from "./lib/Proxy";
 
 export { Proxy, BasePlugin, RuleEngine, PipelineAbortSignal };
 
 export type {
   IProxy,
+  ProxyConfig,
   ProxyOptions,
   RequestContext,
   RequestScope,
@@ -35,7 +39,9 @@ export type {
   SessionContext,
   WebSocketContext,
   PluginEventMap,
+  WsMessageContext,
   ProxyEventMap,
   IRuleParser,
+  WatchableRuleFile,
   AbortMessage,
 };
