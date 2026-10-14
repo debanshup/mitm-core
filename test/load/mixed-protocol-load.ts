@@ -14,7 +14,7 @@ import { Proxy } from "../../src/lib/Proxy";
 import { ContextManager } from "../../src/core/scope/ContextManager";
 import { connectionManager } from "../../src/core/connection/ConnectionManager";
 
-const CLIENTS_PER_PROTOCOL = 25;
+const CLIENTS_PER_PROTOCOL = 100;
 
 const CA_CERT = fs.readFileSync(path.resolve("creds/__self__/CA.pem"), "utf8");
 

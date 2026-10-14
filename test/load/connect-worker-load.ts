@@ -15,7 +15,7 @@ const HOST = "localhost";
 const CONNECTIONS = 10;
 const REQUESTS_PER_CLIENT = 100;
 
-const CA_CERT = fs.readFileSync(path.join(CA_PATH.CA_DIR, "/CA.crt"), "utf8");
+const CA_CERT = fs.readFileSync(path.join(CA_PATH.CA_DIR, "/CA.pem"), "utf8");
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -268,7 +268,7 @@ async function main(): Promise<void> {
 
   const rootCa = {
     key: fs.readFileSync(path.join(CA_PATH.CA_DIR, "/key.pem"), "utf8"),
-    cert: fs.readFileSync(path.join(CA_PATH.CA_DIR, "/CA.crt"), "utf8"),
+    cert: fs.readFileSync(path.join(CA_PATH.CA_DIR, "/CA.pem"), "utf8"),
   };
 
   const proxy = new Proxy({

@@ -3,7 +3,6 @@ import { WatchableRuleFile, type IRuleParser } from "./ruleStore";
 
 /**
  * Abstract base class for managing file-backed rule configurations.
- *
  * Provides a factory for creating concrete rule-engine instances and a
  * shared registry of their associated rule stores. Subclasses define the
  * rule name, configuration path, parser, and initial state.
@@ -18,10 +17,9 @@ import { WatchableRuleFile, type IRuleParser } from "./ruleStore";
  * ```
  *
  * For a complete implementation, see the
- * [rule engine example](https://github.com/example/mitm-core/blob/main/example/advanced/rules/bypass.Rule.ts).
+ * [rule engine example](https://github.com/debanshup/mitm-core/blob/main/example/advanced/rules/bypass.Rule.ts).
  */
 
-// -- change above link
 export abstract class RuleEngine<T> {
   private static stores = new Map<string, WatchableRuleFile<any>>();
 

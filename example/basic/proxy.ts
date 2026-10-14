@@ -5,7 +5,7 @@ import path from "path";
 
 const rootCa = {
   key: fs.readFileSync(path.join(CA_PATH.CA_DIR, "/key.pem"), "utf8"),
-  cert: fs.readFileSync(path.join(CA_PATH.CA_DIR, "/CA.crt"), "utf8"),
+  cert: fs.readFileSync(path.join(CA_PATH.CA_DIR, "/CA.pem"), "utf8"),
 };
 
 const proxy = new Proxy({ rootCa });
