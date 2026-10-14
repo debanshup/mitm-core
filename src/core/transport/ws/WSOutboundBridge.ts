@@ -146,20 +146,36 @@ export class WSOutboundBridge {
             if (upstreamWS.readyState === WebSocket.OPEN) {
               upstreamWS.close(
                 getSafeCloseCode(code),
-                reason ? reason.toString("utf8") : "",
+                reason ? reason.toString("utf8") : undefined,
               );
+              upstreamSocket.once("close", () =>
+                isolateTunnelTearDown(null, "Client_Normal_Close"),
+              );
+              setTimeout(
+                () => isolateTunnelTearDown(null, "Client_Close_Timeout"),
+                1000,
+              ).unref();
+            } else {
+              isolateTunnelTearDown(null, "Client_Normal_Close");
             }
-            isolateTunnelTearDown(null, "Client_Normal_Close");
           });
 
           upstreamWS.on("close", (code, reason) => {
             if (clientWS.readyState === WebSocket.OPEN) {
               clientWS.close(
                 getSafeCloseCode(code),
-                reason ? reason.toString("utf8") : "",
+                reason ? reason.toString("utf8") : undefined,
               );
+              clientSocket.once("close", () =>
+                isolateTunnelTearDown(null, "Upstream_Normal_Close"),
+              );
+              setTimeout(
+                () => isolateTunnelTearDown(null, "Upstream_Close_Timeout"),
+                1000,
+              ).unref();
+            } else {
+              isolateTunnelTearDown(null, "Upstream_Normal_Close");
             }
-            isolateTunnelTearDown(null, "Upstream_Normal_Close");
           });
           clientWS.on("error", (err) =>
             isolateTunnelTearDown(err, "Client_WS_Engine"),
