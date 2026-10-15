@@ -12,7 +12,7 @@ import type {
   WsMessageContext,
 } from "./core/event/plugin-events/pluginEvents";
 import type { ProxyEventMap } from "./core/event/proxy-events/proxyEvents";
-import { BasePlugin } from "./core/plugin/BasePlugin";
+import { BasePlugin, type PluginPayload } from "./core/plugin/BasePlugin";
 import { RuleEngine } from "./core/rule/RuleEngine";
 import type { IRuleParser, WatchableRuleFile } from "./core/rule/ruleStore";
 import type {
@@ -39,6 +39,7 @@ export type {
   SessionContext,
   WebSocketContext,
   PluginEventMap,
+  PluginPayload,
   WsMessageContext,
   ProxyEventMap,
   IRuleParser,
