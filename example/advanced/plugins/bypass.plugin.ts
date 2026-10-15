@@ -3,7 +3,7 @@ import {
   BasePlugin,
   PipelineAbortSignal,
   RuleEngine,
-  type RequestScope,
+  type PluginPayload,
 } from "../../../src";
 import { BypassRuleEngine } from "../rules/bypass.Rule";
 
@@ -16,7 +16,7 @@ export class BypassPlugin extends BasePlugin<"proxy:client-before-handshake"> {
     this.bypassEngine = RuleEngine.createRule(BypassRuleEngine);
   }
 
-  async run({ scope }: { scope: RequestScope }) {
+  async run({ scope }: PluginPayload<typeof this.event>) {
     const { session, request, lifecycle } = scope;
     const originalHost = request.target.originalHost;
 

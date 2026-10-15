@@ -1,4 +1,8 @@
-import { BasePlugin, type RequestScope } from "../../../src";
+import {
+  BasePlugin,
+  type PluginPayload,
+  type RequestScope,
+} from "../../../src";
 import {
   pluginEventManager,
   type WsMessageContext,
@@ -24,13 +28,7 @@ export class WsMockPlugin extends BasePlugin<"proxy:ws-client-message"> {
     console.info(`[WsMockPlugin] Cleaned up: ${this.name}`);
   }
 
-  async run({
-    scope,
-    messageContext,
-  }: {
-    scope: RequestScope;
-    messageContext: WsMessageContext;
-  }) {
+  async run({ scope, messageContext }: PluginPayload<typeof this.event>) {
     const text = messageContext.data.toString("utf8");
 
     console.log(
