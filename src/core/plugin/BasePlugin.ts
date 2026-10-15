@@ -1,29 +1,19 @@
 import type { PluginEventMap } from "../event/plugin-events/pluginEvents";
-import type { RequestContext } from "../scope/types";
 
 /**
- * Provides contextual information about the proxy session and request
- * associated with a plugin event.
+ * Extracts the payload type associated with a plugin event.
+ *
+ * If the event map defines its value as an argument tuple, the first
+ * tuple element is used as the payload type. Otherwise, the event map
+ * value itself is used.
+ *
+ * @typeParam K - The plugin event key from {@link PluginEventMap}.
+ * @returns The payload type associated with the specified plugin event.
  */
-export type PluginContext = {
-  /** Information about the current proxy session. */
-  session: {
-    /** Unique identifier of the proxy session. */
-    id: string;
-
-    /** Protocol information associated with the session. */
-    protocol: {
-      /** Type of connection established with the proxy, when known. */
-      connectionType?: "tcp" | "http" | "https";
-
-      /** HTTP version negotiated or detected for the connection, when known. */
-      httpVersion?: "h1" | "h2" | "h3" | "unknown";
-    };
-  };
-
-  /** Context associated with the current request. */
-  request: RequestContext;
-};
+export type PluginPayload<K extends keyof PluginEventMap> =
+  PluginEventMap[K] extends unknown[]
+    ? PluginEventMap[K][0]
+    : PluginEventMap[K];
 
 /**
  * Base class for implementing plugins that handle plugin events.
@@ -46,7 +36,10 @@ export type PluginContext = {
  *   }
  * }
  * ```
+ *  For a complete implementation, see the
+ * [Plugin example](https://github.com/debanshup/mitm-core/blob/main/example/advanced/plugins/wsIntercept.plugin.ts).
  */
+
 export abstract class BasePlugin<K extends keyof PluginEventMap> {
   /**
    * Identifies the plugin event this plugin handles.
@@ -68,11 +61,7 @@ export abstract class BasePlugin<K extends keyof PluginEventMap> {
    * @param payload - The payload associated with the plugin event.
    * @returns Nothing, or a promise that resolves when the handler completes.
    */
-  abstract run(
-    payload: PluginEventMap[K] extends unknown[]
-      ? PluginEventMap[K][0]
-      : PluginEventMap[K],
-  ): Promise<void> | void;
+  abstract run(payload: PluginPayload<K>): Promise<void> | void;
 
   /**
    * Initializes the plugin during proxy initialization.
