@@ -15,6 +15,10 @@ import EventEmitter from "events";
  * @internal
  */
 export class TypedEventEmitter<T extends object> extends EventEmitter {
+  constructor() {
+    super();
+  }
+
   /**
    * Registers a listener for the specified event.
    *
@@ -100,6 +104,27 @@ export class TypedEventEmitter<T extends object> extends EventEmitter {
     return super.listeners(event as string | symbol) as Array<
       T[K] extends any[] ? (...args: T[K]) => void : never
     >;
+  }
+
+  override addListener<K extends keyof T & (string | symbol)>(
+    event: K,
+    listener: T[K] extends any[] ? (...args: T[K]) => void : never,
+  ): this {
+    return this.on(event, listener);
+  }
+
+  override removeListener<K extends keyof T & (string | symbol)>(
+    event: K,
+    listener: T[K] extends any[] ? (...args: T[K]) => void : never,
+  ): this {
+    return this.off(event, listener);
+  }
+
+  override listenerCount(
+    eventName: string | symbol,
+    listener?: (...args: any[]) => void,
+  ): number {
+    return super.listenerCount(eventName, listener);
   }
 
   /**
