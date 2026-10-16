@@ -30,7 +30,7 @@ export class BypassRuleParser implements IRuleParser<RegExp[]> {
 }
 export class BypassRuleEngine extends RuleEngine<string[] | RegExp[]> {
   public readonly ruleName = "tls-bypass";
-  public readonly rulePath = "rules/bypass.rules.txt";
+  public readonly rulePath = "example/advanced/rules/bypass.rules.txt";
   public readonly parser = new BypassRuleParser();
   public readonly defaultState: string[] = [];
 

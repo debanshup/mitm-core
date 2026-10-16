@@ -48,10 +48,9 @@ npm install
 
 # 3. Build the project
 npm run build
-
-# 4. Start the development environment
-npm run dev
 ```
+
+To run the example proxy, refer to the examples provided in the repository.
 
 The development command runs the example proxy with the built-in bypass plugin.
 
