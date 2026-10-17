@@ -44,15 +44,13 @@ git clone https://github.com/<your-username>/mitm-core.git
 cd mitm-core
 
 # 2. Install dependencies
-npm install
+npm ci
 
 # 3. Build the project
 npm run build
 ```
 
 To run the example proxy, refer to the examples provided in the repository.
-
-The development command runs the example proxy with the built-in bypass plugin.
 
 ### Before Submitting a Pull Request
 
