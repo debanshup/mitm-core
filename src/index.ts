@@ -7,6 +7,7 @@
  * Internal implementation details, including event managers, emitters,
  * handlers, and configuration registries, are not exported from this module.
  */
+import type { ProxyConfig, ProxyOptions } from "./config.registry";
 import type {
   PluginEventMap,
   WsMessageContext,
@@ -24,8 +25,8 @@ import type {
 } from "./core/scope/types";
 import { PipelineAbortSignal } from "./core/signals/pipelineAbortSignal";
 import type { AbortMessage } from "./core/signals/types";
-import type { ProxyOptions, IProxy } from "./lib/Proxy";
-import { Proxy, type ProxyConfig } from "./lib/Proxy";
+import type { IProxy } from "./lib/Proxy";
+import { Proxy } from "./lib/Proxy";
 
 export { Proxy, BasePlugin, RuleEngine, PipelineAbortSignal };
 
