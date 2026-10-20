@@ -1,4 +1,5 @@
 {
+  "require": ["./test/helpers/generate-upstream-certs.cjs"],
   "node-option": ["import=tsx"],
   "extension": ["ts"],
   "spec": ["test/**/*.test.ts"],

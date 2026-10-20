@@ -25,3 +25,7 @@ Thumbs.db
 .idea/
 .vscode/
 *.cpuprofile
+
+# Generated integration-test TLS credentials
+/test/fixtures/certs/upstream-cert.pem
+/test/fixtures/certs/upstream-key.pem

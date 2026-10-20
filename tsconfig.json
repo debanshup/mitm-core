@@ -21,6 +21,6 @@
     "verbatimModuleSyntax": true,
     "isolatedModules": true
   },
-  "include": ["src/**/*", "test/**/*", "example/**/*", "constants"],
+  "include": ["src/**/*", "test/**/*", "example/**/*", "test/constants"],
   "exclude": ["node_modules", "dist"]
 }
