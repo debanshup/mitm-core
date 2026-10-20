@@ -16,6 +16,14 @@ export class BypassPlugin extends BasePlugin<"proxy:client-before-handshake"> {
     this.bypassEngine = RuleEngine.createRule(BypassRuleEngine);
   }
 
+  async init() {
+    console.info(`[BypassPlugin] Initialised: ${this.name}`);
+  }
+
+  async cleanup(): Promise<void> {
+    console.info(`[BypassPlugin] Cleaned up: ${this.name}`);
+  }
+
   async run({ scope }: PluginPayload<typeof this.event>) {
     const { session, request, lifecycle } = scope;
     const originalHost = request.target.originalHost;
