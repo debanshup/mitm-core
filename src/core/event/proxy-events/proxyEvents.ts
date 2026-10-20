@@ -85,6 +85,87 @@ export interface ProxyEventMap {
    * execution.
    */
   error: [err: Error | unknown];
+
+  // WebSocket lifecycle
+
+  /**
+   * Fired when the proxy receives a client WebSocket upgrade request.
+   *
+   * This event does not guarantee that the upstream handshake succeeds.
+   */
+  "ws:request": [
+    payload: {
+      scope: RequestScope;
+      socket: Stream.Duplex;
+      head: Buffer;
+    },
+  ];
+
+  /**
+   * Fired after the upstream WebSocket upgrade succeeds and the proxy
+   * finishes initializing the WebSocket tunnel.
+   */
+  "ws:established": [payload: { scope: RequestScope }];
+
+  /**
+   * Fired when a client-originated WebSocket message is received,
+   * before the bridge forwards it upstream.
+   */
+  "ws:client-message": [
+    payload: {
+      scope: RequestScope;
+      data: Buffer;
+      isBinary: boolean;
+    },
+  ];
+
+  /**
+   * Fired when an upstream-originated WebSocket message is received,
+   * before the bridge forwards it to the client.
+   */
+  "ws:upstream-message": [
+    payload: {
+      scope: RequestScope;
+      data: Buffer;
+      isBinary: boolean;
+    },
+  ];
+
+  /**
+   * Fired when a WebSocket endpoint reports a close event.
+   */
+  "ws:close": [
+    payload: {
+      scope: RequestScope;
+      direction: "client" | "upstream";
+      code: number;
+      reason: Buffer;
+    },
+  ];
+
+  /**
+   * Fired when a WebSocket endpoint reports an error.
+   */
+  "ws:error": [
+    payload: {
+      scope: RequestScope;
+      direction: "client" | "upstream";
+      error: Error;
+    },
+  ];
+}
+
+export function reportProxyError(error: unknown): void {
+  try {
+    if (proxyEventManager.listenerCount("error") > 0) {
+      proxyEventManager.emit("error", error);
+    } else {
+      // console.error("[Proxy Error]", error);
+    }
+  } catch (reportingError) {
+    console.error("[Proxy Error] Error listener failed:", reportingError);
+    console.error("[Proxy Error] Original error:", error);
+  }
 }
 
 /**
