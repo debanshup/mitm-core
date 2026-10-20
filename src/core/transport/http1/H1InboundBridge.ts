@@ -4,6 +4,7 @@ import { randomUUID } from "crypto";
 
 import type { RequestScope } from "../../scope/types";
 import { connectionEvents } from "../../event/connection-events/connectionEvents";
+import { reportProxyError } from "../../event/proxy-events/proxyEvents";
 
 const HOP_HEADERS = new Set([
   "connection",
@@ -52,12 +53,20 @@ export class H1InboundBridge {
         return;
       }
 
-      await connectionEvents.emitAsync("WS:UPGRADE", {
-        req,
-        socket: clientSocket,
-        scope: connectionScope,
-        head,
-      });
+      try {
+        await connectionEvents.emitAsync("WS:UPGRADE", {
+          req,
+          socket: clientSocket,
+          scope: connectionScope,
+          head,
+        });
+      } catch (error) {
+        reportProxyError(error);
+
+        if (!clientSocket.destroyed) {
+          clientSocket.destroy();
+        }
+      }
     });
 
     this.h1Server.on("request", async (req, res) => {
@@ -109,13 +118,18 @@ export class H1InboundBridge {
           scope: requestScope,
         });
       } catch (err) {
-        console.error("[Internal H1 Bridge Parser Error]", err);
+        reportProxyError(err);
 
-        if (!res.headersSent) {
-          res.statusCode = 502;
-          res.end("Bad Gateway (Proxy Core Fault)");
-        } else {
-          res.destroy();
+        if (!res.destroyed && !res.writableEnded) {
+          if (!res.headersSent) {
+            res.writeHead(502, {
+              "Content-Type": "text/plain",
+              Connection: "close",
+            });
+            res.end("Bad Gateway (Proxy Core Fault)");
+          } else {
+            res.destroy();
+          }
         }
 
         if (!req.socket.destroyed) {

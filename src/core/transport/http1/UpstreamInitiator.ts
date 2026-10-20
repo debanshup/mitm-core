@@ -5,6 +5,7 @@ import { ProxyUtils } from "../../utils/ProxyUtils";
 import type { RequestScope } from "../../scope/types";
 import { pluginEventManager } from "../../event/plugin-events/pluginEvents";
 import { getConfig } from "../../../config.registry";
+import { reportProxyError } from "../../event/proxy-events/proxyEvents";
 
 export class UpstreamInitiator {
   private static httpsAgent = new https.Agent({
@@ -26,6 +27,17 @@ export class UpstreamInitiator {
     scheduling: "fifo",
     timeout: 60000,
   });
+
+  private static async emitPluginEventSafely(
+    eventName: "proxy:upstream-connect" | "proxy:upstream-request",
+    scope: RequestScope,
+  ): Promise<void> {
+    try {
+      await pluginEventManager.emitAsync(eventName, { scope });
+    } catch (error) {
+      reportProxyError(error);
+    }
+  }
 
   public static async initH1UpstreamReq(targetUrl: URL, scope: RequestScope) {
     const { request } = scope;
@@ -82,22 +94,19 @@ export class UpstreamInitiator {
     upstream.once("socket", (socket) => {
       if (socket.connecting) {
         const connectEvent = isHTTPS ? "secureConnect" : "connect";
-        socket.once(connectEvent, async () => {
-          await pluginEventManager.emitAsync("proxy:upstream-connect", {
-            scope,
-          });
+
+        socket.once(connectEvent, () => {
+          void this.emitPluginEventSafely("proxy:upstream-connect", scope);
         });
       } else {
-        setImmediate(async () => {
-          await pluginEventManager.emitAsync("proxy:upstream-connect", {
-            scope,
-          });
+        setImmediate(() => {
+          void this.emitPluginEventSafely("proxy:upstream-connect", scope);
         });
       }
     });
 
-    upstream.once("finish", async () => {
-      await pluginEventManager.emitAsync("proxy:upstream-request", { scope });
+    upstream.once("finish", () => {
+      void this.emitPluginEventSafely("proxy:upstream-request", scope);
     });
 
     let clientDisconnected = false;
@@ -153,11 +162,7 @@ export class UpstreamInitiator {
 
       const errCode = (err as NodeJS.ErrnoException).code;
 
-      if (clientDisconnected) {
-        return;
-      }
-
-      if (errCode === "ERR_UPSTREAM_TIMEOUT") {
+      if (clientDisconnected || errCode === "ERR_UPSTREAM_TIMEOUT") {
         return;
       }
 
@@ -165,7 +170,10 @@ export class UpstreamInitiator {
         errCode !== "ERR_STREAM_PREMATURE_CLOSE" &&
         errCode !== "ERR_CLIENT_DISCONNECTED"
       ) {
+        reportProxyError(err);
+
         console.error("Pipeline mapping failed from client to upstream:", err);
+
         this.handleUpstreamFailure(err, scope, targetUrl);
       }
     });

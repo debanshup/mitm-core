@@ -3,6 +3,7 @@ import type { RequestScope } from "../../scope/types";
 import type { ResponseCacheProcessor } from "../../cache/ResponseCacheProcessor";
 import { StreamingResponseHandler } from "./streamingResponseHandler";
 import { ScopeMutator } from "../../scope/ScopeMutator";
+import { reportProxyError } from "../../event/proxy-events/proxyEvents";
 
 export const RES_HOP_HEADERS = new Set([
   "connection",
@@ -68,6 +69,8 @@ export class ResponseDispatcher {
         upstream,
       );
     } catch (error) {
+      // report proxy error
+      reportProxyError(error);
       const errorCode = (error as NodeJS.ErrnoException)?.code ?? "";
 
       const expectedTermination =
