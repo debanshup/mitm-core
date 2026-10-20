@@ -1,11 +1,11 @@
 import type { RequestScope } from "../../scope/types";
-import type { ProxyConfig } from "../../../lib/Proxy";
-
 import { ResponseCacheProcessor } from "../../cache/ResponseCacheProcessor";
 import { ScopeMutator } from "../../scope/ScopeMutator";
 import { connectionEvents } from "../../event/connection-events/connectionEvents";
 import { pluginEventManager } from "../../event/plugin-events/pluginEvents";
 import { ResponseDispatcher } from "./responseDispatcher";
+import type { ProxyConfig } from "../../../config.registry";
+import { reportProxyError } from "../../event/proxy-events/proxyEvents";
 
 export class H1OutboundBridge {
   public static execute(
@@ -52,27 +52,45 @@ export class H1OutboundBridge {
     }
 
     upstreamReq.on("response", async (upstreamRes) => {
-      scope.lifecycle.timestamps.upstreamReceivedAt = Date.now();
-      await connectionEvents.emitAsync("UPSTREAM:RESPONSE", {
-        scope,
-        upstreamRes,
-      });
-
-      if (cacheProcessor.tryServeRevalidation(upstreamRes)) {
-        return safeResolve();
-      }
-
-      cacheProcessor.initializeUpstreamIntercept(upstreamRes);
-
       try {
+        scope.lifecycle.timestamps.upstreamReceivedAt = Date.now();
+
+        await connectionEvents.emitAsync("UPSTREAM:RESPONSE", {
+          scope,
+          upstreamRes,
+        });
+
+        if (cacheProcessor.tryServeRevalidation(upstreamRes)) {
+          safeResolve();
+          return;
+        }
+
+        cacheProcessor.initializeUpstreamIntercept(upstreamRes);
+
         await ResponseDispatcher.handle(
           scope,
           upstreamRes,
           cacheProcessor,
           upstreamReq,
         );
+
         safeResolve();
       } catch (error) {
+        reportProxyError(error);
+
+        if (!upstreamRes.destroyed) {
+          upstreamRes.destroy();
+        }
+
+        if (!inboundRes.destroyed && !inboundRes.writableEnded) {
+          if (!inboundRes.headersSent) {
+            inboundRes.writeHead(502, { Connection: "close" });
+            inboundRes.end("Bad Gateway: Proxy response handling failed.");
+          } else {
+            inboundRes.destroy();
+          }
+        }
+
         safeReject(error);
       }
     });
@@ -89,8 +107,7 @@ export class H1OutboundBridge {
         errorCode === "ERR_STREAM_PREMATURE_CLOSE";
 
       if (!isExpectedDrop && !isClientDisconnected) {
-        console.error("[H1OutboundBridge] Upstream Error:", errorCode);
-        console.info(err);
+        reportProxyError(err);
       }
 
       if (isSettled) return;
