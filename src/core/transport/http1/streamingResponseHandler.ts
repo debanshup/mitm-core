@@ -65,8 +65,6 @@ export class StreamingResponseHandler {
         );
       }
 
-      ScopeMutator.failPipeline(scope);
-
       if (!res.writableEnded && !res.destroyed) {
         res.destroy(error);
       }
