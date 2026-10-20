@@ -8,8 +8,11 @@ import tls from "node:tls";
 
 import { Proxy } from "../../../src/lib/Proxy";
 
-const CA_CERT = fs.readFileSync("creds/__self__/CA.pem", "utf8");
-const CA_KEY = fs.readFileSync("creds/__self__/key.pem", "utf8");
+import { TEST_CA_DIR } from "../../constants/path";
+import path from "node:path";
+
+const CA_CERT = fs.readFileSync(path.join(TEST_CA_DIR, "CA.pem"), "utf8");
+const CA_KEY = fs.readFileSync(path.join(TEST_CA_DIR, "key.pem"), "utf8");
 
 const UPSTREAM_CERT = fs.readFileSync("test/fixtures/certs/upstream-cert.pem");
 const UPSTREAM_KEY = fs.readFileSync("test/fixtures/certs/upstream-key.pem");

@@ -6,24 +6,24 @@ import { HandshakeHandler } from "../../../../src/core/handlers/handshake.handle
 import { proxyEventManager } from "../../../../src/core/event/proxy-events/proxyEvents";
 import { pluginEventManager } from "../../../../src/core/event/plugin-events/pluginEvents";
 import { SocketGuard } from "../../../../src/core/utils/SocketGuard";
-import { CAManager } from "../../../../src/core/CA/CAManager";
+import { SecureContextManager } from "../../../../src/core/security/SecureContextManager";
 import { H1InboundBridge } from "../../../../src/core/transport/http1/H1InboundBridge";
 
 const mockCertificateGeneration = () => {
-  const originalGetCA = CAManager.getCA;
-  const originalGenerateCA = CAManager.generateCA;
+  const originalGetSecureContext = SecureContextManager.getSecureContext;
+  const originalGenerateSecureContext = SecureContextManager.generateSecureContext;
 
-  CAManager.getCA = (async () => {
+  SecureContextManager.getSecureContext = (async () => {
     return {} as tls.SecureContext;
-  }) as typeof CAManager.getCA;
+  }) as typeof SecureContextManager.getSecureContext;
 
-  CAManager.generateCA = (async () => {
+  SecureContextManager.generateSecureContext = (async () => {
     return {} as tls.SecureContext;
-  }) as typeof CAManager.generateCA;
+  }) as typeof SecureContextManager.generateSecureContext;
 
   return () => {
-    CAManager.getCA = originalGetCA;
-    CAManager.generateCA = originalGenerateCA;
+    SecureContextManager.getSecureContext = originalGetSecureContext;
+    SecureContextManager.generateSecureContext = originalGenerateSecureContext;
   };
 };
 
@@ -339,7 +339,7 @@ describe("HandshakeHandler", () => {
     }
   });
 
-  it("should use CAManager.getCA when certificate cache is enabled", async () => {
+  it("should use SecureContextManager.getSecureContext when certificate cache is enabled", async () => {
     const socket = new MockSocket();
     const handler = new HandshakeHandler();
 
@@ -352,7 +352,7 @@ describe("HandshakeHandler", () => {
 
     const scope = createScope(socket);
 
-    const originalGetCA = CAManager.getCA;
+    const originalGetSecureContext = SecureContextManager.getSecureContext;
     const originalTLSSocket = tls.TLSSocket;
     const originalEnsureCleanupGuards = SocketGuard.ensureCleanupGuards;
     const originalH1Execute = H1InboundBridge.execute;
@@ -360,12 +360,12 @@ describe("HandshakeHandler", () => {
     let receivedHost: string | undefined;
     let receivedConfig: any;
 
-    CAManager.getCA = (async (host: string, config: any) => {
+    SecureContextManager.getSecureContext = (async (host: string, config: any) => {
       receivedHost = host;
       receivedConfig = config;
 
       return {} as tls.SecureContext;
-    }) as typeof CAManager.getCA;
+    }) as typeof SecureContextManager.getSecureContext;
 
     (tls as any).TLSSocket = class extends MockTLSSocket {
       constructor(socket: MockSocket, options?: any) {
@@ -386,7 +386,7 @@ describe("HandshakeHandler", () => {
       assert.equal(receivedHost, "example.com");
       assert.equal(receivedConfig, handler.config);
     } finally {
-      CAManager.getCA = originalGetCA;
+      SecureContextManager.getSecureContext = originalGetSecureContext;
       (tls as any).TLSSocket = originalTLSSocket;
       SocketGuard.ensureCleanupGuards = originalEnsureCleanupGuards;
       H1InboundBridge.execute = originalH1Execute;

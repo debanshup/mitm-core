@@ -5,9 +5,11 @@ import net from "node:net";
 
 import { Proxy } from "../../../src/lib/Proxy";
 
-const CA_CERT = fs.readFileSync("creds/__self__/CA.pem", "utf8");
+import { TEST_CA_DIR } from "../../constants/path";
+import path from "node:path";
 
-const CA_KEY = fs.readFileSync("creds/__self__/key.pem", "utf8");
+const CA_CERT = fs.readFileSync(path.join(TEST_CA_DIR, "CA.pem"), "utf8");
+const CA_KEY = fs.readFileSync(path.join(TEST_CA_DIR, "key.pem"), "utf8");
 
 describe("HTTP Error Path Matrix", () => {
   let upstream: http.Server;

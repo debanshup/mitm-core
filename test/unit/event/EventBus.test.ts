@@ -254,4 +254,59 @@ describe("TypedEventEmitter", () => {
       },
     );
   });
+
+  it("should continue invoking listeners when one throws synchronously", async () => {
+    const emitter = new TypedEventEmitter<TestEvents>();
+    let secondListenerCalled = false;
+
+    emitter.on("message", () => {
+      throw new Error("sync listener failed");
+    });
+
+    emitter.on("message", () => {
+      secondListenerCalled = true;
+    });
+
+    await assert.rejects(
+      emitter.emitAsync("message", { value: "hello" }),
+      /sync listener failed/,
+    );
+
+    assert.equal(secondListenerCalled, true);
+  });
+
+  it("should aggregate synchronous and asynchronous listener failures", async () => {
+    const emitter = new TypedEventEmitter<TestEvents>();
+
+    emitter.on("message", () => {
+      throw new Error("sync failure");
+    });
+
+    emitter.on("message", async () => {
+      throw new Error("async failure");
+    });
+
+    await assert.rejects(
+      emitter.emitAsync("message", { value: "hello" }),
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        assert.match(error.message, /sync failure/);
+        assert.match(error.message, /async failure/);
+        return true;
+      },
+    );
+  });
+
+  it("should not invoke a listener more than once during emitAsync", async () => {
+    const emitter = new TypedEventEmitter<TestEvents>();
+    let calls = 0;
+
+    emitter.on("message", () => {
+      calls++;
+    });
+
+    await emitter.emitAsync("message", { value: "hello" });
+
+    assert.equal(calls, 1);
+  });
 });

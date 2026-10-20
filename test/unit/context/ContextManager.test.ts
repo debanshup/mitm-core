@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { describe, it } from "mocha";
 import { Duplex } from "node:stream";
 import { ContextManager } from "../../../src/core/scope/ContextManager";
-import net from "net";
 function createSocket(): Duplex {
   return new Duplex({
     read() {},

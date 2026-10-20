@@ -8,9 +8,11 @@ import assert from "assert";
 import { HttpsProxyAgent } from "https-proxy-agent";
 import { WebSocket, WebSocketServer } from "ws";
 import { HttpProxyAgent } from "http-proxy-agent";
+import path from "path";
+import { TEST_CA_DIR } from "../../constants/path";
 
-const CA_CERT = fs.readFileSync("creds/__self__/CA.pem", "utf8");
-const CA_KEY = fs.readFileSync("creds/__self__/key.pem", "utf8");
+const CA_CERT = fs.readFileSync(path.join(TEST_CA_DIR, "CA.pem"), "utf8");
+const CA_KEY = fs.readFileSync(path.join(TEST_CA_DIR, "key.pem"), "utf8");
 
 const UPSTREAM_CERT = fs.readFileSync("test/fixtures/certs/upstream-cert.pem");
 const UPSTREAM_KEY = fs.readFileSync("test/fixtures/certs/upstream-key.pem");

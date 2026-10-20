@@ -4,7 +4,7 @@ import path from "node:path";
 
 import { CertificateCacheManager } from "../../../src/core/cache/CertificateCacheManager";
 import { pool } from "../../../src/core/workers/pool/Worker_pool";
-import { LEAF_PATH } from "../../../constants/path";
+import { TEST_LEAF_DIR } from "../../constants/path";
 
 const caConfig = {
   cert: "CA CERT",
@@ -17,7 +17,7 @@ const createWorkerResult = () => ({
 });
 
 const cleanupHost = (host: string) => {
-  const dir = path.join(LEAF_PATH.CERT_DIR, host);
+  const dir = path.join(TEST_LEAF_DIR, host);
 
   if (fs.existsSync(dir)) {
     fs.rmSync(dir, { recursive: true, force: true });
@@ -39,7 +39,7 @@ describe("CertificateCacheManager", () => {
     }) as typeof pool.run;
 
     try {
-      const result = await CertificateCacheManager.getCAFromCache(
+      const result = await CertificateCacheManager.getLeafFromCache(
         host,
         caConfig,
       );
@@ -48,9 +48,9 @@ describe("CertificateCacheManager", () => {
       assert.deepEqual(result.key, Buffer.from("PRIVATE KEY"));
       assert.equal(workerCalled, 1);
 
-      const certPath = path.join(LEAF_PATH.CERT_DIR, host, "cert.crt");
+      const certPath = path.join(TEST_LEAF_DIR, host, "cert.crt");
 
-      const keyPath = path.join(LEAF_PATH.CERT_DIR, host, "key.pem");
+      const keyPath = path.join(TEST_LEAF_DIR, host, "key.pem");
 
       assert.equal(fs.existsSync(certPath), true);
       assert.equal(fs.existsSync(keyPath), true);
@@ -64,7 +64,7 @@ describe("CertificateCacheManager", () => {
     const host = `filesystem-${Date.now()}.example.com`;
     cleanupHost(host);
 
-    const dir = path.join(LEAF_PATH.CERT_DIR, host);
+    const dir = path.join(TEST_LEAF_DIR, host);
     fs.mkdirSync(dir, { recursive: true });
 
     const cert = Buffer.from("FILE CERT");
@@ -82,7 +82,7 @@ describe("CertificateCacheManager", () => {
     }) as typeof pool.run;
 
     try {
-      const result = await CertificateCacheManager.getCAFromCache(
+      const result = await CertificateCacheManager.getLeafFromCache(
         host,
         caConfig,
       );
@@ -110,12 +110,12 @@ describe("CertificateCacheManager", () => {
     }) as typeof pool.run;
 
     try {
-      const first = await CertificateCacheManager.getCAFromCache(
+      const first = await CertificateCacheManager.getLeafFromCache(
         host,
         caConfig,
       );
 
-      const second = await CertificateCacheManager.getCAFromCache(
+      const second = await CertificateCacheManager.getLeafFromCache(
         host,
         caConfig,
       );
@@ -144,9 +144,9 @@ describe("CertificateCacheManager", () => {
     }) as typeof pool.run;
 
     try {
-      const first = CertificateCacheManager.getCAFromCache(host, caConfig);
+      const first = CertificateCacheManager.getLeafFromCache(host, caConfig);
 
-      const second = CertificateCacheManager.getCAFromCache(host, caConfig);
+      const second = CertificateCacheManager.getLeafFromCache(host, caConfig);
 
       const [firstResult, secondResult] = await Promise.all([first, second]);
 
@@ -172,14 +172,14 @@ describe("CertificateCacheManager", () => {
 
     try {
       await assert.rejects(
-        CertificateCacheManager.getCAFromCache(host, caConfig),
+        CertificateCacheManager.getLeafFromCache(host, caConfig),
         /worker failure/,
       );
 
       assert.equal(workerCalled, 1);
 
       await assert.rejects(
-        CertificateCacheManager.getCAFromCache(host, caConfig),
+        CertificateCacheManager.getLeafFromCache(host, caConfig),
         /worker failure/,
       );
 

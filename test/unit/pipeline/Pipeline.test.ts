@@ -4,10 +4,10 @@ import { describe, it, afterEach } from "mocha";
 import { StateStore } from "../../../src/core/state/StateStore";
 import { BaseHandler } from "../../../src/core/handlers/base/base.handler";
 import type { RequestScope } from "../../../src/core/scope/types";
-import type { ProxyConfig } from "../../../src/lib/Proxy";
 import Pipeline from "../../../src/core/pipelines/PipelineCompiler";
 import { PipelineAbortSignal } from "../../../src/core/signals/pipelineAbortSignal";
 import { Duplex } from "node:stream";
+import type { ProxyConfig } from "../../../src/config.registry";
 
 const config = {} as ProxyConfig;
 
