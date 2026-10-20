@@ -1,12 +1,15 @@
 import tls from "node:tls";
 import net from "node:net";
-import { CAManager } from "../CA/CAManager";
+import { SecureContextManager } from "../security/SecureContextManager";
 import { BaseHandler } from "./base/base.handler";
 import { ProxyUtils } from "../utils/ProxyUtils";
 import type { RequestScope } from "../scope/types";
 import { H1InboundBridge } from "../transport/http1/H1InboundBridge";
 import { getConfig } from "../../config.registry";
-import { proxyEventManager } from "../event/proxy-events/proxyEvents";
+import {
+  proxyEventManager,
+  reportProxyError,
+} from "../event/proxy-events/proxyEvents";
 import { pluginEventManager } from "../event/plugin-events/pluginEvents";
 import { SocketGuard } from "../utils/SocketGuard";
 import { PipelineAbortSignal } from "../signals/pipelineAbortSignal";
@@ -85,13 +88,21 @@ export class HandshakeHandler extends BaseHandler {
 
     const customLeaf = session.customCertificates?.get(host);
 
+    // console.info("custom leaf:",customLeaf)
+
     if (customLeaf) {
       secureContext = tls.createSecureContext(customLeaf);
     } else {
       if (this.config.useCertificateCache) {
-        secureContext = await CAManager.getCA(host, this.config);
+        secureContext = await SecureContextManager.getSecureContext(
+          host,
+          this.config,
+        );
       } else {
-        secureContext = await CAManager.generateCA(host, this.config);
+        secureContext = await SecureContextManager.generateSecureContext(
+          host,
+          this.config,
+        );
       }
     }
 
@@ -127,8 +138,14 @@ export class HandshakeHandler extends BaseHandler {
                 return cb(null, tls.createSecureContext(customLeaf));
               }
               const ctx = this.config.useCertificateCache
-                ? await CAManager.getCA(target, this.config)
-                : await CAManager.generateCA(target, this.config);
+                ? await SecureContextManager.getSecureContext(
+                    target,
+                    this.config,
+                  )
+                : await SecureContextManager.generateSecureContext(
+                    target,
+                    this.config,
+                  );
               cb(null, ctx);
             } catch (err) {
               console.error(`[Fatal SNI Error] ${err}`);
@@ -175,6 +192,8 @@ export class HandshakeHandler extends BaseHandler {
       });
 
       tlsSocket.on("error", (err: any) => {
+        // report proxy error
+        reportProxyError(err);
         if (isSettled) return;
         isSettled = true;
         clearTimeout(handshakeTimeout);
