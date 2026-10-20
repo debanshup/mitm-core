@@ -9,18 +9,12 @@ import { HttpsProxyAgent } from "https-proxy-agent";
 import { Proxy } from "../../src/lib/Proxy";
 import { ContextManager } from "../../src/core/scope/ContextManager";
 import { connectionManager } from "../../src/core/connection/ConnectionManager";
+import { TEST_CA_DIR } from "../constants/path";
 
 const CLIENTS = 50;
 
-const CA_CERT = fs.readFileSync(
-  path.resolve(process.cwd(), "creds/__self__/CA.pem"),
-  "utf-8",
-);
-
-const CA_KEY = fs.readFileSync(
-  path.resolve(process.cwd(), "creds/__self__/key.pem"),
-  "utf-8",
-);
+const CA_CERT = fs.readFileSync(path.join(TEST_CA_DIR, "CA.pem"), "utf8");
+const CA_KEY = fs.readFileSync(path.join(TEST_CA_DIR, "key.pem"), "utf8");
 
 function listen(server: http.Server): Promise<number> {
   return new Promise((resolve, reject) => {

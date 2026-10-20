@@ -7,7 +7,7 @@ import crypto from "node:crypto";
 import { Proxy } from "../../src/lib/Proxy";
 import { ContextManager } from "../../src/core/scope/ContextManager";
 import { connectionManager } from "../../src/core/connection/ConnectionManager";
-import { CA_PATH } from "../../constants/path";
+import { TEST_CA_DIR } from "../constants/path";
 import path from "path";
 
 const HOST = "localhost";
@@ -15,7 +15,7 @@ const HOST = "localhost";
 const CONNECTIONS = 10;
 const REQUESTS_PER_CLIENT = 100;
 
-const CA_CERT = fs.readFileSync(path.join(CA_PATH.CA_DIR, "/CA.pem"), "utf8");
+const CA_CERT = fs.readFileSync(path.join(TEST_CA_DIR, "/CA.pem"), "utf8");
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -267,8 +267,8 @@ async function main(): Promise<void> {
   const upstreamPort = (upstream.address() as net.AddressInfo).port;
 
   const rootCa = {
-    key: fs.readFileSync(path.join(CA_PATH.CA_DIR, "/key.pem"), "utf8"),
-    cert: fs.readFileSync(path.join(CA_PATH.CA_DIR, "/CA.pem"), "utf8"),
+    key: fs.readFileSync(path.join(TEST_CA_DIR, "/key.pem"), "utf8"),
+    cert: fs.readFileSync(path.join(TEST_CA_DIR, "/CA.pem"), "utf8"),
   };
 
   const proxy = new Proxy({

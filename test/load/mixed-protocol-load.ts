@@ -13,12 +13,12 @@ import { HttpsProxyAgent } from "https-proxy-agent";
 import { Proxy } from "../../src/lib/Proxy";
 import { ContextManager } from "../../src/core/scope/ContextManager";
 import { connectionManager } from "../../src/core/connection/ConnectionManager";
+import { TEST_CA_DIR } from "../constants/path";
 
 const CLIENTS_PER_PROTOCOL = 100;
 
-const CA_CERT = fs.readFileSync(path.resolve("creds/__self__/CA.pem"), "utf8");
-
-const CA_KEY = fs.readFileSync(path.resolve("creds/__self__/key.pem"), "utf8");
+const CA_CERT = fs.readFileSync(path.join(TEST_CA_DIR, "CA.pem"), "utf8");
+const CA_KEY = fs.readFileSync(path.join(TEST_CA_DIR, "key.pem"), "utf8");
 
 const UPSTREAM_CERT = fs.readFileSync(
   path.resolve("test/fixtures/certs/upstream-cert.pem"),

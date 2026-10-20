@@ -13,6 +13,7 @@ import { HttpsProxyAgent } from "https-proxy-agent";
 import { Proxy } from "../../src/lib/Proxy";
 import { ContextManager } from "../../src/core/scope/ContextManager";
 import { connectionManager } from "../../src/core/connection/ConnectionManager";
+import { TEST_CA_DIR } from "../constants/path";
 
 const CLIENTS_PER_PROTOCOL = 25;
 const WS_MESSAGES = 25;
@@ -20,9 +21,8 @@ const WS_MESSAGE_INTERVAL_MS = 5;
 const UPSTREAM_DELAY_MS = 100;
 const LIFECYCLE_DRAIN_TIMEOUT_MS = 5000;
 
-const CA_CERT = fs.readFileSync(path.resolve("creds/__self__/CA.pem"), "utf8");
-
-const CA_KEY = fs.readFileSync(path.resolve("creds/__self__/key.pem"), "utf8");
+const CA_CERT = fs.readFileSync(path.join(TEST_CA_DIR, "CA.pem"), "utf8");
+const CA_KEY = fs.readFileSync(path.join(TEST_CA_DIR, "key.pem"), "utf8");
 
 const UPSTREAM_CERT = fs.readFileSync(
   path.resolve("test/fixtures/certs/upstream-cert.pem"),
