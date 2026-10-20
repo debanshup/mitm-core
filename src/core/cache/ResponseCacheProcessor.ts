@@ -1,7 +1,7 @@
 import type { IncomingMessage } from "http";
-import type { ProxyConfig } from "../../lib/Proxy";
 import { ResponseCache, type CachedResponse } from "./ResponseCache";
 import type { RequestScope } from "../scope/types";
+import type { ProxyConfig } from "../../config.registry";
 
 // Prevent V8 OOM crashes if a stream is infinitely large
 const MAX_CACHE_MEMORY_LIMIT = 5 * 1024 * 1024; // 5MB limit per response
