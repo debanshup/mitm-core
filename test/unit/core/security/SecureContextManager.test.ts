@@ -122,7 +122,10 @@ describe("SecureContextManager", () => {
       return fakeContext;
     }) as typeof tls.createSecureContext;
 
-    const result = await SecureContextManager.generateSecureContext(host, config);
+    const result = await SecureContextManager.generateSecureContext(
+      host,
+      config,
+    );
 
     assert.equal(result, fakeContext);
     assert.equal(workerCalled, 1);

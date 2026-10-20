@@ -11,7 +11,8 @@ import { H1InboundBridge } from "../../../../src/core/transport/http1/H1InboundB
 
 const mockCertificateGeneration = () => {
   const originalGetSecureContext = SecureContextManager.getSecureContext;
-  const originalGenerateSecureContext = SecureContextManager.generateSecureContext;
+  const originalGenerateSecureContext =
+    SecureContextManager.generateSecureContext;
 
   SecureContextManager.getSecureContext = (async () => {
     return {} as tls.SecureContext;
@@ -360,7 +361,10 @@ describe("HandshakeHandler", () => {
     let receivedHost: string | undefined;
     let receivedConfig: any;
 
-    SecureContextManager.getSecureContext = (async (host: string, config: any) => {
+    SecureContextManager.getSecureContext = (async (
+      host: string,
+      config: any,
+    ) => {
       receivedHost = host;
       receivedConfig = config;
 
