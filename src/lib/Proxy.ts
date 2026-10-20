@@ -1,8 +1,13 @@
-import { registerGlobalConfig } from "../config.registry";
+import {
+  registerGlobalConfig,
+  type ProxyConfig,
+  type ProxyOptions,
+} from "../config.registry";
 import * as http from "http";
 import { connectionEvents } from "../core/event/connection-events/connectionEvents";
 import {
   proxyEventManager,
+  reportProxyError,
   type ProxyEventMap,
 } from "../core/event/proxy-events/proxyEvents";
 import type { BasePlugin } from "../core/plugin/BasePlugin";
@@ -15,87 +20,7 @@ import {
   type PluginEventMap,
 } from "../core/event/plugin-events/pluginEvents";
 import { TypedEventEmitter } from "../core/event/EventBus";
-
-/**
- * Configuration options for the proxy server, controlling caching,
- * TLS certificate handling, default pipeline registration, and timeouts.
- */
-export type ProxyConfig = {
-  /**
-   * Enables caching of generated TLS leaf certificates.
-   *
-   * @default true
-   */
-  useCertificateCache?: boolean;
-
-  /**
-   * Enables caching of proxy responses to improve performance.
-   *
-   * @default false
-   */
-  useResponseCache?: boolean;
-
-  /**
-   * Determines whether the default request and response processing
-   * pipelines are registered.
-   *
-   * @default true
-   */
-  useDefaultPipelines?: boolean;
-
-  /**
-   * Root Certificate Authority (CA) credentials used to sign generated
-   * TLS leaf certificates during HTTPS interception.
-   *
-   * The certificate and private key must be compatible CA credentials.
-   */
-  rootCa?: {
-    /** CA private key, provided as a PEM string or Buffer. */
-    key: string | Buffer;
-
-    /** CA certificate, provided as a PEM string or Buffer. */
-    cert: string | Buffer;
-  };
-
-  /**
-   * Maximum time, in milliseconds, to wait for the client to complete
-   * the TLS ClientHello.
-   *
-   * @default 10000
-   */
-  handshakeTimeoutMs?: number;
-
-  /**
-   * Maximum time, in milliseconds, allowed for an upstream operation
-   * before the configured timeout is reached.
-   *
-   * @default 30000
-   */
-  upstreamTimeoutMs?: number;
-
-  /**
-   * Maximum time, in milliseconds, to wait for plugin execution to finish.
-   * Set to 0 to disable the timeout completely.
-   *
-   * @default 10000
-   */
-  pluginTimeoutMs?: number;
-};
-
-/**
- * Configuration options for creating a Proxy instance.
- *
- * Extends the proxy configuration with an optional existing HTTP server
- * to which the proxy can attach.
- */
-export type ProxyOptions = ProxyConfig & {
-  /**
-   * An existing HTTP server to attach the proxy to.
-   *
-   * If omitted, the proxy creates a new HTTP server.
-   */
-  server?: http.Server;
-};
+import DEFAULT_LEAF_DIR from "../constants/path";
 
 /**
  * Interface for the Proxy class, managing plugin execution,
@@ -423,6 +348,7 @@ export class Proxy extends TypedEventEmitter<ProxyEventMap> implements IProxy {
     this.httpServer = options.server || http.createServer({ keepAlive: true });
     this.config = {
       useCertificateCache: options.useCertificateCache ?? true,
+      leafCacheDir: options.leafCacheDir ?? DEFAULT_LEAF_DIR,
       useResponseCache: options.useResponseCache ?? false,
       useDefaultPipelines: options.useDefaultPipelines ?? true,
       rootCa: options.rootCa || { key: "", cert: "" },
@@ -446,66 +372,100 @@ export class Proxy extends TypedEventEmitter<ProxyEventMap> implements IProxy {
   private bindAllEvents() {
     this.httpServer.on("connection", async (socket) => {
       connectionManager.track(socket);
-      await connectionEvents.emitAsync("TCP", {
-        socket,
-      });
+
+      try {
+        await connectionEvents.emitAsync("TCP", { socket });
+      } catch (error) {
+        reportProxyError(error);
+
+        if (!socket.destroyed) {
+          socket.destroy();
+        }
+      }
     });
 
     this.httpServer.on("connect", async (req, socket, head) => {
       const scope: RequestScope = ContextManager.getOrCreateScope(socket);
-
       scope.request.client.req = req;
 
-      connectionEvents.emit("CONNECT", {
-        req,
-        socket,
-        head,
-        scope,
-      });
+      try {
+        await connectionEvents.emitAsync("CONNECT", {
+          req,
+          socket,
+          head,
+          scope,
+        });
+      } catch (error) {
+        reportProxyError(error);
+
+        if (!socket.destroyed) {
+          socket.destroy();
+        }
+      }
     });
 
     this.httpServer.on("request", async (req, res) => {
       const scope: RequestScope = ContextManager.getOrCreateScope(req.socket);
+
       scope.request.client.req = req;
       scope.request.client.res = res;
 
-      await connectionEvents.emitAsync("HTTP:PLAIN", {
-        req,
-        res,
-        scope,
-      });
+      try {
+        await connectionEvents.emitAsync("HTTP:PLAIN", {
+          req,
+          res,
+          scope,
+        });
+      } catch (error) {
+        reportProxyError(error);
+
+        if (res.destroyed || res.writableEnded) {
+          return;
+        }
+
+        if (!res.headersSent) {
+          res.writeHead(500, {
+            "Content-Type": "text/plain",
+            Connection: "close",
+          });
+          res.end("Internal Proxy Error");
+        } else {
+          res.destroy();
+        }
+      }
     });
 
     this.httpServer.on("upgrade", async (req, socket, head) => {
       const scope = ContextManager.getOrCreateScope(socket);
-      await connectionEvents.emitAsync("WS:UPGRADE", {
-        req,
-        socket,
-        scope,
-        head,
-      });
+
+      try {
+        await connectionEvents.emitAsync("WS:UPGRADE", {
+          req,
+          socket,
+          scope,
+          head,
+        });
+      } catch (error) {
+        reportProxyError(error);
+
+        if (!socket.destroyed) {
+          socket.destroy();
+        }
+      }
     });
 
     this.httpServer.on("error", (err: NodeJS.ErrnoException) => {
-      // Startup errors are propagated by listen() through its one-time
-      // error listener. Avoid logging them twice here.
+      // Startup errors are propagated through listen()'s error handling.
       if (err.code === "EADDRINUSE" || err.code === "EACCES") {
         return;
       }
 
-      // Node's EventEmitter throws when "error" is emitted without a listener.
-      // Preserve the proxy's error event API without crashing when nobody
-      // subscribes to it.
-      if (proxyEventManager.listenerCount("error") > 0) {
-        proxyEventManager.emit("error", err);
-      }
+      reportProxyError(err);
 
       if (err.code === "EMFILE") {
         console.warn(
           "[SERVER_OS_WARN] Operating system file descriptor limit reached.",
         );
-      } else if (proxyEventManager.listenerCount("error") === 0) {
-        console.error("[Root HTTPServer Error Hook Captured]:", err.message);
       }
     });
   }
