@@ -1,22 +1,19 @@
 import { Proxy } from "../../src/index";
 import fs from "fs";
 import path from "path";
-import process from "process";
 import { BypassPlugin } from "./plugins/bypass.plugin";
 import { WsMockPlugin } from "./plugins/wsIntercept.plugin";
-const CA_PATH = {
-  CA_DIR: path.join(process.cwd(), "creds/__self__"),
-};
-
+import { TEST_CA_DIR } from "../../test/constants/path";
+ 
 const rootCa = {
-  key: fs.readFileSync(path.join(CA_PATH.CA_DIR, "/key.pem"), "utf8"),
-  cert: fs.readFileSync(path.join(CA_PATH.CA_DIR, "/CA.pem"), "utf8"),
+  key: fs.readFileSync(path.join(TEST_CA_DIR, "/key.pem"), "utf8"),
+  cert: fs.readFileSync(path.join(TEST_CA_DIR, "/CA.pem"), "utf8"),
 };
 
 const proxy = new Proxy({
   useDefaultPipelines: true,
   useCertificateCache: true,
-  useResponseCache: true,
+  useResponseCache: false,
   rootCa,
 });
 

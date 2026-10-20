@@ -1,11 +1,11 @@
 import { Proxy } from "../../src/index";
 import fs from "fs";
-import { CA_PATH } from "../../constants/path";
+import { TEST_CA_DIR } from "../../test/constants/path";
 import path from "path";
 
 const rootCa = {
-  key: fs.readFileSync(path.join(CA_PATH.CA_DIR, "/key.pem"), "utf8"),
-  cert: fs.readFileSync(path.join(CA_PATH.CA_DIR, "/CA.pem"), "utf8"),
+  key: fs.readFileSync(path.join(TEST_CA_DIR, "/key.pem"), "utf8"),
+  cert: fs.readFileSync(path.join(TEST_CA_DIR, "/CA.pem"), "utf8"),
 };
 
 const proxy = new Proxy({ rootCa });
