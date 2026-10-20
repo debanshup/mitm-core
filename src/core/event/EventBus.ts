@@ -175,15 +175,16 @@ export class TypedEventEmitter<T extends object> extends EventEmitter {
 
     if (listeners.length === 0) return;
 
-    // 1. Execute all listeners concurrently and wait for ALL to settle (resolve or reject)
     const results = await Promise.allSettled(
-      listeners.map((listener) => {
+      listeners.map(async (listener) => {
         const fn = listener as (...args: any[]) => void | Promise<void>;
-        return Promise.resolve(fn(...args));
+
+        // Convert synchronous throws into rejected promises,
+        // allowing every listener to be invoked.
+        await Promise.resolve();
+        return fn(...args);
       }),
     );
-
-    // 2. Aggregate any errors that occurred during execution
     const errors: any[] = [];
     for (const result of results) {
       if (result.status === "rejected") {
@@ -191,7 +192,6 @@ export class TypedEventEmitter<T extends object> extends EventEmitter {
       }
     }
 
-    // 3. If any listener failed, throw a collective error so your outer try/catch blocks notice it
     if (errors.length > 0) {
       if (errors.length === 1) {
         throw errors[0]; // Throw the single error directly to keep clean stack traces

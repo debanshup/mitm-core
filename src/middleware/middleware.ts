@@ -158,6 +158,11 @@ export class Middleware {
           head,
         );
         if (!success) return;
+        await proxyEventManager.emitAsync("ws:request", {
+          head,
+          scope,
+          socket,
+        });
         await Pipeline.run(wsScope);
       } catch (error) {
         console.error(
@@ -179,20 +184,5 @@ export class Middleware {
     connectionEvents.on("WS:UPGRADE", onWsUpgrade);
 
     connectionEvents.on("UPSTREAM:RESPONSE", onUpstreamResponse);
-
-    // let cleanedUp = false;
-
-    // return () => {
-    //   if (cleanedUp) return;
-
-    //   cleanedUp = true;
-
-    //   connectionEvents.off("TCP", onTCP);
-    //   connectionEvents.off("CONNECT", onConnect);
-    //   connectionEvents.off("HTTP:PLAIN", onHttpPlain);
-    //   connectionEvents.off("HTTPS:DECRYPTED", onHttpsDecrypted);
-    //   connectionEvents.off("UPSTREAM:RESPONSE", onUpstreamResponse);
-    //   connectionEvents.off("WS:UPGRADE", onWsUpgrade);
-    // };
   }
 }

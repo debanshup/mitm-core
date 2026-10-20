@@ -1,4 +1,4 @@
-import type { ProxyConfig } from "../../../lib/Proxy";
+import type { ProxyConfig } from "../../../config.registry";
 import type { Phase } from "../../../phase/Phase";
 import type { RequestScope } from "../../scope/types";
 
