@@ -4,6 +4,7 @@ import type { BaseHandler } from "../handlers/base/base.handler.ts";
 import { HANDLERS } from "../handlers/registry/registry";
 import { PipelineAbortSignal } from "../signals/pipelineAbortSignal";
 import { WSOutboundBridge } from "../transport/ws/WSOutboundBridge.js";
+import { reportProxyError } from "../event/proxy-events/proxyEvents.js";
 
 /**
  * Orchestrates the proxy request lifecycle by managing and executing handler pipelines.
@@ -50,10 +51,6 @@ export default class Pipeline {
     }
 
     if (request.webSocket && !request.webSocket.isUpgraded) {
-      // console.info(
-      //   `[Pipeline] Routing WS upgrade to Outbound Bridge: ${request.target.url}`,
-      // );
-
       lifecycle.nextPhase = undefined;
       await WSOutboundBridge.execute(scope);
       return;
@@ -122,6 +119,8 @@ export default class Pipeline {
             return;
           }
 
+          // report proxy error
+          reportProxyError(error);
           const EXPECTED_ERROR_CODES = new Set([
             "ECONNRESET", // Connection reset by peer
             "ETIMEDOUT", // Operation timed out
@@ -139,7 +138,7 @@ export default class Pipeline {
             console.error(
               `[Handler Error] ${step.name} failed during ${currentPhase}:`,
               scope.request.target.originalHost,
-              error,
+              error.message,
             );
           }
 
