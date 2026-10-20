@@ -3,7 +3,7 @@ import path from "path";
 import fs from "fs";
 import * as crypto from "crypto";
 import { pool } from "../workers/pool/Worker_pool";
-import { LEAF_PATH } from "../../../constants/path";
+import { getConfig } from "../../config.registry";
 
 export class CertificateCacheManager {
   protected constructor() {}
@@ -30,11 +30,14 @@ export class CertificateCacheManager {
     this.cache.set(host.toLowerCase(), { key, cert });
   }
 
-  public static addToFile(
+  private static saveToFile(
     host: string,
     data: { key: string | Buffer; cert: string | Buffer },
+    savingDir?: string,
   ) {
-    const dir = path.join(LEAF_PATH.CERT_DIR, host);
+    const dir = savingDir
+      ? path.join(savingDir, `${host}`)
+      : path.join(getConfig().leafCacheDir!, `${host}`);
 
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
@@ -74,14 +77,14 @@ export class CertificateCacheManager {
     this.cache.clear();
   }
 
-  public static async getCAFromCache(
+  public static async getLeafFromCache(
     host: string,
     caConfig: { key: any; cert: any },
+    leafDir?: string,
   ): Promise<{ key: Buffer; cert: Buffer }> {
     if (this.isCached(host)) {
       return this.cache.get(host.toLowerCase())!;
     }
-
     // Check for In-Flight Task
     const existingTask = this.inFlight.get(host);
     if (existingTask) {
@@ -90,8 +93,12 @@ export class CertificateCacheManager {
 
     const task = (async () => {
       try {
-        const certPath = path.join(LEAF_PATH.CERT_DIR, `${host}`, "cert.crt");
-        const keyPath = path.join(LEAF_PATH.CERT_DIR, `${host}`, "key.pem");
+        const dir = leafDir
+          ? path.join(leafDir, `${host}`)
+          : path.join(getConfig().leafCacheDir!, host);
+
+        const certPath = path.join(dir, "cert.crt");
+        const keyPath = path.join(dir, "key.pem");
 
         // Check FileSystem
         if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
@@ -112,7 +119,7 @@ export class CertificateCacheManager {
             key: Buffer.isBuffer(key) ? key : Buffer.from(key),
           };
 
-          this.addToFile(host, safeData);
+          this.saveToFile(host, safeData);
           this.addToCache(host, safeData);
 
           return safeData;
