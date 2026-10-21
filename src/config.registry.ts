@@ -10,7 +10,12 @@ export type ProxyConfig = {
    * @default true
    */
   useCertificateCache?: boolean;
-  // todo: docstr
+
+  /**
+   * Directory used to store cached TLS leaf certificates.
+   *
+   * @default "~/.mitm-core"
+   */
   leafCacheDir?: string;
 
   /**
