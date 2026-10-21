@@ -24,7 +24,7 @@ Expected directory structure:
 your-project/
 ├── creds/
 │   └── __self__/
-│       ├── CA.crt
+│       ├── CA.pem
 │       └── key.pem
 ├── package.json
 └── index.js
@@ -57,7 +57,7 @@ openssl req -x509 -new -nodes \
   -key key.pem \
   -sha256 \
   -days 3650 \
-  -out CA.crt
+  -out CA.pem
 ```
 
 When prompted, provide the certificate details. Set the **Common Name** to a recognizable name, such as `mitm-core-root`.
