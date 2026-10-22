@@ -4,7 +4,7 @@
 
 > **RequestLifecycle** = `object`
 
-Defined in: [src/core/scope/types.ts:161](https://github.com/debanshup/mitm-core/blob/fc22de3fd8e4f2d9f11ff7f044d0c352707cfcca/src/core/scope/types.ts#L161)
+Defined in: [src/core/scope/types.ts:161](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/core/scope/types.ts#L161)
 
 Tracks request lifecycle metadata and controls request-pipeline execution.
 
@@ -17,7 +17,7 @@ execution state.
 
 > **isHijacked**: `boolean`
 
-Defined in: [src/core/scope/types.ts:170](https://github.com/debanshup/mitm-core/blob/fc22de3fd8e4f2d9f11ff7f044d0c352707cfcca/src/core/scope/types.ts#L170)
+Defined in: [src/core/scope/types.ts:170](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/core/scope/types.ts#L170)
 
 Indicates whether the request has been taken over by a handler
 and should no longer follow the normal pipeline path.
@@ -33,7 +33,7 @@ interpret it.
 
 > **timestamps**: `object`
 
-Defined in: [src/core/scope/types.ts:173](https://github.com/debanshup/mitm-core/blob/fc22de3fd8e4f2d9f11ff7f044d0c352707cfcca/src/core/scope/types.ts#L173)
+Defined in: [src/core/scope/types.ts:173](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/core/scope/types.ts#L173)
 
 Timing measurements collected during request processing.
 

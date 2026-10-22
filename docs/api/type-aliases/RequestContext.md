@@ -4,7 +4,7 @@
 
 > **RequestContext** = `object`
 
-Defined in: [src/core/scope/types.ts:74](https://github.com/debanshup/mitm-core/blob/fc22de3fd8e4f2d9f11ff7f044d0c352707cfcca/src/core/scope/types.ts#L74)
+Defined in: [src/core/scope/types.ts:74](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/core/scope/types.ts#L74)
 
 Contains the data associated with an individual request-response
 transaction passing through the proxy.
@@ -19,7 +19,7 @@ is available when the transaction involves an upgrade.
 
 > **client**: `object`
 
-Defined in: [src/core/scope/types.ts:79](https://github.com/debanshup/mitm-core/blob/fc22de3fd8e4f2d9f11ff7f044d0c352707cfcca/src/core/scope/types.ts#L79)
+Defined in: [src/core/scope/types.ts:79](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/core/scope/types.ts#L79)
 
 Client-facing HTTP request and response information.
 
@@ -59,7 +59,7 @@ Request URL as received or represented by the proxy.
 
 > **requestId**: `string`
 
-Defined in: [src/core/scope/types.ts:76](https://github.com/debanshup/mitm-core/blob/fc22de3fd8e4f2d9f11ff7f044d0c352707cfcca/src/core/scope/types.ts#L76)
+Defined in: [src/core/scope/types.ts:76](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/core/scope/types.ts#L76)
 
 Unique identifier assigned to this request-response transaction.
 
@@ -69,7 +69,7 @@ Unique identifier assigned to this request-response transaction.
 
 > **target**: `object`
 
-Defined in: [src/core/scope/types.ts:106](https://github.com/debanshup/mitm-core/blob/fc22de3fd8e4f2d9f11ff7f044d0c352707cfcca/src/core/scope/types.ts#L106)
+Defined in: [src/core/scope/types.ts:106](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/core/scope/types.ts#L106)
 
 Original and current destination information for routing.
 
@@ -103,7 +103,7 @@ Current target URL used by the proxy, when available.
 
 > **upstream**: `object`
 
-Defined in: [src/core/scope/types.ts:97](https://github.com/debanshup/mitm-core/blob/fc22de3fd8e4f2d9f11ff7f044d0c352707cfcca/src/core/scope/types.ts#L97)
+Defined in: [src/core/scope/types.ts:97](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/core/scope/types.ts#L97)
 
 Upstream HTTP request and response information.
 
@@ -125,7 +125,7 @@ Response received from the upstream server, when available.
 
 > `optional` **webSocket?**: [`WebSocketContext`](WebSocketContext.md)
 
-Defined in: [src/core/scope/types.ts:126](https://github.com/debanshup/mitm-core/blob/fc22de3fd8e4f2d9f11ff7f044d0c352707cfcca/src/core/scope/types.ts#L126)
+Defined in: [src/core/scope/types.ts:126](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/core/scope/types.ts#L126)
 
 WebSocket-specific state and endpoint references.
 

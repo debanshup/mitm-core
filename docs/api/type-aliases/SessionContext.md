@@ -4,7 +4,7 @@
 
 > **SessionContext** = `object`
 
-Defined in: [src/core/scope/types.ts:19](https://github.com/debanshup/mitm-core/blob/fc22de3fd8e4f2d9f11ff7f044d0c352707cfcca/src/core/scope/types.ts#L19)
+Defined in: [src/core/scope/types.ts:19](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/core/scope/types.ts#L19)
 
 Contains connection-level information shared across requests handled
 over the same underlying proxy connection.
@@ -18,7 +18,7 @@ connection data, and optional custom TLS certificates.
 
 > **connectionId**: `string`
 
-Defined in: [src/core/scope/types.ts:26](https://github.com/debanshup/mitm-core/blob/fc22de3fd8e4f2d9f11ff7f044d0c352707cfcca/src/core/scope/types.ts#L26)
+Defined in: [src/core/scope/types.ts:26](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/core/scope/types.ts#L26)
 
 Unique identifier assigned to the underlying connection.
 
@@ -31,7 +31,7 @@ the same connection, including requests over HTTP keep-alive.
 
 > `optional` **customCertificates?**: `Map`\<`string`, \{ `cert`: `string` \| `Buffer`; `key`: `string` \| `Buffer`; \}\>
 
-Defined in: [src/core/scope/types.ts:60](https://github.com/debanshup/mitm-core/blob/fc22de3fd8e4f2d9f11ff7f044d0c352707cfcca/src/core/scope/types.ts#L60)
+Defined in: [src/core/scope/types.ts:60](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/core/scope/types.ts#L60)
 
 Optional map of domain names to explicitly supplied TLS certificates.
 
@@ -45,7 +45,7 @@ certificates for that domain.
 
 > `optional` **head?**: `Buffer` \| `null`
 
-Defined in: [src/core/scope/types.ts:51](https://github.com/debanshup/mitm-core/blob/fc22de3fd8e4f2d9f11ff7f044d0c352707cfcca/src/core/scope/types.ts#L51)
+Defined in: [src/core/scope/types.ts:51](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/core/scope/types.ts#L51)
 
 Initial data received with the connection, if available.
 
@@ -58,7 +58,7 @@ before the proxy commits to a routing decision.
 
 > **protocol**: `object`
 
-Defined in: [src/core/scope/types.ts:37](https://github.com/debanshup/mitm-core/blob/fc22de3fd8e4f2d9f11ff7f044d0c352707cfcca/src/core/scope/types.ts#L37)
+Defined in: [src/core/scope/types.ts:37](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/core/scope/types.ts#L37)
 
 Protocol information detected or established for this connection.
 
@@ -80,7 +80,7 @@ HTTP version associated with the connection, when identified.
 
 > **socket**: `Duplex`
 
-Defined in: [src/core/scope/types.ts:34](https://github.com/debanshup/mitm-core/blob/fc22de3fd8e4f2d9f11ff7f044d0c352707cfcca/src/core/scope/types.ts#L34)
+Defined in: [src/core/scope/types.ts:34](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/core/scope/types.ts#L34)
 
 The underlying readable and writable network stream.
 

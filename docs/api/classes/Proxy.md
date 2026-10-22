@@ -2,7 +2,7 @@
 
 # Class: Proxy
 
-Defined in: [src/lib/Proxy.ts:73](https://github.com/debanshup/mitm-core/blob/fc22de3fd8e4f2d9f11ff7f044d0c352707cfcca/src/lib/Proxy.ts#L73)
+Defined in: [src/lib/Proxy.ts:73](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/lib/Proxy.ts#L73)
 
 The main proxy server implementation.
 
@@ -24,7 +24,7 @@ The main proxy server implementation.
 
 > **new Proxy**(`options?`): `Proxy`
 
-Defined in: [src/lib/Proxy.ts:345](https://github.com/debanshup/mitm-core/blob/fc22de3fd8e4f2d9f11ff7f044d0c352707cfcca/src/lib/Proxy.ts#L345)
+Defined in: [src/lib/Proxy.ts:345](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/lib/Proxy.ts#L345)
 
 Creates and configures a proxy instance.
 
@@ -76,7 +76,7 @@ const proxy = new Proxy({
 
 > **listeners**: `any`
 
-Defined in: [src/lib/Proxy.ts:312](https://github.com/debanshup/mitm-core/blob/fc22de3fd8e4f2d9f11ff7f044d0c352707cfcca/src/lib/Proxy.ts#L312)
+Defined in: [src/lib/Proxy.ts:312](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/lib/Proxy.ts#L312)
 
 Returns the registered listeners for the specified event.
 
@@ -257,7 +257,7 @@ Defined in: node\_modules/@types/node/events.d.ts:103
 
 > **addListener**\<`K`\>(`event`, `listener`): `this`
 
-Defined in: [src/lib/Proxy.ts:287](https://github.com/debanshup/mitm-core/blob/fc22de3fd8e4f2d9f11ff7f044d0c352707cfcca/src/lib/Proxy.ts#L287)
+Defined in: [src/lib/Proxy.ts:287](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/lib/Proxy.ts#L287)
 
 #### Type Parameters
 
@@ -289,7 +289,7 @@ Defined in: [src/lib/Proxy.ts:287](https://github.com/debanshup/mitm-core/blob/f
 
 > **address**(): `string` \| `AddressInfo` \| `null`
 
-Defined in: [src/lib/Proxy.ts:589](https://github.com/debanshup/mitm-core/blob/fc22de3fd8e4f2d9f11ff7f044d0c352707cfcca/src/lib/Proxy.ts#L589)
+Defined in: [src/lib/Proxy.ts:589](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/lib/Proxy.ts#L589)
 
 #### Returns
 
@@ -301,7 +301,7 @@ Defined in: [src/lib/Proxy.ts:589](https://github.com/debanshup/mitm-core/blob/f
 
 > **emit**\<`K`\>(`event`, ...`args`): `boolean`
 
-Defined in: [src/core/event/EventBus.ts:85](https://github.com/debanshup/mitm-core/blob/fc22de3fd8e4f2d9f11ff7f044d0c352707cfcca/src/core/event/EventBus.ts#L85)
+Defined in: [src/core/event/EventBus.ts:85](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/core/event/EventBus.ts#L85)
 
 Emits the specified event synchronously.
 
@@ -346,7 +346,7 @@ Arguments associated with the event.
 
 > **emitAsync**\<`K`\>(`eventName`, ...`args`): `Promise`\<`void`\>
 
-Defined in: [src/core/event/EventBus.ts:168](https://github.com/debanshup/mitm-core/blob/fc22de3fd8e4f2d9f11ff7f044d0c352707cfcca/src/core/event/EventBus.ts#L168)
+Defined in: [src/core/event/EventBus.ts:168](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/core/event/EventBus.ts#L168)
 
 Executes all listeners for an event concurrently and asynchronously.
 
@@ -463,7 +463,7 @@ v1.0.0
 
 > **listen**(`port`, `callback?`): `Promise`\<`void`\>
 
-Defined in: [src/lib/Proxy.ts:510](https://github.com/debanshup/mitm-core/blob/fc22de3fd8e4f2d9f11ff7f044d0c352707cfcca/src/lib/Proxy.ts#L510)
+Defined in: [src/lib/Proxy.ts:510](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/lib/Proxy.ts#L510)
 
 Starts the proxy's HTTP server.
 
@@ -497,7 +497,7 @@ A promise representing startup.
 
 > **listenerCount**(`eventName`, `listener?`): `number`
 
-Defined in: [src/core/event/EventBus.ts:123](https://github.com/debanshup/mitm-core/blob/fc22de3fd8e4f2d9f11ff7f044d0c352707cfcca/src/core/event/EventBus.ts#L123)
+Defined in: [src/core/event/EventBus.ts:123](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/core/event/EventBus.ts#L123)
 
 Returns the number of listeners listening for the event named `eventName`.
 If `listener` is provided, it will return how many times the listener is found
@@ -535,7 +535,7 @@ v3.2.0
 
 > **off**\<`K`\>(`event`, `listener`): `this`
 
-Defined in: [src/lib/Proxy.ts:277](https://github.com/debanshup/mitm-core/blob/fc22de3fd8e4f2d9f11ff7f044d0c352707cfcca/src/lib/Proxy.ts#L277)
+Defined in: [src/lib/Proxy.ts:277](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/lib/Proxy.ts#L277)
 
 Removes a previously registered listener for the specified event.
 
@@ -579,7 +579,7 @@ This emitter instance for method chaining.
 
 > **on**\<`K`\>(`event`, `listener`): `this`
 
-Defined in: [src/lib/Proxy.ts:257](https://github.com/debanshup/mitm-core/blob/fc22de3fd8e4f2d9f11ff7f044d0c352707cfcca/src/lib/Proxy.ts#L257)
+Defined in: [src/lib/Proxy.ts:257](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/lib/Proxy.ts#L257)
 
 Registers a listener for the specified event.
 
@@ -624,7 +624,7 @@ This emitter instance for method chaining.
 
 > **once**\<`K`\>(`event`, `listener`): `this`
 
-Defined in: [src/lib/Proxy.ts:267](https://github.com/debanshup/mitm-core/blob/fc22de3fd8e4f2d9f11ff7f044d0c352707cfcca/src/lib/Proxy.ts#L267)
+Defined in: [src/lib/Proxy.ts:267](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/lib/Proxy.ts#L267)
 
 Registers a listener that is invoked at most once for the specified event.
 
@@ -832,7 +832,7 @@ v9.4.0
 
 > **removeAllListeners**(`event?`): `this`
 
-Defined in: [src/lib/Proxy.ts:305](https://github.com/debanshup/mitm-core/blob/fc22de3fd8e4f2d9f11ff7f044d0c352707cfcca/src/lib/Proxy.ts#L305)
+Defined in: [src/lib/Proxy.ts:305](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/lib/Proxy.ts#L305)
 
 Removes all listeners for the specified event, or all events when
 no event is provided.
@@ -862,7 +862,7 @@ This emitter instance for method chaining.
 
 > **removeListener**\<`K`\>(`event`, `listener`): `this`
 
-Defined in: [src/lib/Proxy.ts:296](https://github.com/debanshup/mitm-core/blob/fc22de3fd8e4f2d9f11ff7f044d0c352707cfcca/src/lib/Proxy.ts#L296)
+Defined in: [src/lib/Proxy.ts:296](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/lib/Proxy.ts#L296)
 
 #### Type Parameters
 
@@ -927,7 +927,7 @@ v0.3.5
 
 > **stop**(`shutdownTimeoutMs?`): `Promise`\<`void`\>
 
-Defined in: [src/lib/Proxy.ts:576](https://github.com/debanshup/mitm-core/blob/fc22de3fd8e4f2d9f11ff7f044d0c352707cfcca/src/lib/Proxy.ts#L576)
+Defined in: [src/lib/Proxy.ts:576](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/lib/Proxy.ts#L576)
 
 Gracefully shuts down the proxy, allowing active requests to drain
 until the shutdown timeout expires before forcing cleanup.
@@ -957,7 +957,7 @@ A promise that resolves when shutdown completes.
 
 > **unuse**(`plugin`): `this`
 
-Defined in: [src/lib/Proxy.ts:494](https://github.com/debanshup/mitm-core/blob/fc22de3fd8e4f2d9f11ff7f044d0c352707cfcca/src/lib/Proxy.ts#L494)
+Defined in: [src/lib/Proxy.ts:494](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/lib/Proxy.ts#L494)
 
 Unregisters a plugin before the proxy starts.
 Does nothing if the plugin is not registered.
@@ -990,7 +990,7 @@ If the proxy is starting, running, or has been stopped.
 
 > **use**\<`K`\>(`plugin`): `this`
 
-Defined in: [src/lib/Proxy.ts:473](https://github.com/debanshup/mitm-core/blob/fc22de3fd8e4f2d9f11ff7f044d0c352707cfcca/src/lib/Proxy.ts#L473)
+Defined in: [src/lib/Proxy.ts:473](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/lib/Proxy.ts#L473)
 
 Registers a plugin before the proxy starts.
 Duplicate registration of the same plugin instance is ignored.

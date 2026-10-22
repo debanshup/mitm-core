@@ -2,7 +2,7 @@
 
 # Abstract Class: BasePlugin\<K\>
 
-Defined in: [src/core/plugin/BasePlugin.ts:43](https://github.com/debanshup/mitm-core/blob/fc22de3fd8e4f2d9f11ff7f044d0c352707cfcca/src/core/plugin/BasePlugin.ts#L43)
+Defined in: [src/core/plugin/BasePlugin.ts:43](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/core/plugin/BasePlugin.ts#L43)
 
 Base class for implementing plugins that handle plugin events.
 
@@ -50,7 +50,7 @@ The key of the plugin event handled by this plugin.
 
 > `abstract` `readonly` **event**: `K`
 
-Defined in: [src/core/plugin/BasePlugin.ts:50](https://github.com/debanshup/mitm-core/blob/fc22de3fd8e4f2d9f11ff7f044d0c352707cfcca/src/core/plugin/BasePlugin.ts#L50)
+Defined in: [src/core/plugin/BasePlugin.ts:50](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/core/plugin/BasePlugin.ts#L50)
 
 Identifies the plugin event this plugin handles.
 
@@ -65,7 +65,7 @@ the payload type received by [run](#run).
 
 > **get** **name**(): `string`
 
-Defined in: [src/core/plugin/BasePlugin.ts:98](https://github.com/debanshup/mitm-core/blob/fc22de3fd8e4f2d9f11ff7f044d0c352707cfcca/src/core/plugin/BasePlugin.ts#L98)
+Defined in: [src/core/plugin/BasePlugin.ts:98](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/core/plugin/BasePlugin.ts#L98)
 
 Gets the plugin's class name.
 
@@ -82,7 +82,7 @@ and can be used to identify the plugin in logs and debugging output.
 
 > `optional` **cleanup**(): `void` \| `Promise`\<`void`\>
 
-Defined in: [src/core/plugin/BasePlugin.ts:90](https://github.com/debanshup/mitm-core/blob/fc22de3fd8e4f2d9f11ff7f044d0c352707cfcca/src/core/plugin/BasePlugin.ts#L90)
+Defined in: [src/core/plugin/BasePlugin.ts:90](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/core/plugin/BasePlugin.ts#L90)
 
 Releases resources owned by the plugin during proxy shutdown.
 
@@ -104,7 +104,7 @@ A promise that resolves when cleanup completes, or
 
 > `optional` **init**(): `void` \| `Promise`\<`void`\>
 
-Defined in: [src/core/plugin/BasePlugin.ts:77](https://github.com/debanshup/mitm-core/blob/fc22de3fd8e4f2d9f11ff7f044d0c352707cfcca/src/core/plugin/BasePlugin.ts#L77)
+Defined in: [src/core/plugin/BasePlugin.ts:77](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/core/plugin/BasePlugin.ts#L77)
 
 Initializes the plugin during proxy initialization.
 
@@ -126,7 +126,7 @@ A promise that resolves when initialization completes, or
 
 > `abstract` **run**(`payload`): `void` \| `Promise`\<`void`\>
 
-Defined in: [src/core/plugin/BasePlugin.ts:64](https://github.com/debanshup/mitm-core/blob/fc22de3fd8e4f2d9f11ff7f044d0c352707cfcca/src/core/plugin/BasePlugin.ts#L64)
+Defined in: [src/core/plugin/BasePlugin.ts:64](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/core/plugin/BasePlugin.ts#L64)
 
 Executes the plugin's event-handling logic.
 

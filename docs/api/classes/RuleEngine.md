@@ -2,7 +2,7 @@
 
 # Abstract Class: RuleEngine\<T\>
 
-Defined in: [src/core/rule/RuleEngine.ts:23](https://github.com/debanshup/mitm-core/blob/fc22de3fd8e4f2d9f11ff7f044d0c352707cfcca/src/core/rule/RuleEngine.ts#L23)
+Defined in: [src/core/rule/RuleEngine.ts:23](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/core/rule/RuleEngine.ts#L23)
 
 Abstract base class for managing file-backed rule configurations.
 Provides a factory for creating concrete rule-engine instances and a
@@ -44,7 +44,7 @@ The type of state managed by the rule engine.
 
 > **store**: [`WatchableRuleFile`](../interfaces/WatchableRuleFile.md)\<`T`\>
 
-Defined in: [src/core/rule/RuleEngine.ts:44](https://github.com/debanshup/mitm-core/blob/fc22de3fd8e4f2d9f11ff7f044d0c352707cfcca/src/core/rule/RuleEngine.ts#L44)
+Defined in: [src/core/rule/RuleEngine.ts:44](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/core/rule/RuleEngine.ts#L44)
 
 Rule store associated with this engine instance.
 
@@ -57,7 +57,7 @@ the factory method.
 
 > `static` **createRule**\<`E`\>(`ChildClass`): `E`
 
-Defined in: [src/core/rule/RuleEngine.ts:56](https://github.com/debanshup/mitm-core/blob/fc22de3fd8e4f2d9f11ff7f044d0c352707cfcca/src/core/rule/RuleEngine.ts#L56)
+Defined in: [src/core/rule/RuleEngine.ts:56](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/core/rule/RuleEngine.ts#L56)
 
 Constructs a concrete rule engine and creates its associated rule store.
 
@@ -92,7 +92,7 @@ The created rule-engine instance.
 
 > `static` **getRuleStore**(`storeName`): [`WatchableRuleFile`](../interfaces/WatchableRuleFile.md)\<`any`\> \| `undefined`
 
-Defined in: [src/core/rule/RuleEngine.ts:82](https://github.com/debanshup/mitm-core/blob/fc22de3fd8e4f2d9f11ff7f044d0c352707cfcca/src/core/rule/RuleEngine.ts#L82)
+Defined in: [src/core/rule/RuleEngine.ts:82](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/core/rule/RuleEngine.ts#L82)
 
 Retrieves a rule store registered under the specified name.
 

@@ -2,7 +2,7 @@
 
 # Interface: WatchableRuleFile\<T\>
 
-Defined in: [src/core/rule/ruleStore.ts:58](https://github.com/debanshup/mitm-core/blob/fc22de3fd8e4f2d9f11ff7f044d0c352707cfcca/src/core/rule/ruleStore.ts#L58)
+Defined in: [src/core/rule/ruleStore.ts:58](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/core/rule/ruleStore.ts#L58)
 
 Manages a rule configuration file and keeps its parsed state available
 for matching and updates.
@@ -28,7 +28,7 @@ The parsed representation of the rule configuration.
 
 > `readonly` **filePath**: `string`
 
-Defined in: [src/core/rule/ruleStore.ts:64](https://github.com/debanshup/mitm-core/blob/fc22de3fd8e4f2d9f11ff7f044d0c352707cfcca/src/core/rule/ruleStore.ts#L64)
+Defined in: [src/core/rule/ruleStore.ts:64](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/core/rule/ruleStore.ts#L64)
 
 Absolute, normalized path to the rule configuration file.
 
@@ -38,7 +38,7 @@ Absolute, normalized path to the rule configuration file.
 
 > `readonly` **name**: `string`
 
-Defined in: [src/core/rule/ruleStore.ts:79](https://github.com/debanshup/mitm-core/blob/fc22de3fd8e4f2d9f11ff7f044d0c352707cfcca/src/core/rule/ruleStore.ts#L79)
+Defined in: [src/core/rule/ruleStore.ts:79](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/core/rule/ruleStore.ts#L79)
 
 Identifier used to associate the store with a rule engine.
 
@@ -48,7 +48,7 @@ Identifier used to associate the store with a rule engine.
 
 > **appendRule**(`input`): `void`
 
-Defined in: [src/core/rule/ruleStore.ts:147](https://github.com/debanshup/mitm-core/blob/fc22de3fd8e4f2d9f11ff7f044d0c352707cfcca/src/core/rule/ruleStore.ts#L147)
+Defined in: [src/core/rule/ruleStore.ts:147](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/core/rule/ruleStore.ts#L147)
 
 Formats and appends a rule to the configuration file.
 
@@ -77,7 +77,7 @@ Raw rule input to format and append.
 
 > **destroy**(): `void`
 
-Defined in: [src/core/rule/ruleStore.ts:169](https://github.com/debanshup/mitm-core/blob/fc22de3fd8e4f2d9f11ff7f044d0c352707cfcca/src/core/rule/ruleStore.ts#L169)
+Defined in: [src/core/rule/ruleStore.ts:169](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/core/rule/ruleStore.ts#L169)
 
 Stops the file watcher and clears any pending reload timer.
 
@@ -94,7 +94,7 @@ watcher and timer resources.
 
 > **match**(`target`): `boolean`
 
-Defined in: [src/core/rule/ruleStore.ts:131](https://github.com/debanshup/mitm-core/blob/fc22de3fd8e4f2d9f11ff7f044d0c352707cfcca/src/core/rule/ruleStore.ts#L131)
+Defined in: [src/core/rule/ruleStore.ts:131](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/core/rule/ruleStore.ts#L131)
 
 Checks whether a target matches the currently loaded rules.
 

@@ -2,7 +2,7 @@
 
 # Interface: IRuleParser\<T\>
 
-Defined in: [src/core/rule/ruleStore.ts:15](https://github.com/debanshup/mitm-core/blob/fc22de3fd8e4f2d9f11ff7f044d0c352707cfcca/src/core/rule/ruleStore.ts#L15)
+Defined in: [src/core/rule/ruleStore.ts:15](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/core/rule/ruleStore.ts#L15)
 
 Defines the parsing, matching, and optional formatting operations
 for a rule configuration.
@@ -25,7 +25,7 @@ The parsed representation of the rule configuration.
 
 > `optional` **formatForSave**(`input`): `string`
 
-Defined in: [src/core/rule/ruleStore.ts:42](https://github.com/debanshup/mitm-core/blob/fc22de3fd8e4f2d9f11ff7f044d0c352707cfcca/src/core/rule/ruleStore.ts#L42)
+Defined in: [src/core/rule/ruleStore.ts:42](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/core/rule/ruleStore.ts#L42)
 
 Optionally formats an input value for appending to the rule file.
 
@@ -52,7 +52,7 @@ The formatted rule string.
 
 > **match**(`rules`, `target`): `boolean`
 
-Defined in: [src/core/rule/ruleStore.ts:31](https://github.com/debanshup/mitm-core/blob/fc22de3fd8e4f2d9f11ff7f044d0c352707cfcca/src/core/rule/ruleStore.ts#L31)
+Defined in: [src/core/rule/ruleStore.ts:31](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/core/rule/ruleStore.ts#L31)
 
 Evaluates whether a target matches the parsed rules.
 
@@ -82,7 +82,7 @@ The target string to check.
 
 > **parse**(`rawContent`): `T`
 
-Defined in: [src/core/rule/ruleStore.ts:22](https://github.com/debanshup/mitm-core/blob/fc22de3fd8e4f2d9f11ff7f044d0c352707cfcca/src/core/rule/ruleStore.ts#L22)
+Defined in: [src/core/rule/ruleStore.ts:22](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/core/rule/ruleStore.ts#L22)
 
 Parses raw configuration file content into the rule representation.
 

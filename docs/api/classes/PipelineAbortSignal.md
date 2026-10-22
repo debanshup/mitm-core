@@ -2,7 +2,7 @@
 
 # Class: PipelineAbortSignal
 
-Defined in: [src/core/signals/pipelineAbortSignal.ts:24](https://github.com/debanshup/mitm-core/blob/fc22de3fd8e4f2d9f11ff7f044d0c352707cfcca/src/core/signals/pipelineAbortSignal.ts#L24)
+Defined in: [src/core/signals/pipelineAbortSignal.ts:24](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/core/signals/pipelineAbortSignal.ts#L24)
 
 Error used to intentionally stop pipeline execution.
 
@@ -38,7 +38,7 @@ throw new PipelineAbortSignal({
 
 > **new PipelineAbortSignal**(`payload?`): `PipelineAbortSignal`
 
-Defined in: [src/core/signals/pipelineAbortSignal.ts:42](https://github.com/debanshup/mitm-core/blob/fc22de3fd8e4f2d9f11ff7f044d0c352707cfcca/src/core/signals/pipelineAbortSignal.ts#L42)
+Defined in: [src/core/signals/pipelineAbortSignal.ts:42](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/core/signals/pipelineAbortSignal.ts#L42)
 
 Creates a pipeline-abort signal.
 
@@ -81,7 +81,7 @@ Defined in: node\_modules/typescript/lib/lib.es2022.error.d.ts:26
 
 > `readonly` `optional` **data?**: [`AbortMessage`](../type-aliases/AbortMessage.md)
 
-Defined in: [src/core/signals/pipelineAbortSignal.ts:30](https://github.com/debanshup/mitm-core/blob/fc22de3fd8e4f2d9f11ff7f044d0c352707cfcca/src/core/signals/pipelineAbortSignal.ts#L30)
+Defined in: [src/core/signals/pipelineAbortSignal.ts:30](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/core/signals/pipelineAbortSignal.ts#L30)
 
 Optional metadata describing the pipeline abort.
 
