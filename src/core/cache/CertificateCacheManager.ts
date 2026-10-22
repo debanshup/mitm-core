@@ -119,7 +119,7 @@ export class CertificateCacheManager {
             key: Buffer.isBuffer(key) ? key : Buffer.from(key),
           };
 
-          this.saveToFile(host, safeData);
+          this.saveToFile(host, safeData, leafDir);
           this.addToCache(host, safeData);
 
           return safeData;
