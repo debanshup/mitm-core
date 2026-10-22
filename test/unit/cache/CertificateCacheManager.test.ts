@@ -42,6 +42,7 @@ describe("CertificateCacheManager", () => {
       const result = await CertificateCacheManager.getLeafFromCache(
         host,
         caConfig,
+        TEST_LEAF_DIR,
       );
 
       assert.deepEqual(result.cert, Buffer.from("CERTIFICATE"));
@@ -85,6 +86,7 @@ describe("CertificateCacheManager", () => {
       const result = await CertificateCacheManager.getLeafFromCache(
         host,
         caConfig,
+        TEST_LEAF_DIR,
       );
 
       assert.deepEqual(result.cert, cert);
@@ -113,11 +115,13 @@ describe("CertificateCacheManager", () => {
       const first = await CertificateCacheManager.getLeafFromCache(
         host,
         caConfig,
+        TEST_LEAF_DIR,
       );
 
       const second = await CertificateCacheManager.getLeafFromCache(
         host,
         caConfig,
+        TEST_LEAF_DIR,
       );
 
       assert.deepEqual(second, first);
@@ -144,9 +148,17 @@ describe("CertificateCacheManager", () => {
     }) as typeof pool.run;
 
     try {
-      const first = CertificateCacheManager.getLeafFromCache(host, caConfig);
+      const first = CertificateCacheManager.getLeafFromCache(
+        host,
+        caConfig,
+        TEST_LEAF_DIR,
+      );
 
-      const second = CertificateCacheManager.getLeafFromCache(host, caConfig);
+      const second = CertificateCacheManager.getLeafFromCache(
+        host,
+        caConfig,
+        TEST_LEAF_DIR,
+      );
 
       const [firstResult, secondResult] = await Promise.all([first, second]);
 
@@ -172,14 +184,14 @@ describe("CertificateCacheManager", () => {
 
     try {
       await assert.rejects(
-        CertificateCacheManager.getLeafFromCache(host, caConfig),
+        CertificateCacheManager.getLeafFromCache(host, caConfig, TEST_LEAF_DIR),
         /worker failure/,
       );
 
       assert.equal(workerCalled, 1);
 
       await assert.rejects(
-        CertificateCacheManager.getLeafFromCache(host, caConfig),
+        CertificateCacheManager.getLeafFromCache(host, caConfig, TEST_LEAF_DIR),
         /worker failure/,
       );
 
