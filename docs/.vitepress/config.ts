@@ -2,6 +2,7 @@ import { defineConfig } from "vitepress";
 import typedocSidebar from "../api/typedoc-sidebar.json";
 
 export default defineConfig({
+  base:"/",
   title: "mitm-core",
   description:
     "A TypeScript proxy framework for inspecting and processing HTTP, HTTPS, WebSocket, and secure WebSocket traffic.",
