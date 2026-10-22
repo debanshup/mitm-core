@@ -1,6 +1,6 @@
 {
   "name": "mitm-core",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "author": "Debanshu Panigrahi",
   "license": "MIT",
   "description": "A typed, extensible MITM proxy framework for Node.js. Built entirely in TypeScript, mitm-core provides a phased pipeline and plugin system for intercepting, inspecting, and modifying HTTP, HTTPS, WebSocket, and secure WebSocket traffic.",
@@ -116,11 +116,6 @@
     "undici": "^7.25.0",
     "uuid": "^3.4.0",
     "vitepress": "^1.6.4"
-  },
-  "commit-and-tag-version": {
-    "skip": {
-      "changelog": true
-    }
   },
   "dependencies": {
     "lru-cache": "^11.2.4",
