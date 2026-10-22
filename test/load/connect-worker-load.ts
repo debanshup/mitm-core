@@ -458,8 +458,14 @@ async function main(): Promise<void> {
             await makeConnectRequest(proxyPort, upstreamPort, requestId);
 
             successful++;
-          } catch {
+          } catch (error) {
             failed++;
+            if (failed <= 10) {
+              console.error(
+                `[LOAD FAILURE] Run ${run}, request ${requestId}:`,
+                error,
+              );
+            }
           }
 
           await sleep(Math.random() * 10);
