@@ -1,9 +1,12 @@
 {
   "$schema": "https://typedoc.org/schema.json",
   "entryPoints": ["src/index.ts"],
-  "out": "api-docs",
+  "out": "docs/api",
+  "plugin": ["typedoc-plugin-markdown", "typedoc-vitepress-theme"],
+  "entryFileName": "index",
   "includeVersion": true,
   "excludePrivate": true,
   "excludeProtected": true,
-  "excludeInternal": true
+  "excludeInternal": true,
+  "includeHierarchySummary": true
 }

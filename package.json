@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "author": "Debanshu Panigrahi",
   "license": "MIT",
-  "description": "A high-performance, fully extensible Man-in-the-Middle (MITM) proxy framework for Node.js. Built completely in TypeScript, it provides a strictly-typed pipeline for intercepting, modifying, and analyzing HTTP/HTTPS traffic.",
+  "description": "A typed, extensible MITM proxy framework for Node.js. Built entirely in TypeScript, mitm-core provides a phased pipeline and plugin system for intercepting, inspecting, and modifying HTTP, HTTPS, WebSocket, and secure WebSocket traffic.",
   "engines": {
     "node": ">=20",
     "npm": ">=9"
@@ -87,7 +87,10 @@
     "prepare": "npm run build",
     "prepublishOnly": "npm run test && npm run lint && npm run typecheck",
     "release": "commit-and-tag-version",
-    "docs:api": "typedoc"
+    "docs:api": "typedoc && sed -i 's|/docs/api/|/api/|g' docs/api/typedoc-sidebar.json",
+    "docs:dev": "vitepress dev docs",
+    "docs:build": "vitepress build docs",
+    "docs:preview": "vitepress preview docs"
   },
   "devDependencies": {
     "@babel/preset-typescript": "^7.28.5",
@@ -106,10 +109,13 @@
     "tsup": "^8.5.1",
     "tsx": "^4.21.0",
     "typedoc": "^0.28.20",
+    "typedoc-plugin-markdown": "^4.14.1",
+    "typedoc-vitepress-theme": "^1.1.4",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.58.2",
     "undici": "^7.25.0",
-    "uuid": "^3.4.0"
+    "uuid": "^3.4.0",
+    "vitepress": "^1.6.4"
   },
   "commit-and-tag-version": {
     "skip": {
