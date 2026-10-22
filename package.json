@@ -87,7 +87,7 @@
     "prepare": "npm run build",
     "prepublishOnly": "npm run test && npm run lint && npm run typecheck",
     "release": "commit-and-tag-version",
-    "docs:api": "typedoc && sed -i 's|/docs/api/|/api/|g' docs/api/typedoc-sidebar.json",
+    "docs:api": "typedoc && sed -i 's|/docs/api/|/api/|g' docs/api/typedoc-sidebar.json && node scripts/generate-api-landing.mjs",
     "docs:dev": "vitepress dev docs",
     "docs:build": "vitepress build docs",
     "docs:preview": "vitepress preview docs"
