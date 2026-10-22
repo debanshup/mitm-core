@@ -6,8 +6,8 @@
 
 ## Documentation
 
-- [Official Documentation](https://link_to_official_docs)
-- [API Reference](https://example.com/api-reference)
+- [Official Documentation](https://mitm-core.debanshupanigrahi.dev/)
+- [API Reference](https://mitm-core.debanshupanigrahi.dev/api/)
 - [Examples](https://github.com/debanshup/mitm-core/tree/main/example)
 
 ## Prerequisites
