@@ -1,31 +1,50 @@
+# Dependencies
 node_modules/
-api-docs/
+
+# Build output
 dist/
+api-docs/
 *.tsbuildinfo
 
+# Documentation build output and cache
+docs/.vitepress/cache/
+docs/.vitepress/dist/
+
+# Credentials and certificates
 creds/
 *.pem
 *.crt
 *.key
+
+# Environment variables
 .env
 .env.*
 
+# Package archives
 *.tgz
 
+# Logs
 logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+# Test coverage
 coverage/
 .nyc_output/
-.DS_Store
-Thumbs.db
-.idea/
-.vscode/
-*.cpuprofile
 
 # Generated integration-test TLS credentials
 /test/fixtures/certs/upstream-cert.pem
 /test/fixtures/certs/upstream-key.pem
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE settings
+.idea/
+.vscode/
+
+# Profiling
+*.cpuprofile
