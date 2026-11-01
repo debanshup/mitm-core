@@ -215,9 +215,9 @@ export class ContextManager {
         }
       }
     } finally {
-        this.activeRequests.clear();
-        this.requestLifeCycleIndex.clear();
-        this.requestIndex.clear();
+      this.activeRequests.clear();
+      this.requestLifeCycleIndex.clear();
+      this.requestIndex.clear();
     }
   }
 

@@ -73,7 +73,6 @@ export class Middleware {
           socket,
         });
 
-
         await Pipeline.run(scope);
       } catch (err) {
         if (err instanceof PipelineAbortSignal) {

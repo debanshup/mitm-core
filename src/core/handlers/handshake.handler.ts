@@ -41,7 +41,6 @@ export class HandshakeHandler extends BaseHandler {
       });
 
       if (scope.lifecycle.isHijacked) return;
-
     } catch (err) {
       if (err instanceof PipelineAbortSignal) {
         throw err;
@@ -82,7 +81,7 @@ export class HandshakeHandler extends BaseHandler {
       await pluginEventManager.emitAsync("proxy:client-after-handshake", {
         scope,
       });
-      
+
       if (scope.lifecycle.isHijacked) return;
 
       await proxyEventManager.emitAsync("connect:established", {
