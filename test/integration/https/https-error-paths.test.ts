@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import https from "node:https";
-import http from "node:http";
 
 import net from "node:net";
 import tls from "node:tls";

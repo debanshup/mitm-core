@@ -272,13 +272,15 @@ describe("ResponseHandler", () => {
     };
 
     try {
-      await assert.doesNotReject(() =>
-        ResponseDispatcher.handle(
-          scope,
-          upstreamRes as any,
-          cacheProcessor,
-          upstream,
-        ),
+      await assert.rejects(
+        () =>
+          ResponseDispatcher.handle(
+            scope,
+            upstreamRes as any,
+            cacheProcessor,
+            upstream,
+          ),
+        /streaming failed/,
       );
 
       assert.equal(failedScope, scope);
@@ -306,13 +308,15 @@ describe("ResponseHandler", () => {
     };
 
     try {
-      await assert.doesNotReject(() =>
-        ResponseDispatcher.handle(
-          scope,
-          upstreamRes as any,
-          cacheProcessor,
-          upstream,
-        ),
+      await assert.rejects(
+        () =>
+          ResponseDispatcher.handle(
+            scope,
+            upstreamRes as any,
+            cacheProcessor,
+            upstream,
+          ),
+        /streaming failed/,
       );
 
       assert.equal(failedScope, scope);

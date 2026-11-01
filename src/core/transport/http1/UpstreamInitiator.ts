@@ -6,6 +6,7 @@ import type { RequestScope } from "../../scope/types";
 import { pluginEventManager } from "../../event/plugin-events/pluginEvents";
 import { getConfig } from "../../../config.registry";
 import { reportProxyError } from "../../event/proxy-events/proxyEvents";
+import { PipelineAbortSignal } from "../../signals/pipelineAbortSignal";
 
 export class UpstreamInitiator {
   private static httpsAgent = new https.Agent({
@@ -35,6 +36,9 @@ export class UpstreamInitiator {
     try {
       await pluginEventManager.emitAsync(eventName, { scope });
     } catch (error) {
+      if (error instanceof PipelineAbortSignal) {
+        throw error;
+      }
       reportProxyError(error);
     }
   }

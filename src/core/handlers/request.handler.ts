@@ -4,6 +4,7 @@ import { UpstreamInitiator } from "../transport/http1/UpstreamInitiator";
 import { getConfig } from "../../config.registry";
 import { pluginEventManager } from "../event/plugin-events/pluginEvents";
 import { ScopeMutator } from "../scope/ScopeMutator";
+import { PipelineAbortSignal } from "../signals/pipelineAbortSignal";
 export class RequestHandler extends BaseHandler {
   readonly phase = "request";
   readonly config = getConfig();
@@ -100,6 +101,15 @@ export class RequestHandler extends BaseHandler {
     if (!success) {
       return;
     }
-    await pluginEventManager.emitAsync("proxy:upstream-dispatch", { scope });
+
+    try {
+      await pluginEventManager.emitAsync("proxy:upstream-dispatch", { scope });
+      if (scope.lifecycle.isHijacked) return;
+    } catch (err) {
+      if (err instanceof PipelineAbortSignal) {
+        throw err;
+      }
+      console.error(err);
+    }
   }
 }

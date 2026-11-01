@@ -17,7 +17,7 @@ class ConnectionManager {
    * Tracks a socket and automatically untracks it when closed.
    */
   public track(socket: net.Socket): void {
-    if (this.activeSockets.has(socket)) {
+    if (socket.destroyed || this.activeSockets.has(socket)) {
       return;
     }
     this.activeSockets.add(socket);

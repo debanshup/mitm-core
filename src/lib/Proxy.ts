@@ -410,6 +410,10 @@ export class Proxy extends TypedEventEmitter<ProxyEventMap> implements IProxy {
       scope.request.client.req = req;
       scope.request.client.res = res;
 
+      res.once("close", () => {
+        ContextManager.destroyRequestLifecycle(scope.request.requestId);
+      });
+
       try {
         await connectionEvents.emitAsync("HTTP:PLAIN", {
           req,

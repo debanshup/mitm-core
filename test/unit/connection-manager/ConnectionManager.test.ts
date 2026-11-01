@@ -96,4 +96,25 @@ describe("ConnectionManager", () => {
 
     assert.equal(connectionManager.getCount(), 0);
   });
+
+  it("should not track an already destroyed socket", () => {
+    const socket = new MockSocket();
+    socket.destroyed = true;
+
+    connectionManager.track(socket as unknown as net.Socket);
+
+    assert.equal(connectionManager.getCount(), 0);
+  });
+
+  it("should safely handle repeated destroyAll calls", () => {
+    const socket = new MockSocket();
+
+    connectionManager.track(socket as unknown as net.Socket);
+
+    connectionManager.destroyAll();
+    connectionManager.destroyAll();
+
+    assert.equal(socket.destroyed, true);
+    assert.equal(connectionManager.getCount(), 0);
+  });
 });

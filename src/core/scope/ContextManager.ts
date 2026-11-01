@@ -194,21 +194,31 @@ export class ContextManager {
   }
 
   public static destroyActiveRequests(): void {
-    for (const request of this.activeRequests.values()) {
-      const upstreamReq = request.upstream.req;
+    try {
+      for (const request of this.activeRequests.values()) {
+        const resources = [
+          request.upstream.req,
+          request.upstream.res,
+          request.client.res,
+        ];
 
-      if (upstreamReq && !upstreamReq.destroyed) {
-        upstreamReq.destroy();
+        for (const resource of resources) {
+          if (!resource || resource.destroyed) {
+            continue;
+          }
+
+          try {
+            resource.destroy();
+          } catch (error) {
+            console.error("[ContextManager] Resource cleanup failed:", error);
+          }
+        }
       }
-
-      const clientRes = request.client.res;
-
-      if (clientRes && !clientRes.destroyed) {
-        clientRes.destroy();
-      }
+    } finally {
+        this.activeRequests.clear();
+        this.requestLifeCycleIndex.clear();
+        this.requestIndex.clear();
     }
-
-    this.activeRequests.clear();
   }
 
   /**

@@ -8,6 +8,7 @@ import type { Phase } from "../../phase/Phase";
 import type { Duplex } from "stream";
 import type { StateStore } from "../state/StateStore";
 import type { WebSocket as NodeWebSocket } from "ws";
+import type { AbortMessage } from "../signals/types";
 
 /**
  * Contains connection-level information shared across requests handled
@@ -153,6 +154,31 @@ export type WebSocketContext = {
 };
 
 /**
+ * Records why and where pipeline execution was intentionally stopped.
+ */
+export type PipelineAbortState = AbortMessage & {
+  /** Pipeline phase where the abort occurred. */
+  phase: Phase;
+
+  /** Timestamp when the abort was recorded. */
+  abortedAt: number;
+};
+
+export type FailureDisposition = "recoverable" | "terminal";
+
+export type FailureScope = "request" | "connection";
+
+export type PipelineFailureState = {
+  message: string;
+  phase: Phase;
+  failedAt: number;
+  disposition: FailureDisposition;
+  scope: FailureScope;
+  code?: string;
+  cause?: unknown;
+};
+
+/**
  * Tracks request lifecycle metadata and controls request-pipeline execution.
  *
  * Includes the hijack flag, timing information, and internal pipeline
@@ -160,12 +186,16 @@ export type WebSocketContext = {
  */
 export type RequestLifecycle = {
   /**
-   * Indicates whether the request has been taken over by a handler
-   * and should no longer follow the normal pipeline path.
+   * Indicates whether the request has been taken over by a handler.
    *
-   * @remarks
-   * The effect of this flag depends on how the pipeline and handlers
-   * interpret it.
+   * When set, the pipeline treats the request as hijacked and stops
+   * normal processing. The handler that takes ownership becomes
+   * responsible for managing the request or connection.
+   *
+   * This flag does not indicate an error or cancellation.
+   *
+   * @deprecated Will be replaced by a unified discriminated pipeline
+   * outcome in a future release.
    */
   isHijacked: boolean;
 
@@ -200,6 +230,15 @@ export type RequestLifecycle = {
    * @internal
    */
   state: StateStore;
+
+  /**
+   * Metadata describing an intentional pipeline abort.
+   *
+   * When present, the pipeline must not resume normal execution.
+   */
+  abort?: PipelineAbortState;
+
+  failure?: PipelineFailureState;
 };
 
 /**

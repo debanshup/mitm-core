@@ -45,13 +45,19 @@ export class StreamingResponseHandler {
     try {
       await pipeline(upstreamRes, teeStream, res);
 
-      cacheProcessor.commit(upstreamRes);
+      try {
+        cacheProcessor.commit(upstreamRes);
+      } catch (error) {
+        console.error("[ResponseCache] Commit failed:", error);
+      }
+
       cleanupSockets();
       ScopeMutator.finishPipeline(scope);
     } catch (error: any) {
-      cleanupSockets();
-
-      const errorCode = error.code ?? "";
+      const errorCode =
+        error && typeof error === "object" && typeof error.code === "string"
+          ? error.code
+          : "";
 
       const isExpectedClose =
         errorCode === "ECONNRESET" ||
@@ -70,6 +76,8 @@ export class StreamingResponseHandler {
       }
 
       throw error;
+    } finally {
+      cleanupSockets();
     }
   }
 }

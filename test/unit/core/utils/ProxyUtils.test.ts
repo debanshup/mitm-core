@@ -103,4 +103,35 @@ describe("ProxyUtils", () => {
     assert.equal(unpipeCalled, true);
     assert.equal(endCalled, true);
   });
+
+  it("should continue cleanup when unpipe throws", () => {
+    const stream1 = new PassThrough();
+    const stream2 = new PassThrough();
+
+    stream1.unpipe = (() => {
+      throw new Error("unpipe failed");
+    }) as typeof stream1.unpipe;
+
+    assert.doesNotThrow(() => {
+      ProxyUtils.cleanUp([stream1, stream2]);
+    });
+
+    assert.equal(stream1.destroyed, true);
+    assert.equal(stream2.destroyed, true);
+  });
+
+  it("should continue cleanup when destroy throws", () => {
+    const stream1 = new PassThrough();
+    const stream2 = new PassThrough();
+
+    stream1.destroy = (() => {
+      throw new Error("destroy failed");
+    }) as typeof stream1.destroy;
+
+    assert.doesNotThrow(() => {
+      ProxyUtils.cleanUp([stream1, stream2]);
+    });
+
+    assert.equal(stream2.destroyed, true);
+  });
 });

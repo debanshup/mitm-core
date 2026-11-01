@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import http from "node:http";
 import { Proxy } from "../../../src/lib/Proxy";
+import { connectionManager } from "../../../src/core/connection/ConnectionManager";
+import { ContextManager } from "../../../src/core/scope/ContextManager";
 
 describe("Proxy startup lifecycle", () => {
   it("rejects listen when the requested port is already in use", async () => {
@@ -50,5 +52,140 @@ describe("Proxy startup lifecycle", () => {
     );
 
     await proxy.stop();
+  });
+
+  it("does not leak resources across repeated startup and shutdown cycles", async function () {
+    this.timeout(10000);
+
+    const cycles = 5;
+
+    for (let i = 0; i < cycles; i++) {
+      const proxy = new Proxy();
+
+      await proxy.listen(0);
+
+      assert.ok(proxy.address(), `Proxy should be listening in cycle ${i + 1}`);
+
+      await proxy.stop();
+
+      assert.equal(
+        proxy.address(),
+        null,
+        `Proxy should be stopped after cycle ${i + 1}`,
+      );
+    }
+  });
+
+  it("does not leak sockets, request contexts, or shutdown listeners across cycles", async function () {
+    this.timeout(15000);
+
+    const cycles = 5;
+
+    const upstream = http.createServer((_req, res) => {
+      res.writeHead(200, { "Content-Type": "text/plain" });
+      res.end("ok");
+    });
+
+    await new Promise<void>((resolve) => {
+      upstream.listen(0, "127.0.0.1", resolve);
+    });
+
+    const address = upstream.address();
+    assert.ok(address && typeof address !== "string");
+
+    const upstreamPort = address.port;
+
+    const baseline = {
+      sockets: connectionManager.getCount(),
+      requests: ContextManager.getActiveRequests().length,
+      sigint: process.listenerCount("SIGINT"),
+      sigterm: process.listenerCount("SIGTERM"),
+      sighup: process.listenerCount("SIGHUP"),
+    };
+
+    const waitForCleanup = async () => {
+      const deadline = Date.now() + 2000;
+
+      while (Date.now() < deadline) {
+        if (
+          connectionManager.getCount() === baseline.sockets &&
+          ContextManager.getActiveRequests().length === baseline.requests
+        ) {
+          return;
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+
+      assert.equal(connectionManager.getCount(), baseline.sockets);
+      assert.equal(
+        ContextManager.getActiveRequests().length,
+        baseline.requests,
+      );
+    };
+
+    try {
+      for (let i = 0; i < cycles; i++) {
+        const proxy = new Proxy();
+
+        try {
+          await proxy.listen(0);
+
+          const proxyAddress = proxy.address();
+          assert.ok(proxyAddress && typeof proxyAddress !== "string");
+
+          await new Promise<void>((resolve, reject) => {
+            const req = http.request(
+              {
+                host: "127.0.0.1",
+                port: proxyAddress.port,
+                method: "GET",
+                path: `http://127.0.0.1:${upstreamPort}/cycle-${i}`,
+                headers: {
+                  Host: `127.0.0.1:${upstreamPort}`,
+                  Connection: "close",
+                },
+                agent: false,
+              },
+              (res) => {
+                const socket = res.socket;
+
+                res.once("error", reject);
+
+                res.once("end", () => {
+                  if (socket.destroyed) {
+                    resolve();
+                  } else {
+                    socket.once("close", resolve);
+                  }
+                });
+
+                res.resume();
+              },
+            );
+
+            req.once("error", reject);
+            req.end();
+          });
+
+          await waitForCleanup();
+        } finally {
+          await proxy.stop();
+        }
+
+        await waitForCleanup();
+
+        assert.equal(process.listenerCount("SIGINT"), baseline.sigint);
+        assert.equal(process.listenerCount("SIGTERM"), baseline.sigterm);
+        assert.equal(process.listenerCount("SIGHUP"), baseline.sighup);
+      }
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        upstream.close((err) => {
+          if (err) reject(err);
+          else resolve();
+        });
+      });
+    }
   });
 });

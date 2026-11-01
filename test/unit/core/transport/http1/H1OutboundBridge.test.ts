@@ -5,6 +5,7 @@ import { H1OutboundBridge } from "../../../../../src/core/transport/http1/H1Outb
 import { ResponseDispatcher } from "../../../../../src/core/transport/http1/responseDispatcher";
 import { pluginEventManager } from "../../../../../src/core/event/plugin-events/pluginEvents";
 import { ScopeMutator } from "../../../../../src/core/scope/ScopeMutator";
+import { Middleware } from "../../../../../src/middleware/middleware";
 
 const createResponse = () => {
   const response: any = {
@@ -511,6 +512,60 @@ describe("H1OutboundBridge", () => {
     } finally {
       ScopeMutator.failPipeline = originalFailPipeline;
       pluginEventManager.emitAsync = originalEmitAsync;
+    }
+  });
+
+  it("should skip response dispatch when a plugin hijacks the target response", async () => {
+    const scope = createScope();
+
+    const originalHandle = ResponseDispatcher.handle;
+    const originalEmit = pluginEventManager.emitAsync;
+
+    let dispatcherCalled = false;
+    let resolved = false;
+    let rejectedError: unknown;
+
+    ResponseDispatcher.handle = async () => {
+      dispatcherCalled = true;
+    };
+
+    pluginEventManager.emitAsync = (async (eventName: any) => {
+      console.log("[DEBUG] Plugin event:", eventName);
+
+      if (eventName === "proxy:target-response") {
+        scope.lifecycle.isHijacked = true;
+      }
+    }) as typeof pluginEventManager.emitAsync;
+
+    try {
+      Middleware.register({ initializePipelines: true });
+      H1OutboundBridge.execute(
+        scope,
+        createConfig(),
+        () => {
+          resolved = true;
+        },
+        (err) => {
+          rejectedError = err;
+        },
+      );
+
+      const upstreamRes = new PassThrough() as any;
+      upstreamRes.statusCode = 200;
+      upstreamRes.headers = {};
+      upstreamRes.destroyed = false;
+
+      scope.request.upstream.req.emit("response", upstreamRes);
+
+      await new Promise((resolve) => setImmediate(resolve));
+
+      assert.equal(scope.lifecycle.isHijacked, true);
+      assert.equal(dispatcherCalled, false);
+      assert.equal(resolved, true);
+      assert.equal(rejectedError, undefined);
+    } finally {
+      ResponseDispatcher.handle = originalHandle;
+      pluginEventManager.emitAsync = originalEmit;
     }
   });
 });

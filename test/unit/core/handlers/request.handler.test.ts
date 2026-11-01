@@ -303,4 +303,45 @@ describe("RequestHandler", () => {
       pluginEventManager.emitAsync = originalEmit;
     }
   });
+
+  it("should stop processing when a plugin hijacks at upstream dispatch", async () => {
+    const handler = new RequestHandler();
+    const scope = createScope();
+
+    const originalInit = UpstreamInitiator.initH1UpstreamReq;
+    const originalApply = ScopeMutator.applyUpstreamInitState;
+    const originalEmit = pluginEventManager.emitAsync;
+
+    let upstreamInitialized = false;
+    let eventEmitted = false;
+
+    UpstreamInitiator.initH1UpstreamReq = (async () => {
+      upstreamInitialized = true;
+      return {} as any;
+    }) as typeof UpstreamInitiator.initH1UpstreamReq;
+
+    ScopeMutator.applyUpstreamInitState = () => true;
+
+    pluginEventManager.emitAsync = (async (event: any, payload: any) => {
+      if (event === "proxy:upstream-dispatch") {
+        eventEmitted = true;
+        assert.equal(payload.scope, scope);
+
+        // Simulate plugin hijacking.
+        scope.lifecycle.isHijacked = true;
+      }
+    }) as typeof pluginEventManager.emitAsync;
+
+    try {
+      await handler.handle(scope);
+
+      assert.equal(upstreamInitialized, true);
+      assert.equal(eventEmitted, true);
+      assert.equal(scope.lifecycle.isHijacked, true);
+    } finally {
+      UpstreamInitiator.initH1UpstreamReq = originalInit;
+      ScopeMutator.applyUpstreamInitState = originalApply;
+      pluginEventManager.emitAsync = originalEmit;
+    }
+  });
 });

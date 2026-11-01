@@ -8,26 +8,30 @@ type ProxyStream = Stream & {
 };
 
 export class ProxyUtils {
-  static cleanUp(streams: ProxyStream[], error?: Error): void {
+  public static cleanUp(streams: ProxyStream[], error?: Error): void {
     for (const stream of streams) {
-      if (stream && typeof stream.unpipe === "function") {
-        try {
+      if (!stream) continue;
+
+      try {
+        if (typeof stream.unpipe === "function") {
           stream.unpipe();
-        } catch (unpipeError) {
-          console.error("Failed to unpipe stream:", unpipeError);
         }
+      } catch (unpipeError) {
+        console.error("[ProxyUtils] Failed to unpipe stream:", unpipeError);
       }
     }
 
     for (const stream of streams) {
-      if (!stream) continue;
+      if (!stream || stream.destroyed === true) continue;
 
-      if (stream.destroyed !== true) {
+      try {
         if (typeof stream.destroy === "function") {
           stream.destroy(error);
         } else if (typeof stream.end === "function") {
           stream.end();
         }
+      } catch (cleanupError) {
+        console.error("[ProxyUtils] Failed to destroy stream:", cleanupError);
       }
     }
   }

@@ -7,6 +7,7 @@ import type { Socket } from "net";
 import type { IncomingMessage, ServerResponse } from "http";
 import type { Duplex } from "stream";
 import type { RequestScope } from "../core/scope/types";
+import { PipelineAbortSignal } from "../core/signals/pipelineAbortSignal";
 
 /**
  * Manages middleware registration and orchestrates the proxy connection lifecycle.
@@ -37,7 +38,10 @@ export class Middleware {
         ScopeMutator.initializeSessionContext(socket);
         await proxyEventManager.emitAsync("connection:open", { socket });
       } catch (err) {
-        throw err;
+        if (err instanceof PipelineAbortSignal) {
+          console.info(err.name, err.data);
+        }
+        console.error(`[Middleware Fatal] Pipeline crash on CONNECT:`, err);
       }
     };
 
@@ -62,17 +66,23 @@ export class Middleware {
         if (!success) return;
 
         await pluginEventManager.emitAsync("proxy:client-connect", { scope });
+        if (scope.lifecycle.isHijacked) return;
         await proxyEventManager.emitAsync("connect:request", {
           head,
           scope,
           socket,
         });
 
+
         await Pipeline.run(scope);
       } catch (err) {
-        console.error(`[Middleware Fatal] Pipeline crash on CONNECT:`, err);
-        ScopeMutator.failPipeline(scope);
-        if (!socket.destroyed) socket.destroy();
+        if (err instanceof PipelineAbortSignal) {
+          console.info(err.name, err.data);
+        } else {
+          console.error(`[Middleware Fatal] Pipeline crash on CONNECT:`, err);
+          ScopeMutator.failPipeline(scope);
+          if (!socket.destroyed) socket.destroy();
+        }
       }
     };
 
@@ -92,13 +102,18 @@ export class Middleware {
         await pluginEventManager.emitAsync("proxy:client-http-request", {
           scope,
         });
+        if (scope.lifecycle.isHijacked) return;
         await proxyEventManager.emitAsync("http:request", { scope });
 
         await Pipeline.run(scope);
       } catch (err) {
-        console.error(`[Middleware Fatal] Pipeline crash on HTTP:PLAIN:`, err);
-        ScopeMutator.failPipeline(scope);
-        if (!res.destroyed) res.destroy();
+        if (err instanceof PipelineAbortSignal) {
+          console.info(err.name, err.data);
+        } else {
+          console.error(`[Middleware Fatal] Pipeline crash on CONNECT:`, err);
+          ScopeMutator.failPipeline(scope);
+          if (!res.destroyed) res.destroy();
+        }
       }
     };
 
@@ -109,17 +124,19 @@ export class Middleware {
         await pluginEventManager.emitAsync("proxy:client-https-request", {
           scope,
         });
+        if (scope.lifecycle.isHijacked) return;
         await proxyEventManager.emitAsync("https:request", { scope });
 
         await Pipeline.run(scope);
       } catch (err) {
-        console.error(
-          `[Middleware Fatal] Pipeline crash on HTTPS:DECRYPTED:`,
-          err,
-        );
-        ScopeMutator.failPipeline(scope);
-        if (!scope.request.client.res?.destroyed)
-          scope.request.client.res?.destroy();
+        if (err instanceof PipelineAbortSignal) {
+          console.info(err.name, err.data);
+        } else {
+          console.error(`[Middleware Fatal] Pipeline crash on CONNECT:`, err);
+          ScopeMutator.failPipeline(scope);
+          if (!scope.request.client.res?.destroyed)
+            scope.request.client.res?.destroy();
+        }
       }
     };
 
@@ -135,6 +152,7 @@ export class Middleware {
         return;
       }
       await pluginEventManager.emitAsync("proxy:target-response", { scope });
+      if (scope.lifecycle.isHijacked) return;
     };
 
     const onWsUpgrade = async ({
@@ -164,12 +182,14 @@ export class Middleware {
           socket,
         });
         await Pipeline.run(wsScope);
-      } catch (error) {
-        console.error(
-          `[Middleware Fatal] Pipeline crash on WS:UPGRADE:`,
-          error,
-        );
-        if (!socket.destroyed) socket.destroy();
+      } catch (err) {
+        if (err instanceof PipelineAbortSignal) {
+          throw err;
+        } else {
+          console.error(`[Middleware Fatal] Pipeline crash on CONNECT:`, err);
+          ScopeMutator.failPipeline(scope);
+          if (!socket.destroyed) socket.destroy();
+        }
       }
     };
 

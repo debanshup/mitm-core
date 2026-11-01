@@ -39,10 +39,14 @@ export class HandshakeHandler extends BaseHandler {
       await pluginEventManager.emitAsync("proxy:client-before-handshake", {
         scope,
       });
+
+      if (scope.lifecycle.isHijacked) return;
+
     } catch (err) {
       if (err instanceof PipelineAbortSignal) {
-        return;
+        throw err;
       }
+      console.error(err);
     }
 
     try {
@@ -50,7 +54,10 @@ export class HandshakeHandler extends BaseHandler {
         socket,
         scope,
       });
-    } catch (error) {
+    } catch (err) {
+      if (err instanceof PipelineAbortSignal) {
+        throw err;
+      }
       if (!socket.destroyed) socket.destroy();
       return;
     }
@@ -75,11 +82,17 @@ export class HandshakeHandler extends BaseHandler {
       await pluginEventManager.emitAsync("proxy:client-after-handshake", {
         scope,
       });
+      
+      if (scope.lifecycle.isHijacked) return;
+
       await proxyEventManager.emitAsync("connect:established", {
         socket,
         scope,
       });
-    } catch (error) {
+    } catch (err) {
+      if (err instanceof PipelineAbortSignal) {
+        throw err;
+      }
       if (!socket.destroyed) socket.destroy();
       return;
     }

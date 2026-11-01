@@ -3,7 +3,7 @@ import type { RequestScope } from "../../scope/types";
 import type { ResponseCacheProcessor } from "../../cache/ResponseCacheProcessor";
 import { StreamingResponseHandler } from "./streamingResponseHandler";
 import { ScopeMutator } from "../../scope/ScopeMutator";
-import { reportProxyError } from "../../event/proxy-events/proxyEvents";
+import { PipelineAbortSignal } from "../../signals/pipelineAbortSignal";
 
 export const RES_HOP_HEADERS = new Set([
   "connection",
@@ -69,17 +69,26 @@ export class ResponseDispatcher {
         upstream,
       );
     } catch (error) {
-      // report proxy error
-      reportProxyError(error);
-      const errorCode = (error as NodeJS.ErrnoException)?.code ?? "";
+      if (error instanceof PipelineAbortSignal) {
+        throw error;
+      }
+
+      const errorCode =
+        error &&
+        typeof error === "object" &&
+        typeof (error as NodeJS.ErrnoException).code === "string"
+          ? (error as NodeJS.ErrnoException).code
+          : "";
 
       const expectedTermination =
         errorCode === "ERR_STREAM_PREMATURE_CLOSE" ||
         errorCode === "ECONNRESET" ||
         errorCode === "EPIPE";
+
       if (expectedTermination) {
         return;
       }
+
       console.error(
         "[Dispatcher Error Capture] Stream routing failed:",
         error,
@@ -88,6 +97,7 @@ export class ResponseDispatcher {
       );
 
       ScopeMutator.failPipeline(scope);
+      throw error;
     }
   }
 }

@@ -396,4 +396,101 @@ describe("HandshakeHandler", () => {
       H1InboundBridge.execute = originalH1Execute;
     }
   });
+
+  it("should stop handshake when a plugin hijacks before handshake", async () => {
+    const socket = new MockSocket();
+    const handler = new HandshakeHandler();
+    const scope = createScope(socket);
+
+    const originalEmit = pluginEventManager.emitAsync;
+    const restoreCA = mockCertificateGeneration();
+    const originalTLSSocket = tls.TLSSocket;
+
+    let tlsCreated = false;
+
+    (tls as any).TLSSocket = class extends MockTLSSocket {
+      constructor(socket: MockSocket, options?: any) {
+        super(socket, options);
+        tlsCreated = true;
+      }
+    };
+
+    pluginEventManager.emitAsync = (async (event: any) => {
+      if (event === "proxy:client-before-handshake") {
+        scope.lifecycle.isHijacked = true;
+      }
+    }) as typeof pluginEventManager.emitAsync;
+
+    try {
+      await handler.handle(scope);
+
+      assert.equal(scope.lifecycle.isHijacked, true);
+      assert.equal(tlsCreated, false);
+      assert.equal(socket.written.length, 0);
+    } finally {
+      pluginEventManager.emitAsync = originalEmit;
+      restoreCA();
+      (tls as any).TLSSocket = originalTLSSocket;
+    }
+  });
+
+  it("should stop further processing when a plugin hijacks after handshake", async () => {
+    const socket = new MockSocket();
+    const handler = new HandshakeHandler();
+    const scope = createScope(socket);
+
+    const originalEmit = pluginEventManager.emitAsync;
+    const originalProxyEmit = proxyEventManager.emitAsync;
+    const restoreCA = mockCertificateGeneration();
+
+    const originalTLSSocket = tls.TLSSocket;
+    const originalEnsureCleanupGuards = SocketGuard.ensureCleanupGuards;
+    const originalH1Execute = H1InboundBridge.execute;
+
+    let proxyEventEmitted = false;
+    let inboundBridgeExecuted = false;
+
+    pluginEventManager.emitAsync = (async (event: any) => {
+      if (event === "proxy:client-after-handshake") {
+        scope.lifecycle.isHijacked = true;
+      }
+    }) as typeof pluginEventManager.emitAsync;
+
+    let establishedEventEmitted = false;
+
+    proxyEventManager.emitAsync = (async (event: any) => {
+      if (event === "connect:established") {
+        establishedEventEmitted = true;
+      }
+    }) as typeof proxyEventManager.emitAsync;
+
+    (tls as any).TLSSocket = class extends MockTLSSocket {
+      constructor(socket: MockSocket, options?: any) {
+        super(socket, options);
+        queueMicrotask(() => this.emit("secure"));
+      }
+    };
+
+    SocketGuard.ensureCleanupGuards = (() => {}) as any;
+
+    H1InboundBridge.execute = (async () => {
+      inboundBridgeExecuted = true;
+    }) as any;
+
+    try {
+      await handler.handle(scope);
+      assert.equal(establishedEventEmitted, false);
+      assert.equal(scope.lifecycle.isHijacked, true);
+      assert.equal(proxyEventEmitted, false);
+      assert.equal(inboundBridgeExecuted, false);
+    } finally {
+      pluginEventManager.emitAsync = originalEmit;
+      proxyEventManager.emitAsync = originalProxyEmit;
+      restoreCA();
+
+      (tls as any).TLSSocket = originalTLSSocket;
+      SocketGuard.ensureCleanupGuards = originalEnsureCleanupGuards;
+      H1InboundBridge.execute = originalH1Execute;
+    }
+  });
 });

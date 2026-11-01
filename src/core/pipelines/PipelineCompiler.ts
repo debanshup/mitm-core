@@ -1,5 +1,5 @@
 import type { Phase } from "../../phase/Phase.ts";
-import type { RequestScope } from "../scope/types.js";
+import type { FailureScope, RequestScope } from "../scope/types.js";
 import type { BaseHandler } from "../handlers/base/base.handler.ts";
 import { HANDLERS } from "../handlers/registry/registry";
 import { PipelineAbortSignal } from "../signals/pipelineAbortSignal";
@@ -13,14 +13,100 @@ import { reportProxyError } from "../event/proxy-events/proxyEvents.js";
  * manages state transitions, and provides centralized error handling for the proxy.
  */
 export default class Pipeline {
-  protected constructor() {}
   private static pipelines: Record<Phase, BaseHandler[]> = {
     tcp: [],
     handshake: [],
     request: [],
     response: [],
   };
-  static compile() {
+
+  private static handlePipelineFailure(
+    scope: RequestScope,
+    error: unknown,
+    phase: Phase,
+    handlerName: string,
+  ): void {
+    const details =
+      error !== null && typeof error === "object"
+        ? (error as { code?: unknown; message?: unknown })
+        : undefined;
+
+    const message =
+      error instanceof Error
+        ? error.message
+        : typeof details?.message === "string"
+          ? details.message
+          : String(error);
+
+    const code = typeof details?.code === "string" ? details.code : undefined;
+
+    const normalizedError =
+      error instanceof Error
+        ? error
+        : Object.assign(new Error(message), code ? { code } : {});
+
+    const res = scope.request.client.res;
+
+    const failureScope: FailureScope =
+      phase === "tcp" || phase === "handshake" || (!!res && res.headersSent)
+        ? "connection"
+        : "request";
+
+    scope.lifecycle.failure = {
+      message,
+      phase,
+      failedAt: Date.now(),
+      disposition: "terminal",
+      scope: failureScope,
+      ...(code ? { code } : {}),
+      cause: error,
+    };
+
+    reportProxyError(normalizedError);
+
+    const expectedCodes = new Set([
+      "ECONNRESET",
+      "ETIMEDOUT",
+      "ECONNREFUSED",
+      "EPIPE",
+    ]);
+
+    const isExpectedDrop =
+      expectedCodes.has(code ?? "") ||
+      code === "ERR_TLS_HANDSHAKE_TIMEOUT" ||
+      message.includes("TLS Handshake Timeout");
+
+    if (!isExpectedDrop) {
+      console.error(
+        `[Handler Error] ${handlerName} failed during ${phase}:`,
+        scope.request.target.originalHost,
+        message,
+      );
+    }
+
+    const wsSocket = scope.request.webSocket?.rawUpgradeSocket;
+
+    if (wsSocket && !scope.request.webSocket?.isUpgraded) {
+      if (!wsSocket.destroyed && wsSocket.writable) {
+        wsSocket.end("HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\n\r\n");
+      } else if (!wsSocket.destroyed) {
+        wsSocket.destroy();
+      }
+    } else if (failureScope === "connection") {
+      if (res && !res.destroyed) {
+        res.destroy();
+      } else if (!scope.session.socket.destroyed) {
+        scope.session.socket.destroy();
+      }
+    } else if (res && !res.headersSent && !res.writableEnded) {
+      res.statusCode = 502;
+      res.end("Proxy Error: Plugin Failure");
+    }
+
+    scope.lifecycle.nextPhase = undefined;
+  }
+
+  public static compile() {
     this.pipelines = { tcp: [], handshake: [], request: [], response: [] };
     for (const HandlerClass of HANDLERS) {
       const instance = new HandlerClass();
@@ -39,34 +125,65 @@ export default class Pipeline {
    * Executes handlers for the current phase in the provided proxy context.
    * Handles phase sequencing, pipeline abortion, and error recovery (502 response).
    */
-  static async run(scope: RequestScope) {
+  public static async run(scope: RequestScope) {
     const { request, lifecycle } = scope;
 
     if (!lifecycle.nextPhase) {
       return;
     }
-    if (lifecycle.isHijacked) {
+
+    if (lifecycle.abort || lifecycle.failure || lifecycle.isHijacked) {
       lifecycle.nextPhase = undefined;
       return;
     }
 
     if (request.webSocket && !request.webSocket.isUpgraded) {
       lifecycle.nextPhase = undefined;
-      await WSOutboundBridge.execute(scope);
+
+      try {
+        await WSOutboundBridge.execute(scope);
+      } catch (error) {
+        if (error instanceof PipelineAbortSignal) {
+          lifecycle.abort = {
+            ...(error.data ?? {}),
+            message: error.message,
+            phase: "request",
+            abortedAt: Date.now(),
+          };
+          return;
+        }
+
+        this.handlePipelineFailure(scope, error, "request", "WSOutboundBridge");
+      }
+
       return;
     }
     let executionJumps = 0;
     const MAX_JUMPS = 10;
 
     while (lifecycle.nextPhase) {
+      if (lifecycle.abort || lifecycle.failure || lifecycle.isHijacked) {
+        lifecycle.nextPhase = undefined;
+        return;
+      }
+
       if (++executionJumps > MAX_JUMPS) {
         const originalHost =
           scope.request.target.originalHost ?? "unknown-host";
         console.error(
           `[Fatal] Infinite phase loop detected for: ${originalHost}. Terminating transaction.`,
         );
-        scope.lifecycle.nextPhase = undefined;
-        scope.lifecycle.isHijacked = true;
+        const failedPhase = lifecycle.nextPhase;
+
+        lifecycle.failure = {
+          message: "Infinite pipeline phase loop detected",
+          phase: failedPhase,
+          scope: "connection",
+          disposition: "terminal",
+          failedAt: Date.now(),
+        };
+
+        lifecycle.nextPhase = undefined;
         const res = scope.request.client.res;
         if (res) {
           try {
@@ -115,43 +232,93 @@ export default class Pipeline {
           await step.handle(scope);
         } catch (error: any) {
           if (error instanceof PipelineAbortSignal) {
+            lifecycle.abort = {
+              ...(error.data ?? {}),
+              message: error.message,
+              phase: currentPhase,
+              abortedAt: Date.now(),
+            };
+
             lifecycle.nextPhase = undefined;
+
+            console.info(
+              "[Pipeline] Execution intentionally aborted:",
+              lifecycle.abort,
+            );
+
             return;
           }
+          const errorDetails =
+            error !== null && typeof error === "object"
+              ? (error as { code?: unknown; message?: unknown })
+              : undefined;
 
-          // report proxy error
-          reportProxyError(error);
+          const errorMessage =
+            error instanceof Error
+              ? error.message
+              : typeof errorDetails?.message === "string"
+                ? errorDetails.message
+                : String(error);
+
+          const failureCode =
+            typeof errorDetails?.code === "string"
+              ? errorDetails.code
+              : undefined;
+
+          const normalizedError =
+            error instanceof Error
+              ? error
+              : Object.assign(
+                  new Error(errorMessage),
+                  failureCode ? { code: failureCode } : {},
+                );
+
+          const res = scope.request.client.res;
+
+          const failureScope: FailureScope =
+            currentPhase === "tcp" ||
+            currentPhase === "handshake" ||
+            (!!res && res.headersSent)
+              ? "connection"
+              : "request";
+
+          lifecycle.failure = {
+            message: errorMessage,
+            phase: currentPhase,
+            failedAt: Date.now(),
+            disposition: "terminal",
+            scope: failureScope,
+            ...(failureCode ? { code: failureCode } : {}),
+            cause: error,
+          };
+
+          // Report a normalized Error instance.
+          reportProxyError(normalizedError);
+
           const EXPECTED_ERROR_CODES = new Set([
-            "ECONNRESET", // Connection reset by peer
-            "ETIMEDOUT", // Operation timed out
-            "ECONNREFUSED", // Connection refused
-            "EPIPE", // Broken pipe (client disconnected early)
+            "ECONNRESET",
+            "ETIMEDOUT",
+            "ECONNREFUSED",
+            "EPIPE",
           ]);
 
-          // Check against codes or known library-specific timeout strings
           const isExpectedDrop =
-            EXPECTED_ERROR_CODES.has(error.code) ||
-            error.code === "ERR_TLS_HANDSHAKE_TIMEOUT" ||
-            error.message?.includes("TLS Handshake Timeout");
+            EXPECTED_ERROR_CODES.has(failureCode ?? "") ||
+            failureCode === "ERR_TLS_HANDSHAKE_TIMEOUT" ||
+            errorMessage.includes("TLS Handshake Timeout");
 
           if (!isExpectedDrop) {
             console.error(
               `[Handler Error] ${step.name} failed during ${currentPhase}:`,
               scope.request.target.originalHost,
-              error.message,
+              errorMessage,
             );
           }
+          this.handlePipelineFailure(scope, error, currentPhase, step.name);
+          return;
+        }
 
-          const res = scope.request.client.res;
-          if (res) {
-            if (!res.headersSent && !res.writableEnded) {
-              res.statusCode = 502;
-              res.end("Proxy Error: Plugin Failure");
-            } else if (!res.destroyed) {
-              res.destroy();
-            }
-          }
-
+        if (lifecycle.isHijacked) {
           lifecycle.nextPhase = undefined;
           return;
         }
@@ -159,7 +326,10 @@ export default class Pipeline {
     }
   }
 
-  static setPipelineForTest(phase: Phase, handlers: BaseHandler[]): void {
+  public static setPipelineForTest(
+    phase: Phase,
+    handlers: BaseHandler[],
+  ): void {
     this.pipelines[phase] = handlers;
   }
 }
