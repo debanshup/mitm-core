@@ -191,11 +191,6 @@ export type RequestLifecycle = {
    * When set, the pipeline treats the request as hijacked and stops
    * normal processing. The handler that takes ownership becomes
    * responsible for managing the request or connection.
-   *
-   * This flag does not indicate an error or cancellation.
-   *
-   * @deprecated Will be replaced by a unified discriminated pipeline
-   * outcome in a future release.
    */
   isHijacked: boolean;
 
