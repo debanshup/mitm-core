@@ -7,6 +7,7 @@ import { ResponseDispatcher } from "./responseDispatcher";
 import type { ProxyConfig } from "../../../config.registry";
 import { reportProxyError } from "../../event/proxy-events/proxyEvents";
 import { PipelineAbortSignal } from "../../signals/pipelineAbortSignal";
+import { UpstreamInitiator } from "./UpstreamInitiator";
 
 export class H1OutboundBridge {
   public static execute(
@@ -66,6 +67,11 @@ export class H1OutboundBridge {
         // while the event listeners were executing.
         if (isSettled) return;
 
+        // Wait for an already-started upstream-request event.**
+        await UpstreamInitiator.waitForUpstreamRequestEvent(upstreamReq);
+
+        if (isSettled) return;
+
         if (scope.lifecycle.isHijacked) {
           safeResolve();
           return;
@@ -114,6 +120,29 @@ export class H1OutboundBridge {
       if (isSettled) return;
       isSettled = true;
 
+      try {
+        await pluginEventManager.emitAsync("proxy:target-error", {
+          scope,
+        });
+      } catch (pluginErr) {
+        if (pluginErr instanceof PipelineAbortSignal) {
+          scope.lifecycle.abort = {
+            ...(pluginErr.data ?? {}),
+            message: pluginErr.message,
+            phase: "request",
+            abortedAt: Date.now(),
+          };
+
+          reject(pluginErr);
+          return;
+        }
+      }
+
+      if (scope.lifecycle.isHijacked) {
+        resolve();
+        return;
+      }
+
       const errorCode =
         err &&
         typeof err === "object" &&
@@ -152,10 +181,6 @@ export class H1OutboundBridge {
           upstreamReq.destroy();
         }
 
-        if (typeof inboundReq.destroy === "function" && !inboundReq.destroyed) {
-          inboundReq.destroy();
-        }
-
         if (!inboundRes.destroyed) {
           if (!inboundRes.headersSent && !inboundRes.writableEnded) {
             if (errorCode === "ERR_UPSTREAM_TIMEOUT") {
@@ -187,59 +212,11 @@ export class H1OutboundBridge {
             inboundRes.destroy(err);
           }
         }
-
-        if (!inboundRes.headersSent && !inboundRes.writableEnded) {
-          if (errorCode === "ERR_UPSTREAM_TIMEOUT") {
-            const body = JSON.stringify({
-              error: "Gateway Timeout: Upstream failed to respond.",
-            });
-
-            inboundRes.writeHead(504, {
-              "Content-Type": "application/json",
-              "Content-Length": Buffer.byteLength(body),
-              Connection: "close",
-            });
-
-            inboundRes.end(body);
-          } else if (isClientDisconnected) {
-            inboundRes.destroy();
-          } else {
-            const body = "Bad Gateway: Remote target connection dropped.";
-
-            inboundRes.writeHead(502, {
-              "Content-Type": "text/plain",
-              "Content-Length": Buffer.byteLength(body),
-              Connection: "close",
-            });
-
-            inboundRes.end(body);
-          }
-        } else {
-          inboundRes.destroy(err);
-        }
       } catch (criticalCleanupErr) {
         console.error(
           "[Proxy Core] Critical sync error cleanup failed:",
           criticalCleanupErr,
         );
-      }
-
-      try {
-        await pluginEventManager.emitAsync("proxy:target-error", {
-          scope,
-        });
-      } catch (pluginErr) {
-        if (pluginErr instanceof PipelineAbortSignal) {
-          scope.lifecycle.abort = {
-            ...(pluginErr.data ?? {}),
-            message: pluginErr.message,
-            phase: "request",
-            abortedAt: Date.now(),
-          };
-
-          reject(pluginErr);
-          return;
-        }
       }
 
       reject(err as any);
