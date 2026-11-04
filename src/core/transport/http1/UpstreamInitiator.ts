@@ -1,7 +1,6 @@
 import https from "https";
 import http, { ClientRequest } from "http";
 import { pipeline } from "stream";
-import { ProxyUtils } from "../../utils/ProxyUtils";
 import type { RequestScope } from "../../scope/types";
 import { pluginEventManager } from "../../event/plugin-events/pluginEvents";
 import { getConfig } from "../../../config.registry";
@@ -16,7 +15,7 @@ export class UpstreamInitiator {
     maxFreeSockets: 256,
     scheduling: "fifo",
     timeout: 60000,
-    rejectUnauthorized: false, // strictly local
+    rejectUnauthorized: false,
     checkServerIdentity: () => undefined,
   });
 
@@ -29,18 +28,26 @@ export class UpstreamInitiator {
     timeout: 60000,
   });
 
-  private static async emitPluginEventSafely(
-    eventName: "proxy:upstream-connect" | "proxy:upstream-request",
-    scope: RequestScope,
+  private static upstreamRequestEvents = new WeakMap<
+    ClientRequest,
+    Promise<void>
+  >();
+
+  public static waitForUpstreamRequestEvent(
+    upstreamReq: ClientRequest,
   ): Promise<void> {
-    try {
-      await pluginEventManager.emitAsync(eventName, { scope });
-    } catch (error) {
-      if (error instanceof PipelineAbortSignal) {
-        throw error;
-      }
-      reportProxyError(error);
-    }
+    return this.upstreamRequestEvents.get(upstreamReq) ?? Promise.resolve();
+  }
+
+  private static upstreamConnectEvents = new WeakMap<
+    ClientRequest,
+    Promise<void>
+  >();
+
+  public static waitForUpstreamConnectEvent(
+    upstreamReq: ClientRequest,
+  ): Promise<void> {
+    return this.upstreamConnectEvents.get(upstreamReq) ?? Promise.resolve();
   }
 
   public static async initH1UpstreamReq(targetUrl: URL, scope: RequestScope) {
@@ -63,23 +70,16 @@ export class UpstreamInitiator {
       upstream = requestModule.request({
         host: targetUrl.hostname,
         port: targetUrl.port || (isHTTPS ? 443 : 80),
-
         servername: isHTTPS ? targetUrl.hostname : undefined,
-
         method: clientReq.method,
-
         path: targetUrl.pathname + targetUrl.search,
-
         headers: {
           ...clientReq.headers,
           host: targetUrl.host,
           connection: "keep-alive",
         },
-
         agent,
-
         timeout: getConfig().upstreamTimeoutMs,
-
         maxHeaderSize: 128 * 1024,
       });
     } catch (syncError) {
@@ -87,42 +87,50 @@ export class UpstreamInitiator {
         "[Outbound Bridge Critical] Synchronous request instantiation failed:",
         syncError,
       );
+
       clientReq.destroy();
       this.handleUpstreamFailure(syncError as Error, scope, targetUrl);
+
       throw syncError;
     }
 
-    // Disable Nagle's algorithm for lower latency
+    let resolveConnect!: () => void;
+    let rejectConnect!: (error: unknown) => void;
+
+    const connectEventPromise = new Promise<void>((resolve, reject) => {
+      resolveConnect = resolve;
+      rejectConnect = reject;
+    });
+
+    void connectEventPromise.catch(() => {});
+
+    this.upstreamConnectEvents.set(upstream, connectEventPromise);
+
+    // Disable Nagle's algorithm for lower latency.
     upstream.setNoDelay(true);
-
-    upstream.once("socket", (socket) => {
-      if (socket.connecting) {
-        const connectEvent = isHTTPS ? "secureConnect" : "connect";
-
-        socket.once(connectEvent, () => {
-          void this.emitPluginEventSafely("proxy:upstream-connect", scope);
-        });
-      } else {
-        setImmediate(() => {
-          void this.emitPluginEventSafely("proxy:upstream-connect", scope);
-        });
-      }
-    });
-
-    upstream.once("finish", () => {
-      void this.emitPluginEventSafely("proxy:upstream-request", scope);
-    });
 
     let clientDisconnected = false;
     let cleanedUp = false;
 
+    // NEW: Track request lifecycle.
+    let requestPipelineStarted = false;
+    let upstreamFailed = false;
+    let pipelineAborted = false;
+
+    const clientSocket = clientReq.socket;
+
     const onClientDisconnect = () => {
+      if (scope.lifecycle.isHijacked) return;
+
       if (clientDisconnected) return;
+
       clientDisconnected = true;
 
       if (!upstream.destroyed) {
         upstream.destroy();
       }
+      // remove remaining lifecycle listeners
+      cleanupClientListeners();
     };
 
     const onClientAborted = () => {
@@ -143,43 +151,136 @@ export class UpstreamInitiator {
       cleanedUp = true;
 
       clientSocket?.removeListener("close", onClientDisconnect);
-
       clientReq.removeListener("aborted", onClientAborted);
 
       request.client.res?.removeListener("close", onClientResponseClose);
+
+      request.client.res?.removeListener("finish", cleanupClientListeners);
+      request.client.res?.removeListener("close", cleanupClientListeners);
     };
 
-    const clientSocket = clientReq.socket;
-
     clientSocket?.once("close", onClientDisconnect);
-
     clientReq.once("aborted", onClientAborted);
 
     request.client.res?.once("close", onClientResponseClose);
-
     request.client.res?.once("finish", cleanupClientListeners);
-
     request.client.res?.once("close", cleanupClientListeners);
 
-    pipeline(clientReq, upstream, (err) => {
-      if (!err) return;
-
-      const errCode = (err as NodeJS.ErrnoException).code;
-
-      if (clientDisconnected || errCode === "ERR_UPSTREAM_TIMEOUT") {
+    // Handle errors occurring before pipeline startup.
+    const onPrePipelineError = (err: Error) => {
+      if (
+        requestPipelineStarted ||
+        clientDisconnected ||
+        pipelineAborted ||
+        scope.lifecycle.isHijacked
+      ) {
         return;
       }
 
+      if (upstreamFailed) return;
+
+      upstreamFailed = true;
+
+      reportProxyError(err);
+      this.handleUpstreamFailure(err, scope, targetUrl);
+    };
+
+    upstream.once("error", onPrePipelineError);
+
+    // Start forwarding only after the connect event completes.
+    const startRequestPipeline = () => {
       if (
-        errCode !== "ERR_STREAM_PREMATURE_CLOSE" &&
-        errCode !== "ERR_CLIENT_DISCONNECTED"
+        requestPipelineStarted ||
+        upstreamFailed ||
+        clientDisconnected ||
+        upstream.destroyed
       ) {
-        reportProxyError(err);
-
-        console.error("Pipeline mapping failed from client to upstream:", err);
-
-        this.handleUpstreamFailure(err, scope, targetUrl);
+        return;
       }
+
+      requestPipelineStarted = true;
+
+      upstream.removeListener("error", onPrePipelineError);
+
+      pipeline(clientReq, upstream, (err) => {
+        if (!err) return;
+
+        const errCode = (err as NodeJS.ErrnoException).code;
+
+        if (clientDisconnected || errCode === "ERR_UPSTREAM_TIMEOUT") {
+          return;
+        }
+
+        if (
+          errCode !== "ERR_STREAM_PREMATURE_CLOSE" &&
+          errCode !== "ERR_CLIENT_DISCONNECTED"
+        ) {
+          reportProxyError(err);
+
+          console.error(
+            "Pipeline mapping failed from client to upstream:",
+            err,
+          );
+
+          this.handleUpstreamFailure(err, scope, targetUrl);
+        }
+      });
+    };
+
+    const dispatchUpstreamConnect = async () => {
+      try {
+        await pluginEventManager.emitAsync("proxy:upstream-connect", { scope });
+
+        if (scope.lifecycle.isHijacked) {
+          resolveConnect();
+          return;
+        }
+
+        if (upstreamFailed || upstream.destroyed) {
+          resolveConnect();
+          return;
+        }
+
+        startRequestPipeline();
+        resolveConnect();
+      } catch (error) {
+        if (error instanceof PipelineAbortSignal) {
+          pipelineAborted = true;
+          rejectConnect(error);
+          upstream.destroy();
+          return;
+        }
+
+        resolveConnect();
+        reportProxyError(error);
+        upstream.destroy();
+      }
+    };
+
+    upstream.once("socket", (socket) => {
+      if (socket.connecting) {
+        const connectEvent = isHTTPS ? "secureConnect" : "connect";
+
+        socket.once(connectEvent, () => {
+          void dispatchUpstreamConnect();
+        });
+      } else {
+        setImmediate(() => {
+          void dispatchUpstreamConnect();
+        });
+      }
+    });
+
+    upstream.once("finish", () => {
+      const eventPromise = pluginEventManager.emitAsync(
+        "proxy:upstream-request",
+        { scope },
+      );
+
+      this.upstreamRequestEvents.set(upstream, eventPromise);
+
+      // Prevent an unhandled rejection before the response awaits it.
+      void eventPromise.catch(() => {});
     });
 
     return upstream;
@@ -205,7 +306,5 @@ export class UpstreamInitiator {
       res.statusCode = 502;
       res.end("Bad Gateway");
     }
-
-    ProxyUtils.cleanUp([request.client.req?.socket!]);
   }
 }

@@ -51,7 +51,6 @@ export class StreamingResponseHandler {
         console.error("[ResponseCache] Commit failed:", error);
       }
 
-      cleanupSockets();
       ScopeMutator.finishPipeline(scope);
     } catch (error: any) {
       const errorCode =
@@ -71,13 +70,13 @@ export class StreamingResponseHandler {
         );
       }
 
+      cleanupSockets();
+
       if (!res.writableEnded && !res.destroyed) {
         res.destroy(error);
       }
 
       throw error;
-    } finally {
-      cleanupSockets();
     }
   }
 }

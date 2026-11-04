@@ -1,6 +1,5 @@
 import { TypedEventEmitter } from "../EventBus";
 import type { RequestScope } from "../../scope/types";
-import { PipelineAbortSignal } from "../../signals/pipelineAbortSignal";
 import { getConfig } from "../../../config.registry";
 const config = getConfig();
 
@@ -193,55 +192,34 @@ export class PluginEventManager extends TypedEventEmitter<PluginEventMap> {
     ...args: PluginEventMap[K] extends any[] ? PluginEventMap[K] : never[]
   ): Promise<void> {
     const listeners = this.listeners(eventName);
+
     if (listeners.length === 0) return;
 
     for (const listener of listeners) {
       const fn = listener as (...args: any[]) => void | Promise<void>;
 
-      if (this.pluginTimeoutMs! <= 0) {
-        await Promise.resolve(fn(...args));
+      const execution = Promise.resolve().then(() => fn(...args));
+
+      if (this.pluginTimeoutMs <= 0) {
+        await execution;
         continue;
       }
 
       let timerId: NodeJS.Timeout | undefined;
 
-      // 1. Initialize the plugin promise
-      const pluginExecution = Promise.resolve(fn(...args));
-
-      // 2. CRITICAL: Attach a "dummy" catch.
-      // If the timeout wins the race, but the plugin throws an error 10 seconds later,
-      // Node.js will crash with an UnhandledPromiseRejection unless this dummy catch exists.
-      pluginExecution.catch(() => {});
-
-      const timeoutTimer = new Promise<never>((_, reject) => {
-        timerId = setTimeout(() => {
-          reject(new Error("PLUGIN_TIMEOUT"));
-        }, this.pluginTimeoutMs);
-      });
-
       try {
-        // 3. Race them!
-        await Promise.race([pluginExecution, timeoutTimer]);
-      } catch (error: any) {
-        if (
-          error instanceof PipelineAbortSignal ||
-          error?.constructor?.name === "PipelineAbortSignal"
-        ) {
-          throw error; // Pass it up to the HandshakeHandler/PipelineCompiler cleanly
-        }
+        await Promise.race([
+          execution,
+          new Promise<never>((_, reject) => {
+            timerId = setTimeout(() => {
+              console.error(
+                `[PLUGIN_TIMEOUT_ABORT] Event: ${String(eventName)}, Execution exceeded limit of: ${this.pluginTimeoutMs}ms`,
+              );
 
-        if (error.message === "PLUGIN_TIMEOUT") {
-          console.error(
-            `[PLUGIN_TIMEOUT_ABORT] Event: ${String(eventName)}, Execution exceeded limit of: ${this.pluginTimeoutMs}ms`,
-          );
-          throw error;
-        }
-
-        console.error(
-          `[Plugin Internal Error] Event: ${String(eventName)} |`,
-          error,
-        );
-        throw error;
+              reject(new Error("PLUGIN_TIMEOUT"));
+            }, this.pluginTimeoutMs);
+          }),
+        ]);
       } finally {
         if (timerId) clearTimeout(timerId);
       }

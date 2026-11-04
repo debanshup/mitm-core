@@ -181,8 +181,7 @@ export class TypedEventEmitter<T extends object> extends EventEmitter {
 
         // Convert synchronous throws into rejected promises,
         // allowing every listener to be invoked.
-        await Promise.resolve();
-        return fn(...args);
+        return Promise.resolve().then(() => fn(...args));
       }),
     );
     const errors: any[] = [];

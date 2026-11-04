@@ -164,17 +164,48 @@ export type PipelineAbortState = AbortMessage & {
   abortedAt: number;
 };
 
+/**
+ * Classifies how the proxy should treat a pipeline failure.
+ *
+ * - `recoverable`: The failure may allow processing to recover.
+ * - `terminal`: The failure prevents further processing.
+ */
 export type FailureDisposition = "recoverable" | "terminal";
 
+/**
+ * Identifies the scope affected by a pipeline failure.
+ *
+ * - `request`: The failure affects only the current request.
+ * - `connection`: The failure affects the underlying proxy connection.
+ */
 export type FailureScope = "request" | "connection";
 
+/**
+ * Records details about a failure encountered during pipeline execution.
+ *
+ * Includes the failure message, execution phase, timestamp,
+ * impact scope, and optional error metadata.
+ */
 export type PipelineFailureState = {
+  /** Human-readable description of the failure. */
   message: string;
+
+  /** Pipeline phase in which the failure occurred. */
   phase: Phase;
+
+  /** Timestamp when the failure was recorded. */
   failedAt: number;
+
+  /** Indicates whether the failure is recoverable or terminal. */
   disposition: FailureDisposition;
+
+  /** Indicates whether the failure affects a request or the entire connection. */
   scope: FailureScope;
+
+  /** Optional error code associated with the failure. */
   code?: string;
+
+  /** Original error or additional context associated with the failure. */
   cause?: unknown;
 };
 
@@ -215,7 +246,6 @@ export type RequestLifecycle = {
   /**
    * Identifies the next pipeline phase to execute.
    *
-   * @internal
    */
   nextPhase?: Phase;
 
@@ -233,6 +263,12 @@ export type RequestLifecycle = {
    */
   abort?: PipelineAbortState;
 
+  /**
+   * Metadata describing a failure encountered during pipeline execution.
+   *
+   * When present, it records the failure details and its impact on
+   * the current request or underlying connection.
+   */
   failure?: PipelineFailureState;
 };
 

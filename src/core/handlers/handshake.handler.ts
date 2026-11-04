@@ -12,7 +12,6 @@ import {
 } from "../event/proxy-events/proxyEvents";
 import { pluginEventManager } from "../event/plugin-events/pluginEvents";
 import { SocketGuard } from "../utils/SocketGuard";
-import { PipelineAbortSignal } from "../signals/pipelineAbortSignal";
 import { ContextManager } from "../scope/ContextManager";
 
 export class HandshakeHandler extends BaseHandler {
@@ -35,31 +34,19 @@ export class HandshakeHandler extends BaseHandler {
       }
       return;
     }
-    try {
-      await pluginEventManager.emitAsync("proxy:client-before-handshake", {
-        scope,
-      });
 
-      if (scope.lifecycle.isHijacked) return;
-    } catch (err) {
-      if (err instanceof PipelineAbortSignal) {
-        throw err;
-      }
-      console.error(err);
-    }
+    await pluginEventManager.emitAsync("proxy:client-before-handshake", {
+      scope,
+    });
 
-    try {
-      await proxyEventManager.emitAsync("connect:before", {
-        socket,
-        scope,
-      });
-    } catch (err) {
-      if (err instanceof PipelineAbortSignal) {
-        throw err;
-      }
-      if (!socket.destroyed) socket.destroy();
-      return;
-    }
+    if (scope.lifecycle.isHijacked) return;
+
+    await proxyEventManager.emitAsync("connect:before", {
+      socket,
+      scope,
+    });
+
+    if (scope.lifecycle.isHijacked) return;
 
     await new Promise<void>((resolve, reject) => {
       if (!socket.writable || socket.destroyed) return resolve();
@@ -77,24 +64,18 @@ export class HandshakeHandler extends BaseHandler {
       session.head = null;
     }
 
-    try {
-      await pluginEventManager.emitAsync("proxy:client-after-handshake", {
-        scope,
-      });
+    await pluginEventManager.emitAsync("proxy:client-after-handshake", {
+      scope,
+    });
 
-      if (scope.lifecycle.isHijacked) return;
+    if (scope.lifecycle.isHijacked) return;
 
-      await proxyEventManager.emitAsync("connect:established", {
-        socket,
-        scope,
-      });
-    } catch (err) {
-      if (err instanceof PipelineAbortSignal) {
-        throw err;
-      }
-      if (!socket.destroyed) socket.destroy();
-      return;
-    }
+    await proxyEventManager.emitAsync("connect:established", {
+      socket,
+      scope,
+    });
+
+    if (scope.lifecycle.isHijacked) return;
 
     let secureContext;
 

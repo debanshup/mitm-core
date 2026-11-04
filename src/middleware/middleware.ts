@@ -72,6 +72,7 @@ export class Middleware {
           scope,
           socket,
         });
+        if (scope.lifecycle.isHijacked) return;
 
         await Pipeline.run(scope);
       } catch (err) {
@@ -103,6 +104,7 @@ export class Middleware {
         });
         if (scope.lifecycle.isHijacked) return;
         await proxyEventManager.emitAsync("http:request", { scope });
+        if (scope.lifecycle.isHijacked) return;
 
         await Pipeline.run(scope);
       } catch (err) {
@@ -125,6 +127,7 @@ export class Middleware {
         });
         if (scope.lifecycle.isHijacked) return;
         await proxyEventManager.emitAsync("https:request", { scope });
+        if (scope.lifecycle.isHijacked) return;
 
         await Pipeline.run(scope);
       } catch (err) {
@@ -180,6 +183,7 @@ export class Middleware {
           scope,
           socket,
         });
+        if (scope.lifecycle.isHijacked) return;
         await Pipeline.run(wsScope);
       } catch (err) {
         if (err instanceof PipelineAbortSignal) {

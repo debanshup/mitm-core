@@ -106,6 +106,28 @@ export default class Pipeline {
     scope.lifecycle.nextPhase = undefined;
   }
 
+  private static handlePipelineAbort(
+    scope: RequestScope,
+    signal: PipelineAbortSignal,
+    phase: Phase,
+  ): void {
+    const { lifecycle } = scope;
+
+    lifecycle.abort = {
+      ...(signal.data ?? {}),
+      message: signal.message,
+      phase,
+      abortedAt: Date.now(),
+    };
+
+    lifecycle.nextPhase = undefined;
+
+    console.info(
+      "[Pipeline] Execution intentionally aborted:",
+      lifecycle.abort,
+    );
+  }
+
   public static compile() {
     this.pipelines = { tcp: [], handshake: [], request: [], response: [] };
     for (const HandlerClass of HANDLERS) {
@@ -144,16 +166,15 @@ export default class Pipeline {
         await WSOutboundBridge.execute(scope);
       } catch (error) {
         if (error instanceof PipelineAbortSignal) {
-          lifecycle.abort = {
-            ...(error.data ?? {}),
-            message: error.message,
-            phase: "request",
-            abortedAt: Date.now(),
-          };
-          return;
+          this.handlePipelineAbort(scope, error, "request");
+        } else {
+          this.handlePipelineFailure(
+            scope,
+            error,
+            "request",
+            "WSOutboundBridge",
+          );
         }
-
-        this.handlePipelineFailure(scope, error, "request", "WSOutboundBridge");
       }
 
       return;
@@ -232,89 +253,11 @@ export default class Pipeline {
           await step.handle(scope);
         } catch (error: any) {
           if (error instanceof PipelineAbortSignal) {
-            lifecycle.abort = {
-              ...(error.data ?? {}),
-              message: error.message,
-              phase: currentPhase,
-              abortedAt: Date.now(),
-            };
-
-            lifecycle.nextPhase = undefined;
-
-            console.info(
-              "[Pipeline] Execution intentionally aborted:",
-              lifecycle.abort,
-            );
-
+            this.handlePipelineAbort(scope, error, currentPhase);
             return;
           }
-          const errorDetails =
-            error !== null && typeof error === "object"
-              ? (error as { code?: unknown; message?: unknown })
-              : undefined;
-
-          const errorMessage =
-            error instanceof Error
-              ? error.message
-              : typeof errorDetails?.message === "string"
-                ? errorDetails.message
-                : String(error);
-
-          const failureCode =
-            typeof errorDetails?.code === "string"
-              ? errorDetails.code
-              : undefined;
-
-          const normalizedError =
-            error instanceof Error
-              ? error
-              : Object.assign(
-                  new Error(errorMessage),
-                  failureCode ? { code: failureCode } : {},
-                );
-
-          const res = scope.request.client.res;
-
-          const failureScope: FailureScope =
-            currentPhase === "tcp" ||
-            currentPhase === "handshake" ||
-            (!!res && res.headersSent)
-              ? "connection"
-              : "request";
-
-          lifecycle.failure = {
-            message: errorMessage,
-            phase: currentPhase,
-            failedAt: Date.now(),
-            disposition: "terminal",
-            scope: failureScope,
-            ...(failureCode ? { code: failureCode } : {}),
-            cause: error,
-          };
-
-          // Report a normalized Error instance.
-          reportProxyError(normalizedError);
-
-          const EXPECTED_ERROR_CODES = new Set([
-            "ECONNRESET",
-            "ETIMEDOUT",
-            "ECONNREFUSED",
-            "EPIPE",
-          ]);
-
-          const isExpectedDrop =
-            EXPECTED_ERROR_CODES.has(failureCode ?? "") ||
-            failureCode === "ERR_TLS_HANDSHAKE_TIMEOUT" ||
-            errorMessage.includes("TLS Handshake Timeout");
-
-          if (!isExpectedDrop) {
-            console.error(
-              `[Handler Error] ${step.name} failed during ${currentPhase}:`,
-              scope.request.target.originalHost,
-              errorMessage,
-            );
-          }
           this.handlePipelineFailure(scope, error, currentPhase, step.name);
+
           return;
         }
 

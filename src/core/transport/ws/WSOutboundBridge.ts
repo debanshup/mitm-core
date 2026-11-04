@@ -21,7 +21,9 @@ export class WSOutboundBridge {
     try {
       await operation();
     } catch (error) {
-      reportProxyError(error);
+      if (!(error instanceof PipelineAbortSignal)) {
+        reportProxyError(error);
+      }
 
       try {
         onError(error);
@@ -98,7 +100,18 @@ export class WSOutboundBridge {
         };
 
         try {
-          await pluginEventManager.emitAsync("proxy:client-upgrade", { scope });
+          try {
+            await pluginEventManager.emitAsync("proxy:client-upgrade", {
+              scope,
+            });
+          } catch (error) {
+            if (error instanceof PipelineAbortSignal) {
+              isolateTunnelTearDown(null, "Client_Upgrade_Aborted");
+              return;
+            }
+
+            throw error;
+          }
           if (scope.lifecycle.isHijacked) return;
           const proxyWSS = new WebSocketServer({
             noServer: true,
@@ -188,6 +201,7 @@ export class WSOutboundBridge {
                   code,
                   reason,
                 });
+                if (scope.lifecycle.isHijacked) return;
               } catch (error) {
                 if (error instanceof PipelineAbortSignal) {
                   throw error;
@@ -221,6 +235,7 @@ export class WSOutboundBridge {
                 code,
                 reason,
               });
+              if (scope.lifecycle.isHijacked) return;
             } catch (error) {
               if (error instanceof PipelineAbortSignal) {
                 throw error;
@@ -253,6 +268,7 @@ export class WSOutboundBridge {
                   direction: "client",
                   error: err,
                 });
+                if (scope.lifecycle.isHijacked) return;
               } catch (reportingError) {
                 if (err instanceof PipelineAbortSignal) {
                   throw err;
@@ -271,6 +287,7 @@ export class WSOutboundBridge {
                   direction: "upstream",
                   error: err,
                 });
+                if (scope.lifecycle.isHijacked) return;
               } catch (reportingError) {
                 if (err instanceof PipelineAbortSignal) {
                   throw err;
@@ -286,11 +303,9 @@ export class WSOutboundBridge {
 
           try {
             await proxyEventManager.emitAsync("ws:established", { scope });
+            if (scope.lifecycle.isHijacked) return;
           } catch (error) {
-            if (error instanceof PipelineAbortSignal) {
-              throw error;
-            }
-            console.error(error);
+            throw error;
           }
         } catch (bootstrapError: any) {
           if (bootstrapError instanceof PipelineAbortSignal) {
@@ -353,11 +368,9 @@ export class WSOutboundBridge {
         isBinary: rawIsBinary,
         scope,
       });
+      if (scope.lifecycle.isHijacked) return;
     } catch (error) {
-      if (error instanceof PipelineAbortSignal) {
-        throw error;
-      }
-      console.error(error);
+      throw error;
     }
   }
 
@@ -391,6 +404,7 @@ export class WSOutboundBridge {
         isBinary: rawIsBinary,
         scope,
       });
+      if (scope.lifecycle.isHijacked) return;
     } catch (error) {
       if (error instanceof PipelineAbortSignal) {
         throw error;
