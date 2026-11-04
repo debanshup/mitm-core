@@ -6,6 +6,7 @@ import { ResponseDispatcher } from "../../../../../src/core/transport/http1/resp
 import { pluginEventManager } from "../../../../../src/core/event/plugin-events/pluginEvents";
 import { ScopeMutator } from "../../../../../src/core/scope/ScopeMutator";
 import { Middleware } from "../../../../../src/middleware/middleware";
+import { PipelineAbortSignal } from "../../../../../src/core/signals/pipelineAbortSignal";
 
 const createResponse = () => {
   const response: any = {
@@ -384,6 +385,57 @@ describe("H1OutboundBridge", () => {
     }
   });
 
+  it("should skip default error handling when a plugin hijacks target-error", async () => {
+    const scope = createScope();
+    scope.lifecycle.isHijacked = false;
+
+    const originalFailPipeline = ScopeMutator.failPipeline;
+    const originalEmitAsync = pluginEventManager.emitAsync;
+
+    let failPipelineCalled = false;
+    let eventEmitted = false;
+
+    ScopeMutator.failPipeline = () => {
+      failPipelineCalled = true;
+    };
+
+    pluginEventManager.emitAsync = (async (eventName: any, payload: any) => {
+      if (eventName === "proxy:target-error") {
+        eventEmitted = true;
+        payload.scope.lifecycle.isHijacked = true;
+      }
+    }) as typeof pluginEventManager.emitAsync;
+
+    try {
+      H1OutboundBridge.execute(
+        scope,
+        createConfig(),
+        () => {
+          assert.fail("should not resolve");
+        },
+        () => {},
+      );
+
+      scope.request.upstream.req.emit(
+        "error",
+        new Error("target connection failed"),
+      );
+
+      await new Promise((resolve) => setImmediate(resolve));
+
+      assert.equal(eventEmitted, true);
+      assert.equal(scope.lifecycle.isHijacked, true);
+
+      // Core must not perform its default error handling.
+      assert.equal(failPipelineCalled, false);
+      assert.equal(scope.request.client.res.endCalled, false);
+      assert.equal(scope.request.client.res.statusCode, undefined);
+    } finally {
+      ScopeMutator.failPipeline = originalFailPipeline;
+      pluginEventManager.emitAsync = originalEmitAsync;
+    }
+  });
+
   it("should ignore an upstream error after the response was already handled", async () => {
     const scope = createScope();
 
@@ -566,6 +618,58 @@ describe("H1OutboundBridge", () => {
     } finally {
       ResponseDispatcher.handle = originalHandle;
       pluginEventManager.emitAsync = originalEmit;
+    }
+  });
+
+  it("should propagate PipelineAbortSignal from target-error plugin", async () => {
+    const scope = createScope();
+
+    const originalFailPipeline = ScopeMutator.failPipeline;
+    const originalEmitAsync = pluginEventManager.emitAsync;
+
+    const abortSignal = new PipelineAbortSignal({
+      message: "Request blocked by plugin",
+      reason: "plugin",
+      event: "proxy:target-error",
+    });
+
+    let failPipelineCalled = false;
+    let rejectedError: unknown;
+
+    ScopeMutator.failPipeline = () => {
+      failPipelineCalled = true;
+    };
+
+    pluginEventManager.emitAsync = (async () => {
+      throw abortSignal;
+    }) as typeof pluginEventManager.emitAsync;
+
+    try {
+      H1OutboundBridge.execute(
+        scope,
+        createConfig(),
+        () => {
+          assert.fail("should not resolve");
+        },
+        (err) => {
+          rejectedError = err;
+        },
+      );
+
+      scope.request.upstream.req.emit(
+        "error",
+        new Error("upstream connection failed"),
+      );
+
+      await new Promise((resolve) => setImmediate(resolve));
+
+      assert.equal(rejectedError, abortSignal);
+      assert.equal(failPipelineCalled, false);
+      assert.equal(scope.request.client.res.endCalled, false);
+      assert.equal(scope.request.client.res.statusCode, undefined);
+    } finally {
+      ScopeMutator.failPipeline = originalFailPipeline;
+      pluginEventManager.emitAsync = originalEmitAsync;
     }
   });
 });

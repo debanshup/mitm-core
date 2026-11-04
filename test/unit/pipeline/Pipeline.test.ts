@@ -8,6 +8,8 @@ import Pipeline from "../../../src/core/pipelines/PipelineCompiler";
 import { PipelineAbortSignal } from "../../../src/core/signals/pipelineAbortSignal";
 import { Duplex } from "node:stream";
 import type { ProxyConfig } from "../../../src/config.registry";
+import { WSOutboundBridge } from "../../../src/core/transport/ws/WSOutboundBridge";
+import type { Phase } from "../../../src/phase/Phase";
 
 const config = {} as ProxyConfig;
 
@@ -1085,5 +1087,100 @@ describe("Pipeline", () => {
       assert.deepEqual(executionOrder, ["request"]);
       assert.equal(scope.lifecycle.nextPhase, undefined);
     });
+  });
+});
+
+describe("PipelineCompiler - PipelineAbortSignal", () => {
+  const phases: Phase[] = ["tcp", "handshake", "request", "response"];
+
+  afterEach(() => {
+    for (const phase of phases) {
+      Pipeline.setPipelineForTest(phase, []);
+    }
+  });
+
+  for (const phase of phases) {
+    it(`should handle PipelineAbortSignal during ${phase} phase`, async () => {
+      const signal = new PipelineAbortSignal({
+        message: `Aborted during ${phase}`,
+        reason: "plugin",
+        event: "test:abort",
+      });
+
+      const scope: any = {
+        request: {
+          client: {},
+          target: {},
+        },
+        lifecycle: {
+          nextPhase: phase,
+          abort: undefined,
+          failure: undefined,
+          isHijacked: false,
+        },
+      };
+
+      Pipeline.setPipelineForTest(phase, [
+        {
+          name: "AbortHandler",
+          handle: async () => {
+            throw signal;
+          },
+        },
+      ] as any);
+
+      await Pipeline.run(scope);
+
+      assert.equal(scope.lifecycle.abort.message, signal.message);
+      assert.equal(scope.lifecycle.abort.reason, "plugin");
+      assert.equal(scope.lifecycle.abort.event, "test:abort");
+      assert.equal(scope.lifecycle.abort.phase, phase);
+
+      assert.equal(scope.lifecycle.failure, undefined);
+      assert.equal(scope.lifecycle.nextPhase, undefined);
+    });
+  }
+
+  it("should handle PipelineAbortSignal from WebSocket upgrade", async () => {
+    const signal = new PipelineAbortSignal({
+      message: "WebSocket upgrade aborted",
+      reason: "plugin",
+      event: "test:ws-abort",
+    });
+
+    const scope: any = {
+      request: {
+        client: {},
+        target: {},
+        webSocket: {
+          isUpgraded: false,
+        },
+      },
+      lifecycle: {
+        nextPhase: "request",
+        abort: undefined,
+        failure: undefined,
+        isHijacked: false,
+      },
+    };
+
+    const originalExecute = WSOutboundBridge.execute;
+
+    WSOutboundBridge.execute = async () => {
+      throw signal;
+    };
+
+    try {
+      await Pipeline.run(scope);
+
+      assert.equal(scope.lifecycle.abort.message, signal.message);
+      assert.equal(scope.lifecycle.abort.phase, "request");
+      assert.equal(scope.lifecycle.abort.event, "test:ws-abort");
+
+      assert.equal(scope.lifecycle.failure, undefined);
+      assert.equal(scope.lifecycle.nextPhase, undefined);
+    } finally {
+      WSOutboundBridge.execute = originalExecute;
+    }
   });
 });

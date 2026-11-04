@@ -240,7 +240,7 @@ describe("StreamingResponseHandler", () => {
         "hello world",
       );
       assert.equal(cacheProcessor.committed, true);
-      assert.equal(cleanupCalled, true);
+      assert.equal(cleanupCalled, false);
       assert.equal(finishCalled, true);
     } finally {
       ScopeMutator.finishPipeline = originalFinishPipeline;
