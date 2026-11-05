@@ -22,9 +22,10 @@ import type {
   RequestLifecycle,
   SessionContext,
   WebSocketContext,
+  PipelineFailureState,
 } from "./core/scope/types";
 import { PipelineAbortSignal } from "./core/signals/pipelineAbortSignal";
-import type { AbortMessage } from "./core/signals/types";
+import type { AbortMessage, AbortReason } from "./core/signals/types";
 import type { IProxy } from "./lib/Proxy";
 import { Proxy } from "./lib/Proxy";
 
@@ -46,4 +47,6 @@ export type {
   IRuleParser,
   WatchableRuleFile,
   AbortMessage,
+  AbortReason,
+  PipelineFailureState,
 };
