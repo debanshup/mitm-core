@@ -39,9 +39,14 @@ export class Middleware {
         await proxyEventManager.emitAsync("connection:open", { socket });
       } catch (err) {
         if (err instanceof PipelineAbortSignal) {
-          console.info(err.name, err.data);
+          console.info(
+            "[Middleware] TCP connection intentionally aborted:",
+            err.message,
+            err.data,
+          );
+          return;
         }
-        console.error(`[Middleware Fatal] Pipeline crash on CONNECT:`, err);
+        console.error(`[Middleware Fatal] Pipeline crash on TCP:`, err);
       }
     };
 
@@ -77,12 +82,17 @@ export class Middleware {
         await Pipeline.run(scope);
       } catch (err) {
         if (err instanceof PipelineAbortSignal) {
-          console.info(err.name, err.data);
-        } else {
-          console.error(`[Middleware Fatal] Pipeline crash on CONNECT:`, err);
-          ScopeMutator.failPipeline(scope);
-          if (!socket.destroyed) socket.destroy();
+          scope.lifecycle.abort = {
+            ...(err.data ?? {}),
+            message: err.message,
+            phase: "handshake",
+            abortedAt: Date.now(),
+          };
+          return;
         }
+        console.error(`[Middleware Fatal] Pipeline crash on CONNECT:`, err);
+        ScopeMutator.failPipeline(scope);
+        if (!socket.destroyed) socket.destroy();
       }
     };
 
@@ -109,12 +119,17 @@ export class Middleware {
         await Pipeline.run(scope);
       } catch (err) {
         if (err instanceof PipelineAbortSignal) {
-          console.info(err.name, err.data);
-        } else {
-          console.error(`[Middleware Fatal] Pipeline crash on CONNECT:`, err);
-          ScopeMutator.failPipeline(scope);
-          if (!res.destroyed) res.destroy();
+          scope.lifecycle.abort = {
+            ...(err.data ?? {}),
+            message: err.message,
+            phase: "request",
+            abortedAt: Date.now(),
+          };
+          return;
         }
+        console.error(`[Middleware Fatal] Pipeline crash on HTTP:`, err);
+        ScopeMutator.failPipeline(scope);
+        if (!res.destroyed) res.destroy();
       }
     };
 
@@ -132,13 +147,18 @@ export class Middleware {
         await Pipeline.run(scope);
       } catch (err) {
         if (err instanceof PipelineAbortSignal) {
-          console.info(err.name, err.data);
-        } else {
-          console.error(`[Middleware Fatal] Pipeline crash on CONNECT:`, err);
-          ScopeMutator.failPipeline(scope);
-          if (!scope.request.client.res?.destroyed)
-            scope.request.client.res?.destroy();
+          scope.lifecycle.abort = {
+            ...(err.data ?? {}),
+            message: err.message,
+            phase: "request",
+            abortedAt: Date.now(),
+          };
+          return;
         }
+        console.error(`[Middleware Fatal] Pipeline crash on HTTPS:`, err);
+        ScopeMutator.failPipeline(scope);
+        if (!scope.request.client.res?.destroyed)
+          scope.request.client.res?.destroy();
       }
     };
 
@@ -153,8 +173,27 @@ export class Middleware {
       if (!success) {
         return;
       }
-      await pluginEventManager.emitAsync("proxy:target-response", { scope });
-      if (scope.lifecycle.isHijacked) return;
+      try {
+        await pluginEventManager.emitAsync("proxy:target-response", { scope });
+        if (scope.lifecycle.isHijacked) return;
+      } catch (err) {
+        if (err instanceof PipelineAbortSignal) {
+          scope.lifecycle.abort = {
+            ...(err.data ?? {}),
+            message: err.message,
+            phase: "response",
+            abortedAt: Date.now(),
+          };
+          return;
+        }
+        console.error(
+          `[Middleware Fatal] Pipeline crash on UPSTREAM_RESPONSE:`,
+          err,
+        );
+        ScopeMutator.failPipeline(scope);
+        if (!scope.request.client.res?.destroyed)
+          scope.request.client.res?.destroy();
+      }
     };
 
     const onWsUpgrade = async ({
@@ -187,12 +226,17 @@ export class Middleware {
         await Pipeline.run(wsScope);
       } catch (err) {
         if (err instanceof PipelineAbortSignal) {
-          throw err;
-        } else {
-          console.error(`[Middleware Fatal] Pipeline crash on CONNECT:`, err);
-          ScopeMutator.failPipeline(scope);
-          if (!socket.destroyed) socket.destroy();
+          scope.lifecycle.abort = {
+            ...(err.data ?? {}),
+            message: err.message,
+            phase: "request",
+            abortedAt: Date.now(),
+          };
+          return;
         }
+        console.error(`[Middleware Fatal] Pipeline crash on WS:`, err);
+        ScopeMutator.failPipeline(scope);
+        if (!socket.destroyed) socket.destroy();
       }
     };
 

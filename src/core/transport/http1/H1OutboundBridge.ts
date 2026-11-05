@@ -128,13 +128,17 @@ export class H1OutboundBridge {
         await pluginEventManager.emitAsync("proxy:target-error", {
           scope,
         });
-      } catch (pluginError) {
-        if (pluginError instanceof PipelineAbortSignal) {
-          reject(pluginError);
+      } catch (pluginErr) {
+        if (pluginErr instanceof PipelineAbortSignal) {
+          scope.lifecycle.abort = {
+            ...(pluginErr.data ?? {}),
+            message: pluginErr.message,
+            phase: "request",
+            abortedAt: Date.now(),
+          };
+          reject(pluginErr);
           return;
         }
-
-        reportProxyError(pluginError);
       }
 
       if (scope.lifecycle.isHijacked) {

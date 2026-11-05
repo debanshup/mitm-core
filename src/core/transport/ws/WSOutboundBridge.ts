@@ -300,13 +300,8 @@ export class WSOutboundBridge {
           });
 
           // emit proxy event
-
-          try {
-            await proxyEventManager.emitAsync("ws:established", { scope });
-            if (scope.lifecycle.isHijacked) return;
-          } catch (error) {
-            throw error;
-          }
+          await proxyEventManager.emitAsync("ws:established", { scope });
+          if (scope.lifecycle.isHijacked) return;
         } catch (bootstrapError: any) {
           if (bootstrapError instanceof PipelineAbortSignal) {
             throw bootstrapError;
@@ -370,7 +365,11 @@ export class WSOutboundBridge {
       });
       if (scope.lifecycle.isHijacked) return;
     } catch (error) {
-      throw error;
+      if (error instanceof PipelineAbortSignal) {
+        throw error;
+      }
+
+      reportProxyError(error);
     }
   }
 
@@ -409,7 +408,7 @@ export class WSOutboundBridge {
       if (error instanceof PipelineAbortSignal) {
         throw error;
       }
-      console.error(error);
+      reportProxyError(error);
     }
   }
 }

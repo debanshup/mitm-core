@@ -13,6 +13,7 @@ import {
 import { pluginEventManager } from "../event/plugin-events/pluginEvents";
 import { SocketGuard } from "../utils/SocketGuard";
 import { ContextManager } from "../scope/ContextManager";
+import { PipelineAbortSignal } from "../signals/pipelineAbortSignal";
 
 export class HandshakeHandler extends BaseHandler {
   readonly phase = "handshake";
@@ -35,19 +36,27 @@ export class HandshakeHandler extends BaseHandler {
       return;
     }
 
-    await pluginEventManager.emitAsync("proxy:client-before-handshake", {
-      scope,
-    });
+    try {
+      await pluginEventManager.emitAsync("proxy:client-before-handshake", {
+        scope,
+      });
 
-    if (scope.lifecycle.isHijacked) return;
+      if (scope.lifecycle.isHijacked) return;
 
-    await proxyEventManager.emitAsync("connect:before", {
-      socket,
-      scope,
-    });
+      await proxyEventManager.emitAsync("connect:before", {
+        socket,
+        scope,
+      });
 
-    if (scope.lifecycle.isHijacked) return;
-
+      if (scope.lifecycle.isHijacked) return;
+    } catch (err) {
+      if (err instanceof PipelineAbortSignal) {
+        throw err; // PipelineCompiler.run() catches this and calls handlePipelineAbort()
+      }
+      // Non-abort plugin error: destroy socket and bail — handler must not continue.
+      if (!socket.destroyed) socket.destroy();
+      return;
+    }
     await new Promise<void>((resolve, reject) => {
       if (!socket.writable || socket.destroyed) return resolve();
       socket.write("HTTP/1.1 200 Connection Established\r\n\r\n", (err) => {
@@ -64,24 +73,30 @@ export class HandshakeHandler extends BaseHandler {
       session.head = null;
     }
 
-    await pluginEventManager.emitAsync("proxy:client-after-handshake", {
-      scope,
-    });
+    try {
+      await pluginEventManager.emitAsync("proxy:client-after-handshake", {
+        scope,
+      });
 
-    if (scope.lifecycle.isHijacked) return;
+      if (scope.lifecycle.isHijacked) return;
 
-    await proxyEventManager.emitAsync("connect:established", {
-      socket,
-      scope,
-    });
+      await proxyEventManager.emitAsync("connect:established", {
+        socket,
+        scope,
+      });
 
-    if (scope.lifecycle.isHijacked) return;
-
+      if (scope.lifecycle.isHijacked) return;
+    } catch (err) {
+      if (err instanceof PipelineAbortSignal) {
+        throw err; // PipelineCompiler.run() catches this and calls handlePipelineAbort()
+      }
+      // Non-abort plugin error: destroy socket and bail — handler must not continue.
+      if (!socket.destroyed) socket.destroy();
+      return;
+    }
     let secureContext;
 
     const customLeaf = session.customCertificates?.get(host);
-
-    // console.info("custom leaf:",customLeaf)
 
     if (customLeaf) {
       secureContext = tls.createSecureContext(customLeaf);
