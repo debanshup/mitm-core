@@ -200,6 +200,8 @@ export class PluginEventManager extends TypedEventEmitter<PluginEventMap> {
 
       const execution = Promise.resolve().then(() => fn(...args));
 
+      execution.catch(() => {});
+
       if (this.pluginTimeoutMs <= 0) {
         await execution;
         continue;

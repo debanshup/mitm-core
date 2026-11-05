@@ -97,7 +97,6 @@ export class ContextManager {
       this.connectionIndex.set(ctx.connectionId, ctx);
 
       const cleanup = () => {
-        // console.info("clean up root ctx");
         this.connectionIndex.delete(ctx!.connectionId);
       };
 

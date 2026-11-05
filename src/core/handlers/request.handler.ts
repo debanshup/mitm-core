@@ -13,7 +13,6 @@ export class RequestHandler extends BaseHandler {
 
     if (session.protocol.httpVersion === "h1") {
       if (!request.client.req) {
-        console.info("REQ not found!");
         return;
       }
 

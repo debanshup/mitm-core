@@ -28,8 +28,6 @@ export class ResponseDispatcher {
       statusCode === 101 &&
       upstreamRes.headers["upgrade"]?.toLowerCase() === "websocket";
 
-    // console.info(isWebSocketUpgrade, upstreamRes.statusCode, scope.request.target.url)
-
     const isNoContent =
       !isWebSocketUpgrade &&
       (statusCode === 204 ||

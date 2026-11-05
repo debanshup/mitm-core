@@ -28,7 +28,6 @@ export class ResponseCache {
     return this.cache.get(key);
   }
   static set(key: string, value: CachedResponse) {
-    // console.info(key);
     this.cache.set(key, value);
   }
   static generateKey(req: IncomingMessage) {
