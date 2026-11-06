@@ -6,6 +6,7 @@ import { pluginEventManager } from "../../event/plugin-events/pluginEvents";
 import { getConfig } from "../../../config.registry";
 import { reportProxyError } from "../../event/proxy-events/proxyEvents";
 import { PipelineAbortSignal } from "../../signals/pipelineAbortSignal";
+import { HeaderResolver } from "../../utils/HeaderResolver";
 
 export class UpstreamInitiator {
   private static httpsAgent = new https.Agent({
@@ -67,17 +68,17 @@ export class UpstreamInitiator {
     try {
       scope.lifecycle.timestamps.upstreamSentAt = Date.now();
 
+      const baseHeaders = HeaderResolver.resolveRequestHeaders(scope);
+      baseHeaders["host"] = targetUrl.host;
+      baseHeaders["connection"] = "keep-alive";
+
       upstream = requestModule.request({
         host: targetUrl.hostname,
         port: targetUrl.port || (isHTTPS ? 443 : 80),
         servername: isHTTPS ? targetUrl.hostname : undefined,
         method: clientReq.method,
         path: targetUrl.pathname + targetUrl.search,
-        headers: {
-          ...clientReq.headers,
-          host: targetUrl.host,
-          connection: "keep-alive",
-        },
+        headers: baseHeaders,
         agent,
         timeout: getConfig().upstreamTimeoutMs,
         maxHeaderSize: 128 * 1024,

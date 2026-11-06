@@ -70,6 +70,26 @@ export type ProxyConfig = {
    * @default 10000
    */
   pluginTimeoutMs?: number;
+
+  /**
+   * Defines global HTTP header customization rules.
+   *
+   * These rules are applied to all requests and responses handled by the proxy.
+   * Per-request overrides take precedence over global overrides.
+   */
+  globalHeaderOverrides?: {
+    /** Headers to add or override in upstream HTTP requests. */
+    requestOverrides?: Record<string, string | string[]>;
+
+    /** Headers to add or override in responses sent to clients. */
+    responseOverrides?: Record<string, string | string[]>;
+
+    /** Request headers to remove before forwarding requests upstream. */
+    requestHeadersToRemove?: string[];
+
+    /** Response headers to remove before sending responses to clients. */
+    responseHeadersToRemove?: string[];
+  };
 };
 
 /**

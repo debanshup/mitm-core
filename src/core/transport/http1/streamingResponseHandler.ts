@@ -6,6 +6,7 @@ import { ScopeMutator } from "../../scope/ScopeMutator";
 import { PassThrough } from "stream";
 import { pipeline } from "stream/promises";
 import { RES_HOP_HEADERS } from "./responseDispatcher";
+import { HeaderResolver } from "../../utils/HeaderResolver";
 
 export class StreamingResponseHandler {
   static async handle(
@@ -23,13 +24,22 @@ export class StreamingResponseHandler {
     }
 
     if (!res.headersSent) {
-      const cleanedHeaders: Record<string, string | string[]> = {};
+      const rawCleanedHeaders: Record<string, string | string[]> = {};
       for (const [key, value] of Object.entries(upstreamRes.headers)) {
         if (value !== undefined && !RES_HOP_HEADERS.has(key.toLowerCase())) {
-          cleanedHeaders[key] = value;
+          rawCleanedHeaders[key] = value;
         }
       }
-      res.writeHead(upstreamRes.statusCode || 200, cleanedHeaders);
+      const finalResHeaders = HeaderResolver.resolveResponseHeaders(
+        scope,
+        rawCleanedHeaders,
+      );
+
+      if (finalResHeaders["content-length"] === undefined) {
+        finalResHeaders["transfer-encoding"] = "chunked";
+      }
+
+      res.writeHead(upstreamRes.statusCode || 200, finalResHeaders);
     }
 
     const teeStream = new PassThrough({ highWaterMark: 1024 * 1024 });

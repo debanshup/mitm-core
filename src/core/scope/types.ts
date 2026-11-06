@@ -11,6 +11,25 @@ import type { WebSocket as NodeWebSocket } from "ws";
 import type { AbortMessage } from "../signals/types";
 
 /**
+ * Defines request-specific HTTP header overrides and removal rules.
+ *
+ * These settings take precedence over global header configuration.
+ */
+export type ExplicitHeaderOverrides = {
+  /** Headers to add or override in the outgoing upstream request. */
+  requestOverrides?: Record<string, string | string[]>;
+
+  /** Headers to add or override in the response sent to the client. */
+  responseOverrides?: Record<string, string | string[]>;
+
+  /** Request headers to remove before forwarding to the upstream server. */
+  requestHeadersToRemove?: string[];
+
+  /** Response headers to remove before sending them to the client. */
+  responseHeadersToRemove?: string[];
+};
+
+/**
  * Contains connection-level information shared across requests handled
  * over the same underlying proxy connection.
  *
@@ -125,6 +144,13 @@ export type RequestContext = {
    * this field; otherwise, it is undefined.
    */
   webSocket?: WebSocketContext;
+
+  /**
+   * Optional per-request header customization rules.
+   *
+   * Overrides global header settings for this transaction.
+   */
+  explicitHeaderOverrides?: ExplicitHeaderOverrides;
 };
 
 /**
