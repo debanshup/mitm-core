@@ -7,11 +7,12 @@ import { connectionEvents } from "../../event/connection-events/connectionEvents
 import { reportProxyError } from "../../event/proxy-events/proxyEvents";
 
 const HOP_HEADERS = new Set([
+  "proxy-connection",
+  "proxy-authenticate",
+  "proxy-authorization",
   "connection",
   "keep-alive",
   "transfer-encoding",
-  "proxy-authenticate",
-  "proxy-authorization",
   "te",
   "trailer",
   "upgrade",
@@ -20,7 +21,6 @@ const HOP_HEADERS = new Set([
   "x-forwarded-host",
   "x-forwarded-proto",
   "forwarded",
-  "proxy-connection",
 ]);
 
 export class H1InboundBridge {
