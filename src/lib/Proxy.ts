@@ -355,6 +355,7 @@ export class Proxy extends TypedEventEmitter<ProxyEventMap> implements IProxy {
       handshakeTimeoutMs: options.handshakeTimeoutMs ?? 10_000,
       upstreamTimeoutMs: options.upstreamTimeoutMs ?? 30_000,
       pluginTimeoutMs: options.pluginTimeoutMs ?? 10_000,
+      globalHeaderOverrides: {},
     };
 
     pluginEventManager.setPluginTimeout(this.config.pluginTimeoutMs);

@@ -14,6 +14,7 @@ export type AbortMessage = {
   /** Human-readable explanation for stopping pipeline execution. */
   message: string;
 
+  /** Category of the abort request. */
   reason?: AbortReason;
 
   /**

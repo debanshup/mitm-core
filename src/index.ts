@@ -7,7 +7,11 @@
  * Internal implementation details, including event managers, emitters,
  * handlers, and configuration registries, are not exported from this module.
  */
-import type { ProxyConfig, ProxyOptions } from "./config.registry";
+import type {
+  ProxyConfig,
+  ProxyOptions,
+  GlobalHeaderOverrides,
+} from "./config.registry";
 import type {
   PluginEventMap,
   WsMessageContext,
@@ -23,6 +27,10 @@ import type {
   SessionContext,
   WebSocketContext,
   PipelineFailureState,
+  ExplicitHeaderOverrides,
+  FailureDisposition,
+  FailureScope,
+  PipelineAbortState,
 } from "./core/scope/types";
 import { PipelineAbortSignal } from "./core/signals/pipelineAbortSignal";
 import type { AbortMessage, AbortReason } from "./core/signals/types";
@@ -49,4 +57,9 @@ export type {
   AbortMessage,
   AbortReason,
   PipelineFailureState,
+  PipelineAbortState,
+  FailureDisposition,
+  FailureScope,
+  GlobalHeaderOverrides,
+  ExplicitHeaderOverrides,
 };

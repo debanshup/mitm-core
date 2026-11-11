@@ -77,19 +77,27 @@ export type ProxyConfig = {
    * These rules are applied to all requests and responses handled by the proxy.
    * Per-request overrides take precedence over global overrides.
    */
-  globalHeaderOverrides?: {
-    /** Headers to add or override in upstream HTTP requests. */
-    requestOverrides?: Record<string, string | string[]>;
+  globalHeaderOverrides?: GlobalHeaderOverrides;
+};
 
-    /** Headers to add or override in responses sent to clients. */
-    responseOverrides?: Record<string, string | string[]>;
+/**
+ * Defines HTTP header customization rules.
+ *
+ * These rules are applied to all requests and responses handled by the proxy.
+ * Per-request overrides take precedence over global overrides.
+ */
+export type GlobalHeaderOverrides = {
+  /** Headers to add or override in upstream HTTP requests. */
+  requestOverrides?: Record<string, string | string[]>;
 
-    /** Request headers to remove before forwarding requests upstream. */
-    requestHeadersToRemove?: string[];
+  /** Headers to add or override in responses sent to clients. */
+  responseOverrides?: Record<string, string | string[]>;
 
-    /** Response headers to remove before sending responses to clients. */
-    responseHeadersToRemove?: string[];
-  };
+  /** Request headers to remove before forwarding requests upstream. */
+  requestHeadersToRemove?: string[];
+
+  /** Response headers to remove before sending responses to clients. */
+  responseHeadersToRemove?: string[];
 };
 
 /**
