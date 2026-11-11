@@ -1087,6 +1087,86 @@ describe("Pipeline", () => {
       assert.deepEqual(executionOrder, ["request"]);
       assert.equal(scope.lifecycle.nextPhase, undefined);
     });
+
+    it("should continue executing handlers when a failure is marked as recoverable", async () => {
+      const scope = createScope();
+      const executionOrder: string[] = [];
+
+      class RecoverableHandler extends BaseHandler {
+        readonly phase = "request" as const;
+        readonly config = config;
+        async handle(scope: RequestScope): Promise<void> {
+          executionOrder.push("recoverable-handler");
+          // Setting a recoverable failure does not halt the pipeline
+          scope.lifecycle.failure = {
+            message: "Non-critical lookup failed",
+            phase: "request",
+            failedAt: Date.now(),
+            disposition: "recoverable",
+            scope: "request",
+          };
+        }
+      }
+
+      class NextHandler extends BaseHandler {
+        readonly phase = "request" as const;
+        readonly config = config;
+        async handle(_scope: RequestScope): Promise<void> {
+          executionOrder.push("next-handler");
+        }
+      }
+
+      Pipeline.setPipelineForTest("request", [
+        new RecoverableHandler(),
+        new NextHandler(),
+      ]);
+
+      await Pipeline.run(scope);
+
+      // The next handler should execute because the failure was recoverable
+      assert.deepEqual(executionOrder, ["recoverable-handler", "next-handler"]);
+      assert.equal(scope.lifecycle.failure?.disposition, "recoverable");
+    });
+
+    it("should halt execution immediately if a handler sets a terminal failure without throwing", async () => {
+      const scope = createScope();
+      const executionOrder: string[] = [];
+
+      class TerminalHandler extends BaseHandler {
+        readonly phase = "request" as const;
+        readonly config = config;
+        async handle(scope: RequestScope): Promise<void> {
+          executionOrder.push("terminal-handler");
+          scope.lifecycle.failure = {
+            message: "Critical error occurred",
+            phase: "request",
+            failedAt: Date.now(),
+            disposition: "terminal", // Manually setting terminal
+            scope: "request",
+          };
+        }
+      }
+
+      class ShouldNotRunHandler extends BaseHandler {
+        readonly phase = "request" as const;
+        readonly config = config;
+        async handle(_scope: RequestScope): Promise<void> {
+          executionOrder.push("should-not-run");
+        }
+      }
+
+      Pipeline.setPipelineForTest("request", [
+        new TerminalHandler(),
+        new ShouldNotRunHandler(),
+      ]);
+
+      await Pipeline.run(scope);
+
+      // Execution halts immediately after the terminal failure is set
+      assert.deepEqual(executionOrder, ["terminal-handler"]);
+      assert.equal(scope.lifecycle.failure?.disposition, "terminal");
+      assert.equal(scope.lifecycle.nextPhase, undefined);
+    });
   });
 });
 

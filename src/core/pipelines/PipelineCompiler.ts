@@ -154,7 +154,11 @@ export default class Pipeline {
       return;
     }
 
-    if (lifecycle.abort || lifecycle.failure || lifecycle.isHijacked) {
+    if (
+      lifecycle.abort ||
+      (lifecycle.failure && lifecycle.failure.disposition === "terminal") ||
+      lifecycle.isHijacked
+    ) {
       lifecycle.nextPhase = undefined;
       return;
     }
@@ -183,7 +187,11 @@ export default class Pipeline {
     const MAX_JUMPS = 10;
 
     while (lifecycle.nextPhase) {
-      if (lifecycle.abort || lifecycle.failure || lifecycle.isHijacked) {
+      if (
+        lifecycle.abort ||
+        (lifecycle.failure && lifecycle.failure.disposition === "terminal") ||
+        lifecycle.isHijacked
+      ) {
         lifecycle.nextPhase = undefined;
         return;
       }
@@ -261,7 +269,10 @@ export default class Pipeline {
           return;
         }
 
-        if (lifecycle.isHijacked) {
+        if (
+          lifecycle.isHijacked ||
+          (lifecycle.failure && lifecycle.failure.disposition === "terminal")
+        ) {
           lifecycle.nextPhase = undefined;
           return;
         }
