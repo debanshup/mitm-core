@@ -48,3 +48,6 @@ Thumbs.db
 
 # Profiling
 *.cpuprofile
+
+# local tools
+.local/
