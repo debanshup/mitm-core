@@ -4,7 +4,7 @@
 
 > **AbortMessage** = `object`
 
-Defined in: [src/core/signals/types.ts:10](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/core/signals/types.ts#L10)
+Defined in: [src/core/signals/types.ts:13](https://github.com/debanshup/mitm-core/blob/2440c2af08119a654bfebe7a287bbaee1753399e/src/core/signals/types.ts#L13)
 
 Describes the context associated with an intentional pipeline abort.
 
@@ -13,11 +13,21 @@ and the event being processed when the abort was requested.
 
 ## Properties
 
-### event
+### cause?
 
-> **event**: keyof [`ProxyEventMap`](../interfaces/ProxyEventMap.md) \| `string`
+> `optional` **cause?**: `unknown`
 
-Defined in: [src/core/signals/types.ts:18](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/core/signals/types.ts#L18)
+Defined in: [src/core/signals/types.ts:31](https://github.com/debanshup/mitm-core/blob/2440c2af08119a654bfebe7a287bbaee1753399e/src/core/signals/types.ts#L31)
+
+Captured error context or lower-level exception metadata.
+
+***
+
+### event?
+
+> `optional` **event?**: keyof [`ProxyEventMap`](../interfaces/ProxyEventMap.md) \| `string`
+
+Defined in: [src/core/signals/types.ts:28](https://github.com/debanshup/mitm-core/blob/2440c2af08119a654bfebe7a287bbaee1753399e/src/core/signals/types.ts#L28)
 
 Event associated with the pipeline abort.
 
@@ -27,16 +37,26 @@ Event associated with the pipeline abort.
 
 > **message**: `string`
 
-Defined in: [src/core/signals/types.ts:12](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/core/signals/types.ts#L12)
+Defined in: [src/core/signals/types.ts:15](https://github.com/debanshup/mitm-core/blob/2440c2af08119a654bfebe7a287bbaee1753399e/src/core/signals/types.ts#L15)
 
 Human-readable explanation for stopping pipeline execution.
 
 ***
 
-### plugin
+### plugin?
 
-> **plugin**: [`BasePlugin`](../classes/BasePlugin.md)\<`any`\>
+> `optional` **plugin?**: [`BasePlugin`](../classes/BasePlugin.md)\<`any`\>
 
-Defined in: [src/core/signals/types.ts:15](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/core/signals/types.ts#L15)
+Defined in: [src/core/signals/types.ts:23](https://github.com/debanshup/mitm-core/blob/2440c2af08119a654bfebe7a287bbaee1753399e/src/core/signals/types.ts#L23)
 
 Plugin associated with the abort request.
+
+***
+
+### reason?
+
+> `optional` **reason?**: [`AbortReason`](AbortReason.md)
+
+Defined in: [src/core/signals/types.ts:18](https://github.com/debanshup/mitm-core/blob/2440c2af08119a654bfebe7a287bbaee1753399e/src/core/signals/types.ts#L18)
+
+Category of the abort request.

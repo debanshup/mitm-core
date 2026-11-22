@@ -1,4 +1,4 @@
-# mitm-core v0.0.1
+# mitm-core v0.0.2
 
 ## Classes
 
@@ -19,6 +19,9 @@
 ## Type Aliases
 
 - [AbortMessage](type-aliases/AbortMessage.md)
+- [AbortReason](type-aliases/AbortReason.md)
+- [GlobalHeaderOverrides](type-aliases/GlobalHeaderOverrides.md)
+- [PipelineFailureState](type-aliases/PipelineFailureState.md)
 - [PluginPayload](type-aliases/PluginPayload.md)
 - [ProxyConfig](type-aliases/ProxyConfig.md)
 - [ProxyOptions](type-aliases/ProxyOptions.md)

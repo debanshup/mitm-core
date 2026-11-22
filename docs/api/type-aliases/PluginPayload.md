@@ -4,7 +4,7 @@
 
 > **PluginPayload**\<`K`\> = [`PluginEventMap`](../interfaces/PluginEventMap.md)\[`K`\] *extends* `unknown`[] ? [`PluginEventMap`](../interfaces/PluginEventMap.md)\[`K`\]\[`0`\] : [`PluginEventMap`](../interfaces/PluginEventMap.md)\[`K`\]
 
-Defined in: [src/core/plugin/BasePlugin.ts:13](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/core/plugin/BasePlugin.ts#L13)
+Defined in: [src/core/plugin/BasePlugin.ts:13](https://github.com/debanshup/mitm-core/blob/2440c2af08119a654bfebe7a287bbaee1753399e/src/core/plugin/BasePlugin.ts#L13)
 
 Extracts the payload type associated with a plugin event.
 

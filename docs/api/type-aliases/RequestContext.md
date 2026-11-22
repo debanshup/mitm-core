@@ -4,7 +4,7 @@
 
 > **RequestContext** = `object`
 
-Defined in: [src/core/scope/types.ts:74](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/core/scope/types.ts#L74)
+Defined in: [src/core/scope/types.ts:94](https://github.com/debanshup/mitm-core/blob/2440c2af08119a654bfebe7a287bbaee1753399e/src/core/scope/types.ts#L94)
 
 Contains the data associated with an individual request-response
 transaction passing through the proxy.
@@ -19,7 +19,7 @@ is available when the transaction involves an upgrade.
 
 > **client**: `object`
 
-Defined in: [src/core/scope/types.ts:79](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/core/scope/types.ts#L79)
+Defined in: [src/core/scope/types.ts:99](https://github.com/debanshup/mitm-core/blob/2440c2af08119a654bfebe7a287bbaee1753399e/src/core/scope/types.ts#L99)
 
 Client-facing HTTP request and response information.
 
@@ -55,11 +55,23 @@ Request URL as received or represented by the proxy.
 
 ***
 
+### explicitHeaderOverrides?
+
+> `optional` **explicitHeaderOverrides?**: `ExplicitHeaderOverrides`
+
+Defined in: [src/core/scope/types.ts:153](https://github.com/debanshup/mitm-core/blob/2440c2af08119a654bfebe7a287bbaee1753399e/src/core/scope/types.ts#L153)
+
+Optional per-request header customization rules.
+
+Overrides global header settings for this transaction.
+
+***
+
 ### requestId
 
 > **requestId**: `string`
 
-Defined in: [src/core/scope/types.ts:76](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/core/scope/types.ts#L76)
+Defined in: [src/core/scope/types.ts:96](https://github.com/debanshup/mitm-core/blob/2440c2af08119a654bfebe7a287bbaee1753399e/src/core/scope/types.ts#L96)
 
 Unique identifier assigned to this request-response transaction.
 
@@ -69,7 +81,7 @@ Unique identifier assigned to this request-response transaction.
 
 > **target**: `object`
 
-Defined in: [src/core/scope/types.ts:106](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/core/scope/types.ts#L106)
+Defined in: [src/core/scope/types.ts:126](https://github.com/debanshup/mitm-core/blob/2440c2af08119a654bfebe7a287bbaee1753399e/src/core/scope/types.ts#L126)
 
 Original and current destination information for routing.
 
@@ -103,7 +115,7 @@ Current target URL used by the proxy, when available.
 
 > **upstream**: `object`
 
-Defined in: [src/core/scope/types.ts:97](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/core/scope/types.ts#L97)
+Defined in: [src/core/scope/types.ts:117](https://github.com/debanshup/mitm-core/blob/2440c2af08119a654bfebe7a287bbaee1753399e/src/core/scope/types.ts#L117)
 
 Upstream HTTP request and response information.
 
@@ -125,7 +137,7 @@ Response received from the upstream server, when available.
 
 > `optional` **webSocket?**: [`WebSocketContext`](WebSocketContext.md)
 
-Defined in: [src/core/scope/types.ts:126](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/core/scope/types.ts#L126)
+Defined in: [src/core/scope/types.ts:146](https://github.com/debanshup/mitm-core/blob/2440c2af08119a654bfebe7a287bbaee1753399e/src/core/scope/types.ts#L146)
 
 WebSocket-specific state and endpoint references.
 

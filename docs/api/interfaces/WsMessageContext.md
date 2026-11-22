@@ -2,7 +2,7 @@
 
 # Interface: WsMessageContext
 
-Defined in: [src/core/event/plugin-events/pluginEvents.ts:13](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/core/event/plugin-events/pluginEvents.ts#L13)
+Defined in: [src/core/event/plugin-events/pluginEvents.ts:12](https://github.com/debanshup/mitm-core/blob/2440c2af08119a654bfebe7a287bbaee1753399e/src/core/event/plugin-events/pluginEvents.ts#L12)
 
 Context provided to plugins when intercepting a WebSocket message.
 
@@ -15,7 +15,7 @@ whether the message should be forwarded.
 
 > **data**: `Buffer`
 
-Defined in: [src/core/event/plugin-events/pluginEvents.ts:15](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/core/event/plugin-events/pluginEvents.ts#L15)
+Defined in: [src/core/event/plugin-events/pluginEvents.ts:14](https://github.com/debanshup/mitm-core/blob/2440c2af08119a654bfebe7a287bbaee1753399e/src/core/event/plugin-events/pluginEvents.ts#L14)
 
 WebSocket message payload represented as a Buffer.
 
@@ -25,7 +25,7 @@ WebSocket message payload represented as a Buffer.
 
 > **drop**: `boolean`
 
-Defined in: [src/core/event/plugin-events/pluginEvents.ts:25](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/core/event/plugin-events/pluginEvents.ts#L25)
+Defined in: [src/core/event/plugin-events/pluginEvents.ts:24](https://github.com/debanshup/mitm-core/blob/2440c2af08119a654bfebe7a287bbaee1753399e/src/core/event/plugin-events/pluginEvents.ts#L24)
 
 Indicates whether the message should be dropped instead of forwarded.
 
@@ -37,6 +37,6 @@ Set this to true to prevent forwarding the message.
 
 > **isBinary**: `boolean`
 
-Defined in: [src/core/event/plugin-events/pluginEvents.ts:18](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/core/event/plugin-events/pluginEvents.ts#L18)
+Defined in: [src/core/event/plugin-events/pluginEvents.ts:17](https://github.com/debanshup/mitm-core/blob/2440c2af08119a654bfebe7a287bbaee1753399e/src/core/event/plugin-events/pluginEvents.ts#L17)
 
 Indicates whether the message is a binary message.

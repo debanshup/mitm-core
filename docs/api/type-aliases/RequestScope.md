@@ -4,7 +4,7 @@
 
 > **RequestScope** = `object`
 
-Defined in: [src/core/scope/types.ts:212](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/core/scope/types.ts#L212)
+Defined in: [src/core/scope/types.ts:308](https://github.com/debanshup/mitm-core/blob/2440c2af08119a654bfebe7a287bbaee1753399e/src/core/scope/types.ts#L308)
 
 Root context for processing an individual proxy transaction.
 
@@ -18,7 +18,7 @@ proxy's execution pipeline.
 
 > **lifecycle**: [`RequestLifecycle`](RequestLifecycle.md)
 
-Defined in: [src/core/scope/types.ts:228](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/core/scope/types.ts#L228)
+Defined in: [src/core/scope/types.ts:324](https://github.com/debanshup/mitm-core/blob/2440c2af08119a654bfebe7a287bbaee1753399e/src/core/scope/types.ts#L324)
 
 Lifecycle metadata and pipeline execution controls for this transaction.
 
@@ -28,7 +28,7 @@ Lifecycle metadata and pipeline execution controls for this transaction.
 
 > **request**: [`RequestContext`](RequestContext.md)
 
-Defined in: [src/core/scope/types.ts:223](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/core/scope/types.ts#L223)
+Defined in: [src/core/scope/types.ts:319](https://github.com/debanshup/mitm-core/blob/2440c2af08119a654bfebe7a287bbaee1753399e/src/core/scope/types.ts#L319)
 
 Data associated with the current request-response transaction,
 including client, upstream, and target information.
@@ -39,7 +39,7 @@ including client, upstream, and target information.
 
 > **session**: [`SessionContext`](SessionContext.md)
 
-Defined in: [src/core/scope/types.ts:217](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/core/scope/types.ts#L217)
+Defined in: [src/core/scope/types.ts:313](https://github.com/debanshup/mitm-core/blob/2440c2af08119a654bfebe7a287bbaee1753399e/src/core/scope/types.ts#L313)
 
 Connection-level context shared across requests associated with
 the same underlying connection.

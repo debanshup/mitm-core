@@ -4,7 +4,7 @@
 
 > **RequestLifecycle** = `object`
 
-Defined in: [src/core/scope/types.ts:161](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/core/scope/types.ts#L161)
+Defined in: [src/core/scope/types.ts:244](https://github.com/debanshup/mitm-core/blob/2440c2af08119a654bfebe7a287bbaee1753399e/src/core/scope/types.ts#L244)
 
 Tracks request lifecycle metadata and controls request-pipeline execution.
 
@@ -13,19 +13,52 @@ execution state.
 
 ## Properties
 
+### abort?
+
+> `optional` **abort?**: `PipelineAbortState`
+
+Defined in: [src/core/scope/types.ts:290](https://github.com/debanshup/mitm-core/blob/2440c2af08119a654bfebe7a287bbaee1753399e/src/core/scope/types.ts#L290)
+
+Metadata describing an intentional pipeline abort.
+
+When present, the pipeline must not resume normal execution.
+
+***
+
+### failure?
+
+> `optional` **failure?**: [`PipelineFailureState`](PipelineFailureState.md)
+
+Defined in: [src/core/scope/types.ts:298](https://github.com/debanshup/mitm-core/blob/2440c2af08119a654bfebe7a287bbaee1753399e/src/core/scope/types.ts#L298)
+
+Metadata describing a failure encountered during pipeline execution.
+
+When present, it records the failure details and its impact on
+the current request or underlying connection.
+
+***
+
 ### isHijacked
 
 > **isHijacked**: `boolean`
 
-Defined in: [src/core/scope/types.ts:170](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/core/scope/types.ts#L170)
+Defined in: [src/core/scope/types.ts:252](https://github.com/debanshup/mitm-core/blob/2440c2af08119a654bfebe7a287bbaee1753399e/src/core/scope/types.ts#L252)
 
-Indicates whether the request has been taken over by a handler
-and should no longer follow the normal pipeline path.
+Indicates whether the request has been taken over by a handler.
 
-#### Remarks
+When set, the pipeline treats the request as hijacked and stops
+normal processing. The handler that takes ownership becomes
+responsible for managing the request or connection.
 
-The effect of this flag depends on how the pipeline and handlers
-interpret it.
+***
+
+### nextPhase?
+
+> `optional` **nextPhase?**: `Phase`
+
+Defined in: [src/core/scope/types.ts:276](https://github.com/debanshup/mitm-core/blob/2440c2af08119a654bfebe7a287bbaee1753399e/src/core/scope/types.ts#L276)
+
+Identifies the next pipeline phase to execute.
 
 ***
 
@@ -33,7 +66,7 @@ interpret it.
 
 > **timestamps**: `object`
 
-Defined in: [src/core/scope/types.ts:173](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/core/scope/types.ts#L173)
+Defined in: [src/core/scope/types.ts:255](https://github.com/debanshup/mitm-core/blob/2440c2af08119a654bfebe7a287bbaee1753399e/src/core/scope/types.ts#L255)
 
 Timing measurements collected during request processing.
 

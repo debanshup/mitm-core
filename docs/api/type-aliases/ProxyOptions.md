@@ -4,7 +4,7 @@
 
 > **ProxyOptions** = [`ProxyConfig`](ProxyConfig.md) & `object`
 
-Defined in: [src/config.registry.ts:81](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/config.registry.ts#L81)
+Defined in: [src/config.registry.ts:109](https://github.com/debanshup/mitm-core/blob/2440c2af08119a654bfebe7a287bbaee1753399e/src/config.registry.ts#L109)
 
 Configuration options for creating a Proxy instance.
 

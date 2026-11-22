@@ -94,11 +94,19 @@ async run(payload: PluginPayload<typeof this.event>): Promise<void> {
 
 The handler can be synchronous or asynchronous. If multiple plugins listen for the same event, the proxy runs their handlers sequentially and waits for each handler to finish before running the next.
 
-If a handler throws an error or its promise rejects, the error propagates through event execution. `PipelineAbortSignal` is handled separately from ordinary errors and is intended for observation and telemetry. **It does not stop pipeline execution.**
-
 #### Using `PipelineAbortSignal`
 
-Use `PipelineAbortSignal` when you need to report an intentional event or condition for observation or telemetry.
+Use `PipelineAbortSignal` when you need to intentionally stop the current pipeline execution.
+
+Unlike ordinary errors, this signal is handled separately by the pipeline.
+
+When a handler throws this signal:
+
+- The current pipeline execution stops immediately.
+- Subsequent handlers and phases are not executed.
+- Abort metadata is recorded in `lifecycle.abort`.
+- The normal pipeline failure handler is not invoked.
+- No automatic HTTP error response or connection destruction occurs.
 
 **Example: Provide a message**
 
@@ -111,12 +119,18 @@ throw new PipelineAbortSignal("Request blocked by policy");
 ```ts
 throw new PipelineAbortSignal({
   message: "Request blocked by plugin",
+  reason: "plugin",
   plugin,
   event: "http:request",
 });
 ```
 
-The signal provides context about what happened. It does not abort the default pipeline or prevent subsequent processing.
+The signal can originate from synchronous or asynchronous handler execution. If multiple plugins listen for the same event, their handlers execute sequentially, and the proxy waits for each handler to finish before executing the next.
+
+If a handler throws an ordinary error or its promise rejects, the error propagates through event execution and is handled by the pipeline's failure-handling mechanism.
+
+`PipelineAbortSignal` is handled separately and terminates the current pipeline execution without treating the abort as an ordinary failure.
+
 
 ### `cleanup()`
 

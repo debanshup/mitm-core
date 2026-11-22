@@ -1,4 +1,4 @@
-# mitm-core v0.0.1
+# mitm-core v0.0.2
 
 ## Hierarchy Summary
 

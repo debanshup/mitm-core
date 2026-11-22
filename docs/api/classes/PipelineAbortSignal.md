@@ -2,21 +2,31 @@
 
 # Class: PipelineAbortSignal
 
-Defined in: [src/core/signals/pipelineAbortSignal.ts:24](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/core/signals/pipelineAbortSignal.ts#L24)
+Defined in: [src/core/signals/pipelineAbortSignal.ts:30](https://github.com/debanshup/mitm-core/blob/2440c2af08119a654bfebe7a287bbaee1753399e/src/core/signals/pipelineAbortSignal.ts#L30)
 
-Error used to intentionally stop pipeline execution.
+Error used to intentionally terminate the current pipeline execution.
 
-Distinguishes deliberate pipeline interruption from unexpected errors.
-The signal can carry optional metadata identifying the reason, plugin,
-and event associated with the interruption.
+Use this signal when processing must stop without transferring
+request ownership to another handler.
+
+Throwing this signal:
+- Stops the current pipeline execution.
+- Does not transfer request ownership.
+- Does not automatically destroy the client or upstream connection.
+- Does not automatically generate an HTTP response.
+
+The component handling the abort is responsible for performing
+any required request, response, or connection cleanup.
 
 ## Examples
 
 ```ts
+// Stop processing because the request violates a policy.
 throw new PipelineAbortSignal("Request blocked by policy");
 ```
 
 ```ts
+// Stop processing with additional metadata.
 throw new PipelineAbortSignal({
   message: "Request blocked by plugin",
   plugin,
@@ -38,7 +48,7 @@ throw new PipelineAbortSignal({
 
 > **new PipelineAbortSignal**(`payload?`): `PipelineAbortSignal`
 
-Defined in: [src/core/signals/pipelineAbortSignal.ts:42](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/core/signals/pipelineAbortSignal.ts#L42)
+Defined in: [src/core/signals/pipelineAbortSignal.ts:48](https://github.com/debanshup/mitm-core/blob/2440c2af08119a654bfebe7a287bbaee1753399e/src/core/signals/pipelineAbortSignal.ts#L48)
 
 Creates a pipeline-abort signal.
 
@@ -81,7 +91,7 @@ Defined in: node\_modules/typescript/lib/lib.es2022.error.d.ts:26
 
 > `readonly` `optional` **data?**: [`AbortMessage`](../type-aliases/AbortMessage.md)
 
-Defined in: [src/core/signals/pipelineAbortSignal.ts:30](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/core/signals/pipelineAbortSignal.ts#L30)
+Defined in: [src/core/signals/pipelineAbortSignal.ts:36](https://github.com/debanshup/mitm-core/blob/2440c2af08119a654bfebe7a287bbaee1753399e/src/core/signals/pipelineAbortSignal.ts#L36)
 
 Optional metadata describing the pipeline abort.
 

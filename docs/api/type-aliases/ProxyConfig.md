@@ -4,18 +4,31 @@
 
 > **ProxyConfig** = `object`
 
-Defined in: [src/config.registry.ts:6](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/config.registry.ts#L6)
+Defined in: [src/config.registry.ts:6](https://github.com/debanshup/mitm-core/blob/2440c2af08119a654bfebe7a287bbaee1753399e/src/config.registry.ts#L6)
 
 Configuration options for the proxy server, controlling caching,
 TLS certificate handling, default pipeline registration, and timeouts.
 
 ## Properties
 
+### globalHeaderOverrides?
+
+> `optional` **globalHeaderOverrides?**: [`GlobalHeaderOverrides`](GlobalHeaderOverrides.md)
+
+Defined in: [src/config.registry.ts:80](https://github.com/debanshup/mitm-core/blob/2440c2af08119a654bfebe7a287bbaee1753399e/src/config.registry.ts#L80)
+
+Defines global HTTP header customization rules.
+
+These rules are applied to all requests and responses handled by the proxy.
+Per-request overrides take precedence over global overrides.
+
+***
+
 ### handshakeTimeoutMs?
 
 > `optional` **handshakeTimeoutMs?**: `number`
 
-Defined in: [src/config.registry.ts:56](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/config.registry.ts#L56)
+Defined in: [src/config.registry.ts:56](https://github.com/debanshup/mitm-core/blob/2440c2af08119a654bfebe7a287bbaee1753399e/src/config.registry.ts#L56)
 
 Maximum time, in milliseconds, to wait for the client to complete
 the TLS ClientHello.
@@ -32,7 +45,7 @@ the TLS ClientHello.
 
 > `optional` **leafCacheDir?**: `string`
 
-Defined in: [src/config.registry.ts:19](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/config.registry.ts#L19)
+Defined in: [src/config.registry.ts:19](https://github.com/debanshup/mitm-core/blob/2440c2af08119a654bfebe7a287bbaee1753399e/src/config.registry.ts#L19)
 
 Directory used to store cached TLS leaf certificates.
 
@@ -48,7 +61,7 @@ Directory used to store cached TLS leaf certificates.
 
 > `optional` **pluginTimeoutMs?**: `number`
 
-Defined in: [src/config.registry.ts:72](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/config.registry.ts#L72)
+Defined in: [src/config.registry.ts:72](https://github.com/debanshup/mitm-core/blob/2440c2af08119a654bfebe7a287bbaee1753399e/src/config.registry.ts#L72)
 
 Maximum time, in milliseconds, to wait for plugin execution to finish.
 Set to 0 to disable the timeout completely.
@@ -65,7 +78,7 @@ Set to 0 to disable the timeout completely.
 
 > `optional` **rootCa?**: `object`
 
-Defined in: [src/config.registry.ts:42](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/config.registry.ts#L42)
+Defined in: [src/config.registry.ts:42](https://github.com/debanshup/mitm-core/blob/2440c2af08119a654bfebe7a287bbaee1753399e/src/config.registry.ts#L42)
 
 Root Certificate Authority (CA) credentials used to sign generated
 TLS leaf certificates during HTTPS interception.
@@ -90,7 +103,7 @@ CA private key, provided as a PEM string or Buffer.
 
 > `optional` **upstreamTimeoutMs?**: `number`
 
-Defined in: [src/config.registry.ts:64](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/config.registry.ts#L64)
+Defined in: [src/config.registry.ts:64](https://github.com/debanshup/mitm-core/blob/2440c2af08119a654bfebe7a287bbaee1753399e/src/config.registry.ts#L64)
 
 Maximum time, in milliseconds, allowed for an upstream operation
 before the configured timeout is reached.
@@ -107,7 +120,7 @@ before the configured timeout is reached.
 
 > `optional` **useCertificateCache?**: `boolean`
 
-Defined in: [src/config.registry.ts:12](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/config.registry.ts#L12)
+Defined in: [src/config.registry.ts:12](https://github.com/debanshup/mitm-core/blob/2440c2af08119a654bfebe7a287bbaee1753399e/src/config.registry.ts#L12)
 
 Enables caching of generated TLS leaf certificates.
 
@@ -123,7 +136,7 @@ true
 
 > `optional` **useDefaultPipelines?**: `boolean`
 
-Defined in: [src/config.registry.ts:34](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/config.registry.ts#L34)
+Defined in: [src/config.registry.ts:34](https://github.com/debanshup/mitm-core/blob/2440c2af08119a654bfebe7a287bbaee1753399e/src/config.registry.ts#L34)
 
 Determines whether the default request and response processing
 pipelines are registered.
@@ -140,7 +153,7 @@ true
 
 > `optional` **useResponseCache?**: `boolean`
 
-Defined in: [src/config.registry.ts:26](https://github.com/debanshup/mitm-core/blob/dfb6027f18c318943aaee5b4934da609ddd35af2/src/config.registry.ts#L26)
+Defined in: [src/config.registry.ts:26](https://github.com/debanshup/mitm-core/blob/2440c2af08119a654bfebe7a287bbaee1753399e/src/config.registry.ts#L26)
 
 Enables caching of proxy responses to improve performance.
 

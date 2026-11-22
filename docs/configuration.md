@@ -29,16 +29,28 @@ All configuration options are optional. Unless otherwise noted, the defaults bel
 
 ## Configuration Options
 
-| Option                | Type                                                | Default           | Description                                                                                                 |
-| --------------------- | --------------------------------------------------- | ----------------- | ----------------------------------------------------------------------------------------------------------- |
-| `useCertificateCache` | `boolean`                                           | `true`            | Enables caching of generated TLS leaf certificates.                                                         |
-| `leafCacheDir`        | `string`                                            | `~/.mitm-core`    | Directory used to store cached TLS leaf certificates.                                                       |
-| `useResponseCache`    | `boolean`                                           | `false`           | Enables proxy response caching.                                                                             |
-| `useDefaultPipelines` | `boolean`                                           | `true`            | Registers the default request and response processing pipelines.                                            |
-| `rootCa`              | `{ key: string \| Buffer; cert: string \| Buffer }` | Empty credentials | Root CA private key and certificate used to sign generated TLS leaf certificates during HTTPS interception. |
-| `handshakeTimeoutMs`  | `number`                                            | `10000`           | Maximum time, in milliseconds, to wait for the client to complete the TLS ClientHello.                      |
-| `upstreamTimeoutMs`   | `number`                                            | `30000`           | Configures the socket inactivity timeout on upstream HTTP requests, in milliseconds.                        |
-| `pluginTimeoutMs`     | `number`                                            | `10000`           | Maximum time, in milliseconds, allowed for plugin execution. Set to `0` to disable the plugin timeout.      |
+| Option                      | Type                                                | Default           | Description                                                                                                                                                             |
+| --------------------------- | --------------------------------------------------- | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `useCertificateCache`       | `boolean`                                           | `true`            | Enables caching of generated TLS leaf certificates.                                                                                                                     |
+| `leafCacheDir`              | `string`                                            | `~/.mitm-core`    | Directory used to store cached TLS leaf certificates.                                                                                                                   |
+| `useResponseCache`          | `boolean`                                           | `false`           | Enables proxy response caching.                                                                                                                                         |
+| `useDefaultPipelines`       | `boolean`                                           | `true`            | Registers the default request and response processing pipelines.                                                                                                        |
+| `rootCa`                    | `{ key: string \| Buffer; cert: string \| Buffer }` | Empty credentials | Root CA private key and certificate used to sign generated TLS leaf certificates during HTTPS interception.                                                             |
+| `handshakeTimeoutMs`        | `number`                                            | `10000`           | Maximum time, in milliseconds, to wait for the client to complete the TLS ClientHello.                                                                                  |
+| `upstreamTimeoutMs`         | `number`                                            | `30000`           | Configures the socket inactivity timeout on upstream HTTP requests, in milliseconds.                                                                                    |
+| `pluginTimeoutMs`           | `number`                                            | `10000`           | Maximum time, in milliseconds, allowed for plugin execution. Set to `0` to disable the plugin timeout.                                                                  |
+| **`globalHeaderOverrides`** | **`GlobalHeaderOverrides`**                         | **`{}`**          | Defines global HTTP header customization rules applied to all requests and responses handled by the proxy. Per-request overrides take precedence over global overrides. |
+
+## Global Header Overrides
+
+The `globalHeaderOverrides` option supports the following properties:
+
+| Property                  | Type                                 | Default | Description                                                     |
+| ------------------------- | ------------------------------------ | ------- | --------------------------------------------------------------- |
+| `requestOverrides`        | `Record<string, string \| string[]>` | `{}`    | Headers to add or override in upstream HTTP requests.           |
+| `responseOverrides`       | `Record<string, string \| string[]>` | `{}`    | Headers to add or override in responses sent to clients.        |
+| `requestHeadersToRemove`  | `string[]`                           | `[]`    | Request headers to remove before forwarding requests upstream.  |
+| `responseHeadersToRemove` | `string[]`                           | `[]`    | Response headers to remove before sending responses to clients. |
 
 ## Root CA Credentials
 

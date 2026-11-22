@@ -1,6 +1,6 @@
 # API Reference
 
-**mitm-core v0.0.1**
+**mitm-core v0.0.2**
 
 API documentation generated from the public TypeScript exports.
 
